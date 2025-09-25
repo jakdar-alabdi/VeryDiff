@@ -133,7 +133,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
         check .|= pos_any
         any_any = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& .!check
         check .|= any_any
-        @assert all(check) "Not all cases covered"
+        @assert all(check) "Not all cases covered: [$(lower₁[.!check]), $(upper₁[.!check])], [$(lower₂[.!check]), $(upper₂[.!check])]"
 
         if !all((zero_diff .+ neg_neg .+ neg_pos .+ neg_any .+ pos_neg .+ pos_pos .+ pos_any .+ any_neg .+ any_pos .+ any_any) .== 1)
             println("For one of the input dimensions multiple cases were selected -- this smells like a bug!")

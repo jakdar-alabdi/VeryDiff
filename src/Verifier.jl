@@ -8,7 +8,8 @@ function verify_network(
     bounds,
     property_check,
     split_heuristic;
-    timeout=Inf)
+    timeout=Inf,
+    init_eps=0.0)
     global FIRST_ROUND = true
     verification_result = nothing
     # Timing
@@ -29,7 +30,7 @@ function verify_network(
     distance = distance[non_zero_indices]
     #Z_original1 = Zonotope(distance .* Matrix(I,input_dim,input_dim)[:,non_zero_distances],mid)
     #Z_original2 = deepcopy(Z_original1)
-    ∂Z_original = Zonotope(Matrix(0.0I,input_dim,size(non_zero_indices,1)),zeros(Float64,input_dim),nothing)
+    ∂Z_original = Zonotope(Matrix(init_eps*I,input_dim,size(non_zero_indices,1)),zeros(Float64,input_dim),nothing)
     #end
 
     #@timeit to "Network_Init" begin
