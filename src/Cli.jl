@@ -26,6 +26,14 @@ function parse_commandline(cmd_args)
             help        =   "Verify δ-Top-1 Equivalence; provides the delta value"
             arg_type    =   Float64
             default     =   -Inf64
+        "--robustness-delta"
+            help        =   "Verify confidence based robustness with given delta"
+            arg_type    =   Float64
+            default     =   -Inf64
+        "--input-epsilon"
+            help        =   "Epsilon value for input perturbation in confidence based robustness"
+            arg_type    =   Float64
+            default     =   0.0
         "--timeout"
             help        =   "Timeout for verification"
             arg_type    =   Int
@@ -39,6 +47,13 @@ end
 
 function run_cmd(args)
     parsed_args = parse_commandline(args)
+
+    epsilon = parsed_args["epsilon"]
+    top_1 = parsed_args["top-1"]
+    top_1_delta = parsed_args["top-1-delta"]
+    robustness_delta = parsed_args["robustness-delta"]
+    input_epsilon = parsed_args["input-epsilon"]
+
     net1 = parsed_args["net1"]
     if !isfile(net1)
         error("File not found: $net1")
@@ -50,7 +65,12 @@ function run_cmd(args)
         error("Failed to parse network: $net1")
         return 1
     end
-    net2 = parsed_args["net2"]
+    if parsed_args["net2"] == "-"
+        @assert robustness_delta != -Inf64 "For confidence based equivalence, both networks must be specified"
+        net2 = parsed_args["net1"]
+    else
+        net2 = parsed_args["net2"]
+    end
     if !isfile(net2)
         error("File not found: $net2")
         return 1
@@ -73,10 +93,6 @@ function run_cmd(args)
         error("Failed to parse specification: $spec")
         return 1
     end
-    
-    epsilon = parsed_args["epsilon"]
-    top_1 = parsed_args["top-1"]
-    top_1_delta = parsed_args["top-1-delta"]
 
     timeout = parsed_args["timeout"]
     if timeout <= 0
@@ -105,6 +121,13 @@ function run_cmd(args)
         property = get_top1_property(delta=top_1_delta, naive=parsed_args["naive"])
         split_heuristic = top1_configure_split_heuristic(1)
     end
+    if robustness_delta != -Inf64
+        @assert isnothing(property) "Cannot specify both epsilon and robustness delta"
+        @assert 0.5 <= robustness_delta < 1.0 "Invalid delta value for robustness; must be in [0.5,1)"
+        property = get_top1_property(delta=robustness_delta, naive=parsed_args["naive"])
+        split_heuristic = top1_configure_split_heuristic(1)
+        @assert input_epsilon > 0.0 "Input epsilon must be positive for confidence based robustness verification"
+    end
     if isnothing(property)
         error("No property specified")
         return 1
@@ -123,7 +146,7 @@ function run_cmd(args)
         # Run verification
         for (bounds, _, _, num) in spec
             passed_time = @timed begin
-                current_result = verify_network(net1, net2, bounds[1:n_inputs,:], property, split_heuristic, timeout=timeout)
+                current_result = verify_network(net1, net2, bounds[1:n_inputs,:], property, split_heuristic, timeout=timeout, init_eps=input_epsilon)
             end
             timeout -= passed_time[:time]
             if current_result == UNSAFE
