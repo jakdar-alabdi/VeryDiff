@@ -138,8 +138,10 @@ function run_cmd(args)
                 break
             end
         end
-    catch
-        println("Caught an exception, aborting")
+    catch e
+        println("Caught an exception: $e")
+        showerror(stdout, e, catch_backtrace())
+        println("Aborting verification.")
         result = UNKNOWN
     end
     if result == SAFE

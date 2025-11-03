@@ -11,6 +11,10 @@ struct VerificationTask
     ∂Z::Zonotope
     verification_status
     distance_bound :: Float64
+    ∂num_approx :: Int
+    lower_bounds :: Vector{Float64}
+    upper_bounds :: Vector{Float64}
+    split_type :: Vector{Bool}
 end
 
 # Z₂ = Z₁ - ∂Z

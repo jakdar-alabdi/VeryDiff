@@ -26,6 +26,23 @@ function to_diff_zono(task :: VerificationTask)
     else
         Z1 = Zonotope(Matrix(I, input_dim, input_dim)[:,task.distance_indices] .* task.distance', task.middle, nothing)
     end
-    Z2 = deepcopy(Z1)
-    return DiffZonotope(Z1, Z2, task.∂Z, 0, 0, 0)
+    if task.∂num_approx > 0
+        z1_bounds = zono_bounds(Z1)
+        ∂z_bounds = zono_bounds(task.∂Z)
+        lower_bounds = max.(z1_bounds[:,1] .+ ∂z_bounds[:,1], task.lower_bounds)
+        upper_bounds = min.(z1_bounds[:,2] .+ ∂z_bounds[:,2], task.upper_bounds)
+        mid = (lower_bounds .+ upper_bounds) ./ 2
+        distance = (upper_bounds .- lower_bounds) ./ 2
+        if NEW_HEURISTIC
+            influence2 = zeros(Float64, input_dim, input_dim)
+        else
+            influence2 = nothing
+        end
+        Z2 = Zonotope(Matrix(I, input_dim, input_dim) .* distance', mid, influence2)
+        num_approx2 = input_dim - length(task.distance_indices)
+    else
+        Z2 = deepcopy(Z1)
+        num_approx2 = 0
+    end
+    return DiffZonotope(Z1, Z2, task.∂Z, 0, num_approx2, task.∂num_approx)
 end
