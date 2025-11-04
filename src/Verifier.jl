@@ -29,22 +29,19 @@ function verify_network(
         #@timeit to "Zono_Init" begin
         non_zero_indices = findall((!).(iszero.(distance)))
         distance = distance[non_zero_indices]
-        #Z_original1 = Zonotope(distance .* Matrix(I,input_dim,input_dim)[:,non_zero_distances],mid)
-        #Z_original2 = deepcopy(Z_original1)
         if init_eps > 0.0
-            # Warning: No new line between matrices is important!
-            ∂Z_original = Zonotope([
-                Matrix(0.0*I,input_dim,size(non_zero_indices,1)) Matrix(init_eps*I,input_dim,input_dim)
-            ],zeros(Float64,input_dim),nothing)
-            println("∂Z Size: $(size(∂Z_original.G)) , $(size(∂Z_original.c))")
+            distance .-= (init_eps/2)
+            distance1_secondary = fill(init_eps/2, input_dim)
+            distance2_secondary = fill(init_eps/2, input_dim)
+            mid1_secondary = zeros(Float64, input_dim)
+            mid2_secondary = zeros(Float64, input_dim)
         else
             println("Differential Zonotope initialized with zero perturbation.")
-            ∂Z_original = Zonotope(
-                Matrix(0.0*I,input_dim,size(non_zero_indices,1)),
-                zeros(Float64,input_dim),nothing)
-
+            distance1_secondary = nothing
+            distance2_secondary = nothing
+            mid1_secondary = nothing
+            mid2_secondary = nothing
         end
-
     end
 
     #@timeit to "Network_Init" begin
@@ -74,15 +71,13 @@ function verify_network(
     #    common_state = MultiThreaddedQueue(num_threads)
     #end
     work_queue = Queue()
-    if init_eps > 0.0
-        push!(work_queue,
-            (1.0,VerificationTask(mid, distance, non_zero_indices, ∂Z_original, nothing, 1.0, input_dim, low, high, zeros(Bool,input_dim)))
-        )
-    else
-        push!(work_queue,
-            (1.0,VerificationTask(mid, distance, non_zero_indices, ∂Z_original, nothing, 1.0, 0, low, high, zeros(Bool,input_dim)))
-        )
-    end
+    push!(work_queue,
+        (1.0,VerificationTask(
+            mid, distance, non_zero_indices,
+            distance1_secondary, mid1_secondary,
+            distance2_secondary, mid2_secondary,
+            nothing, 1.0, zeros(Int, size(non_zero_indices,1)) ) )
+    )
     @timeit to "Verify" begin
         @Debugger.propagation_init_hook(N, prop_state)
         #if single_threaded
@@ -152,15 +147,25 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
             Zout = N(Zin, prop_state)
             end
             if first
-                println("Zono Bounds:")
-                bounds = zono_bounds(Zout.∂Z)
+                #println("Zono Bounds:")
+                if VeryDiff.USE_DIFFZONO
+                    bounds = zono_bounds(Zout.∂Z)
+                else
+                    G = zeros(Float64, size(Zout.Z₁.G,1), size(Zout.Z₁.G,2) + size(Zout.Z₂.G,2) - size(Zout.∂Z.G,2))
+                    G[:,1:size(Zout.Z₁.G,2)] .= Zout.Z₁.G
+                    G[:,1:size(Zout.∂Z.G,2)] .-= Zout.Z₂.G[:,1:size(Zout.∂Z.G,2)]
+                    G[:,(size(Zout.Z₁.G,2)+1):end] .= -Zout.Z₂.G[:, (size(Zout.∂Z.G,2)+1):end]
+                    c = Zout.Z₁.c .- Zout.Z₂.c
+                    bounds = zono_bounds(Zonotope(G,c,nothing))
+                end
                 println(bounds[:,1])
                 println(bounds[:,2])
                 first=false
             end
 
             @timeit to "Property Check" begin
-            prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout, verification_task.verification_status)
+            prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout,
+                verification_task.verification_status)
             end
             global FIRST_ROUND = false
             if !prop_satisfied
@@ -237,55 +242,146 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
     return is_verified
 end
 
-function split_zono(d, verification_task :: VerificationTask, work_share, verification_status, distance_bound)
-    input_dim = size(verification_task.middle,1)
-    #return @timeit to "Split_Zono" begin
-    distance_d = findfirst(x->x==d,verification_task.distance_indices)
-    @assert !isnothing(distance_d)
-    low = verification_task.middle[d]-verification_task.distance[distance_d]
-    high = verification_task.middle[d]+verification_task.distance[distance_d]
-    mid = verification_task.middle[d]
-    mid1 = (low+mid)/2
-    distance1 = mid1-low
-    diff_low = zono_optimize(-1.0, verification_task.∂Z, d)
-    diff_high = zono_optimize(1.0, verification_task.∂Z, d)
-    diff_mid = (diff_low + diff_high)/2
-    diff_distance = (diff_mid - diff_low)
-    verification_task.split_type[d] = !verification_task.split_type[d]
-    if verification_task.split_type[d] && (diff_distance > 0.0)
-        ∂G = verification_task.∂Z.G
-        ∂c = verification_task.∂Z.c
-        middle1 = (diff_mid + diff_low)/2
-        distance1 = (middle1 - diff_low)
-        middle2 = (diff_mid + diff_high)/2
-        distance2 = (diff_high - middle2)
-        ∂G[d, input_dim+d] = distance1
-        ∂c[d] = middle1
-        new_∂Z1 = Zonotope(∂G,∂c,nothing)
-        ∂G2 = deepcopy(verification_task.∂Z.G)
-        ∂c2 = deepcopy(verification_task.∂Z.c)
-        ∂G2[d, input_dim+d] = distance2
-        ∂c2[d] = middle2
-        new_∂Z2 = Zonotope(∂G2,∂c2,nothing)
-        Z1 = VerificationTask(verification_task.middle, verification_task.distance, verification_task.distance_indices, new_∂Z1, verification_status, distance_bound, verification_task.∂num_approx, verification_task.lower_bounds, verification_task.upper_bounds, verification_task.split_type)
-        Z2 = VerificationTask(deepcopy(verification_task.middle), deepcopy(verification_task.distance), deepcopy(verification_task.distance_indices), new_∂Z2, deepcopy(verification_status), distance_bound, verification_task.∂num_approx, verification_task.lower_bounds, verification_task.upper_bounds, deepcopy(verification_task.split_type))
-        return (work_share/2.0,Z1), (work_share/2.0,Z2)
-    else
+function split_zono(distance_d, verification_task :: VerificationTask, work_share, verification_status, distance_bound)
+    # TODO(steuber): Make split prettier?
+    (work_share,Z1), (work_share,Z2), input_pos = (() -> begin
+    split_stage = verification_task.split_stage[distance_d]
+    #print("Work Share: $(work_share)")
+    #print(verification_task.split_stage)
+    verification_task.split_stage[distance_d] = (split_stage + 1) % 3
+    if split_stage == 2
+        #println("Splitting on input dimension $(verification_task.distance_indices[distance_d])")
+        input_pos = verification_task.distance_indices[distance_d]
+        distance1 = verification_task.distance[distance_d]/2
+        distance2 = verification_task.distance[distance_d]/2
+        mid1 = verification_task.middle[input_pos] - distance1
+        mid2 = verification_task.middle[input_pos] + distance2
         distance1_vec = deepcopy(verification_task.distance)
         distance1_vec[distance_d] = distance1
         middle1_vec = deepcopy(verification_task.middle)
-        middle1_vec[d] = mid1
-
-        Z1 = VerificationTask(middle1_vec, distance1_vec, verification_task.distance_indices, deepcopy(verification_task.∂Z), verification_status, distance_bound, verification_task.∂num_approx, verification_task.lower_bounds, verification_task.upper_bounds, verification_task.split_type)
-
-        mid2 = (mid+high)/2
-        distance2 = mid2-mid
+        middle1_vec[input_pos] = mid1
         distance2_vec = verification_task.distance
         distance2_vec[distance_d] = distance2
         middle2_vec = verification_task.middle
-        middle2_vec[d] = mid2
-        Z2 = VerificationTask(middle2_vec, distance2_vec, verification_task.distance_indices, verification_task.∂Z, deepcopy(verification_status), distance_bound, verification_task.∂num_approx, verification_task.lower_bounds, verification_task.upper_bounds, deepcopy(verification_task.split_type))
-
-        return (work_share/2.0,Z1), (work_share/2.0,Z2)
+        middle2_vec[input_pos] = mid2
+        Z1 = VerificationTask(
+            middle1_vec, distance1_vec,
+            deepcopy(verification_task.distance_indices),
+            deepcopy(verification_task.distance1_secondary),
+            deepcopy(verification_task.middle1_secondary),
+            deepcopy(verification_task.distance2_secondary),
+            deepcopy(verification_task.middle2_secondary),
+            deepcopy(verification_status),
+            distance_bound,
+            deepcopy(verification_task.split_stage))
+        Z2 = VerificationTask(
+            middle2_vec, distance2_vec,
+            verification_task.distance_indices,
+            verification_task.distance1_secondary,
+            verification_task.middle1_secondary,
+            verification_task.distance2_secondary,
+            verification_task.middle2_secondary,
+            verification_status,
+            distance_bound,
+            verification_task.split_stage)
+        return (work_share/2.0,Z1), (work_share/2.0,Z2), input_pos
+    elseif split_stage == 1
+        input_pos = distance_d
+        #println("Splitting on differential dimension $(input_pos)")
+        diff_distance1 = verification_task.distance1_secondary[input_pos]/2
+        diff_distance2 = verification_task.distance1_secondary[input_pos]/2
+        diff_mid1 = verification_task.middle1_secondary[input_pos] - diff_distance1
+        diff_mid2 = verification_task.middle1_secondary[input_pos] + diff_distance2
+        distance1_secondary = deepcopy(verification_task.distance1_secondary)
+        distance1_secondary[input_pos] = diff_distance1
+        middle1_secondary = deepcopy(verification_task.middle1_secondary)
+        middle1_secondary[input_pos] = diff_mid1
+        distance2_secondary = deepcopy(verification_task.distance1_secondary)
+        distance2_secondary[input_pos] = diff_distance2
+        middle2_secondary = deepcopy(verification_task.middle1_secondary)
+        middle2_secondary[input_pos] = diff_mid2
+        Z1 = VerificationTask(
+            deepcopy(verification_task.middle), deepcopy(verification_task.distance),
+            deepcopy(verification_task.distance_indices),
+            distance1_secondary,
+            middle1_secondary,
+            deepcopy(verification_task.distance2_secondary),
+            deepcopy(verification_task.middle2_secondary),
+            deepcopy(verification_status),
+            distance_bound,
+            deepcopy(verification_task.split_stage))
+        Z2 = VerificationTask(
+            verification_task.middle, verification_task.distance,
+            verification_task.distance_indices,
+            distance2_secondary,
+            middle2_secondary,
+            verification_task.distance2_secondary,
+            verification_task.middle2_secondary,
+            verification_status,
+            distance_bound,
+            verification_task.split_stage)
+        return (work_share/2.0,Z1), (work_share/2.0,Z2), input_pos
+    else #split_stage == 0
+        input_pos = distance_d 
+        #println("Splitting on differential dimension $(input_pos)")
+        diff_distance1 = verification_task.distance2_secondary[input_pos]/2
+        diff_distance2 = verification_task.distance2_secondary[input_pos]/2
+        diff_mid1 = verification_task.middle2_secondary[input_pos] - diff_distance1
+        diff_mid2 = verification_task.middle2_secondary[input_pos] + diff_distance2
+        distance1_secondary = deepcopy(verification_task.distance2_secondary)
+        distance1_secondary[input_pos] = diff_distance1
+        middle1_secondary = deepcopy(verification_task.middle2_secondary)
+        middle1_secondary[input_pos] = diff_mid1
+        distance2_secondary = deepcopy(verification_task.distance2_secondary)
+        distance2_secondary[input_pos] = diff_distance2
+        middle2_secondary = deepcopy(verification_task.middle2_secondary)
+        middle2_secondary[input_pos] = diff_mid2
+        Z1 = VerificationTask(
+            deepcopy(verification_task.middle), deepcopy(verification_task.distance),
+            deepcopy(verification_task.distance_indices),
+            deepcopy(verification_task.distance1_secondary),
+            deepcopy(verification_task.middle1_secondary),
+            distance1_secondary,
+            middle1_secondary,
+            deepcopy(verification_status),
+            distance_bound,
+            deepcopy(verification_task.split_stage))
+        Z2 = VerificationTask(
+            verification_task.middle, verification_task.distance,
+            verification_task.distance_indices,
+            verification_task.distance1_secondary,
+            verification_task.middle1_secondary,
+            distance2_secondary,
+            middle2_secondary,
+            verification_status,
+            distance_bound,
+            verification_task.split_stage)
+        return (work_share/2.0,Z1), (work_share/2.0,Z2), input_pos
     end
+    end)()
+
+    # # DEBUG
+    # println("Original Bounds on d=$(input_pos)")
+    # Z1z = to_diff_zono(Z1)
+    # zono1_bounds1_low = zono_optimize(-1.0,Z1z.Z₁,input_pos)
+    # zono1_bounds1_high = zono_optimize(1.0,Z1z.Z₁,input_pos)
+    # zono1_bound2_low = zono_optimize(-1.0,Z1z.Z₂,input_pos)
+    # zono1_bound2_high = zono_optimize(1.0,Z1z.Z₂,input_pos)
+    # zono1_boundsd_low = zono_optimize(-1.0,Z1z.∂Z,input_pos)
+    # zono1_boundsd_high = zono_optimize(1.0,Z1z.∂Z,input_pos)
+    # println(" Z1 Bounds on d=$(input_pos): Z1: [$(zono1_bounds1_low), $(zono1_bounds1_high)], Z2: [$(zono1_bound2_low), $(zono1_bound2_high)], ∂Z: [$(zono1_boundsd_low), $(zono1_boundsd_high)]")
+    # # END DEBUG
+
+    # # DEBUG
+    # Z2z = to_diff_zono(Z2)
+    # zono2_bounds1_low = zono_optimize(-1.0,Z2z.Z₁,input_pos)
+    # zono2_bounds1_high = zono_optimize(1.0,Z2z.Z₁,input_pos)
+    # zono2_bound2_low = zono_optimize(-1.0,Z2z.Z₂,input_pos)
+    # zono2_bound2_high = zono_optimize(1.0,Z2z.Z₂,input_pos)
+    # zono2_boundsd_low = zono_optimize(-1.0,Z2z.∂Z,input_pos)
+    # zono2_boundsd_high = zono_optimize(1.0,Z2z.∂Z,input_pos)
+    # println(" Z2 Bounds on d=$(input_pos): Z1: [$(zono2_bounds1_low), $(zono2_bounds1_high)], Z2: [$(zono2_bound2_low), $(zono2_bound2_high)], ∂Z: [$(zono2_boundsd_low), $(zono2_boundsd_high)]")
+    # # END DEBUG
+
+    return (work_share,Z1), (work_share,Z2)
 end

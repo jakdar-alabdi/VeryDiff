@@ -380,6 +380,8 @@ function top1_configure_split_heuristic(mode)
             diff_weights ./= norm(diff_weights,2)
         end
 
+        #diff_weights = @view diff_weights[1:size(distance_indices,1)]
+
         if mode==1
             d = argmax(
                 diff_weights
@@ -393,7 +395,9 @@ function top1_configure_split_heuristic(mode)
                 diff_weights .+ top_dimension_violation
             )[1]
         end
-        return distance_indices[d]
+        #return distance_indices[d]
+        # println("Splitting on dimension $d")
+        return d
     end
 end
 
@@ -433,7 +437,6 @@ function epsilon_split_heuristic(Zin,Zout,heuristics_info,distance_indices)
         diff_weights ./= norm(diff_weights,2)
     end
 
-
     d = argmax(
         # sum(abs,Zin.Z₁.G,dims=1)[1,:].*
         #(∂weights .+ diff_weights)
@@ -442,5 +445,6 @@ function epsilon_split_heuristic(Zin,Zout,heuristics_info,distance_indices)
 
     #print("Selected: $d (vs. $d_alternative)")
     
-    return distance_indices[d]
+    #return distance_indices[d]
+    return d
 end

@@ -8,13 +8,13 @@ struct VerificationTask
     middle :: Vector{Float64}
     distance :: Vector{Float64}
     distance_indices :: Vector{Int}
-    ∂Z::Zonotope
+    distance1_secondary :: Union{Nothing, Vector{Float64}}
+    middle1_secondary :: Union{Nothing, Vector{Float64}}
+    distance2_secondary :: Union{Nothing, Vector{Float64}}
+    middle2_secondary :: Union{Nothing, Vector{Float64}}
     verification_status
     distance_bound :: Float64
-    ∂num_approx :: Int
-    lower_bounds :: Vector{Float64}
-    upper_bounds :: Vector{Float64}
-    split_type :: Vector{Bool}
+    split_stage :: Vector{Int}
 end
 
 # Z₂ = Z₁ - ∂Z

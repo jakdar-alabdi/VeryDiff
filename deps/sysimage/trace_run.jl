@@ -86,9 +86,9 @@ VeryDiff.run_cmd([
 
 # german_credit-not-norm.onnx german_credit-not-norm.onnx test/examples/specs-new/german-credit-bounds.vnnlib --robustness-delta=0.75 --input-epsilon=4e-2
 VeryDiff.run_cmd([
-    "test/examples/nets-new/german_credit-not-norm.onnx",
+    "$sysimage_dir/../../test/examples/nets-new/german_credit-not-norm.onnx",
     "-",
-    "test/examples/specs-new/german-credit-bounds.vnnlib",
+    "$sysimage_dir/../../test/examples/specs-new/german-credit-bounds.vnnlib",
     "--robustness-delta=0.75",
     "--input-epsilon=2e-2"
 ])
