@@ -76,7 +76,7 @@ function verify_network(
             mid, distance, non_zero_indices,
             distance1_secondary, mid1_secondary,
             distance2_secondary, mid2_secondary,
-            nothing, 1.0, zeros(Int, size(non_zero_indices,1)) ) )
+            nothing, 1.0, [0] ) )
     )
     @timeit to "Verify" begin
         @Debugger.propagation_init_hook(N, prop_state)
@@ -177,7 +177,7 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
                 elseif !do_not_split
                     @timeit to "Compute Split" begin
                     splits += 1
-                    split_d = split_heuristic(Zin,Zout,heuristics_info,verification_task.distance_indices)
+                    split_d = split_heuristic(Zin,Zout,heuristics_info, verification_task)
                     #println("[Thread $(threadid)] Splitting on dimension $(split_d) ([$(verification_task.lower_bounds[split_d]), $(verification_task.upper_bounds[split_d])]) with work share $(work_share)")
                     Z1, Z2 = split_zono(split_d, verification_task,work_share,verification_status, distance_bound)
                     # Z1z = to_diff_zono(Z1[2])
@@ -245,11 +245,12 @@ end
 function split_zono(distance_d, verification_task :: VerificationTask, work_share, verification_status, distance_bound)
     # TODO(steuber): Make split prettier?
     (work_share,Z1), (work_share,Z2), input_pos = (() -> begin
-    split_stage = verification_task.split_stage[distance_d]
+    #split_stage = verification_task.split_stage[distance_d]
     #print("Work Share: $(work_share)")
     #print(verification_task.split_stage)
-    verification_task.split_stage[distance_d] = (split_stage + 1) % 3
-    if split_stage == 2
+    #verification_task.split_stage[distance_d] = (split_stage + 1) % 3
+    if distance_d <= size(verification_task.distance_indices,1)
+        #split_stage == 2
         #println("Splitting on input dimension $(verification_task.distance_indices[distance_d])")
         input_pos = verification_task.distance_indices[distance_d]
         distance1 = verification_task.distance[distance_d]/2
@@ -285,9 +286,10 @@ function split_zono(distance_d, verification_task :: VerificationTask, work_shar
             distance_bound,
             verification_task.split_stage)
         return (work_share/2.0,Z1), (work_share/2.0,Z2), input_pos
-    elseif split_stage == 1
-        input_pos = distance_d
-        #println("Splitting on differential dimension $(input_pos)")
+    elseif distance_d <= size(verification_task.distance_indices,1) + size(verification_task.distance1_secondary,1)
+        #split_stage == 1
+        input_pos = distance_d - size(verification_task.distance_indices,1)
+        #println("Splitting on 1 differential dimension $(input_pos)")
         diff_distance1 = verification_task.distance1_secondary[input_pos]/2
         diff_distance2 = verification_task.distance1_secondary[input_pos]/2
         diff_mid1 = verification_task.middle1_secondary[input_pos] - diff_distance1
@@ -322,8 +324,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, work_shar
             verification_task.split_stage)
         return (work_share/2.0,Z1), (work_share/2.0,Z2), input_pos
     else #split_stage == 0
-        input_pos = distance_d 
-        #println("Splitting on differential dimension $(input_pos)")
+        input_pos = distance_d - size(verification_task.distance_indices,1) - size(verification_task.distance1_secondary,1)
+        #println("Splitting on 2 differential dimension $(input_pos)")
         diff_distance1 = verification_task.distance2_secondary[input_pos]/2
         diff_distance2 = verification_task.distance2_secondary[input_pos]/2
         diff_mid1 = verification_task.middle2_secondary[input_pos] - diff_distance1

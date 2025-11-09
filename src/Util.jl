@@ -59,6 +59,15 @@ function to_diff_zono(task :: VerificationTask)
         # TODO (steuber): If we keep discarding the the secondary dimensions, we can optimize this with a smaller matrix
         influence1 = Matrix(1.0I, size(generator1,2), size(generator1,2))
         influence2 = Matrix(1.0I, size(generator2,2), size(generator2,2))
+        # Scale by generator sizes
+        # influence1[:,1:size(task.distance,1)] .*= task.distance'
+        # influence2[:,1:size(task.distance,1)] .*= task.distance'
+        # influence1[:,(size(task.distance,1)+1):(size(task.distance,1)+input_dim)] .*= task.distance1_secondary'
+        # influence1[:,(size(task.distance,1)+input_dim+1):end] .*= 0.0
+        # influence2[:,(size(task.distance,1)+1):(size(task.distance,1)+input_dim)] .*= 0.0
+        # influence2[:,(size(task.distance,1)+input_dim+1):end] .*= task.distance2_secondary'
+        #println(diag(influence1))
+        #println(diag(influence2))
         influence_diff = nothing
     else
         influence1 = nothing

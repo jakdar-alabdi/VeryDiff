@@ -361,7 +361,8 @@ function top1_configure_split_heuristic(mode)
     # elseif mode == 3
     #     (t,o) -> t+o
     # end
-    return (Zin,Zout,heuristics_info,distance_indices) -> begin
+    return (Zin,Zout,heuristics_info,verification_task) -> begin
+        distance_indices = verification_task.distance_indices
         top_dimension_violation = heuristics_info
         top_dimension_violation ./= norm(top_dimension_violation,2)
         #dimension_importance = dimension_importance_mode(top_dimension_importance,other_dimension_importance)
@@ -373,19 +374,61 @@ function top1_configure_split_heuristic(mode)
 
         #diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:].*sum(abs,((Zout.Z₁.G)*Zout.Z₁.influence'.-(Zout.Z₂.G)*Zout.Z₂.influence'),dims=1)[1,:]
         if NEW_HEURISTIC
-            diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:].*sum(abs,(abs.(Zout.Z₁.G)*abs.(Zout.Z₁.influence').+abs.(Zout.Z₂.G)*abs.(Zout.Z₂.influence')),dims=1)[1,:]
+            diff_weights = (sum(abs,Zin.Z₁.G,dims=1)[1,:] .+ sum(abs,Zin.Z₂.G,dims=1)[1,:] ).*sum(abs,(abs.(Zout.Z₁.G)*abs.(Zout.Z₁.influence').+abs.(Zout.Z₂.G)*abs.(Zout.Z₂.influence')),dims=1)[1,:]
+            #diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:] .* sum(abs, Zout.Z₁.G * Zout.Z₁.influence' .- Zout.Z₂.G * Zout.Z₂.influence', dims=1)[1,:]
+            #diff_weights = sum(abs,(abs.(Zout.Z₁.G) .+ abs.(Zout.Z₂.G)) * (abs.(Zout.Z₁.influence') .+ abs.(Zout.Z₂.influence')),dims=1)[1,:]
+            #println(Zout.Z₁.influence)
+            #diff_weights = (sum(abs,Zin.Z₁.G,dims=1)[1,:] ).*sum(abs,(abs.(Zout.Z₁.G*Zout.Z₁.influence'))) .+ (sum(abs,Zin.Z₂.G,dims=1)[1,:] ).*sum(abs,abs.(Zout.Z₂.G*Zout.Z₂.influence'),dims=1)[1,:]
+            #print(diff_weights[(size(distance_indices,1)+1):end])
             diff_weights ./= norm(diff_weights,2)
         else
             diff_weights = sum(abs, (Zout.Z₁.G[:,1:input_dim] .- Zout.Z₂.G[:,1:input_dim] ),dims=1)[1,:]
             diff_weights ./= norm(diff_weights,2)
         end
 
-        #diff_weights = @view diff_weights[1:size(distance_indices,1)]
+        task_split_stage = (verification_task.split_stage[1] + 1) % 10
+        verification_task.split_stage[1] = task_split_stage
+        #if task_split_stage <= 1
+            # Instable Gens: (6,5,2,4)
+            # -1: 2227
+            # 0: 6021
+            # 1: 50k = 99.99993%
+            # 8: 50k =  0.74158%
+            # TODO: Dynamics might be different for larger NNs?
+         #   split_stage = 0
+        #else
+        split_stage = 3 # Always consider all differential generators
+        #end
+
+        # Print (min, median, max) importance values for 1:size(distance_indices,1)
+        # min = minimum(diff_weights[1:size(distance_indices,1)])
+        # max = maximum(diff_weights[1:size(distance_indices,1)])
+        # median = sort(diff_weights[1:size(distance_indices,1)])[cld(size(distance_indices,1),2)]
+        # println("Diff Weights (min, median, max) Stage 0: ($min, $median, $max)")
+        # # Print (min, median, max) importance values for size(distance_indices,1)+1:end
+        # min = minimum(diff_weights[(size(distance_indices,1)+1):end])
+        # max = maximum(diff_weights[(size(distance_indices,1)+1):end])
+        # median = sort(diff_weights[(size(distance_indices,1)+1):end])[cld(size(diff_weights[(size(distance_indices,1)+1):end],1),2)]
+        # println("Diff Weights (min, median, max) Stage 3: ($min, $median, $max)")
+
+        offset = 0
+        if split_stage == 0
+            diff_weights = @view diff_weights[1:size(distance_indices,1)]
+        elseif split_stage == 1
+            diff_weights = @view diff_weights[(size(distance_indices,1)+1):(size(distance_indices,1) + size(verification_task.distance1_secondary,1))]
+            offset = size(distance_indices,1)
+        elseif split_stage == 2
+            diff_weights = @view diff_weights[(size(distance_indices,1) + size(verification_task.distance1_secondary,1)+1):end]
+            offset = size(distance_indices,1) + size(verification_task.distance1_secondary,1)
+        elseif split_stage == 3
+            diff_weights = @view diff_weights[(size(distance_indices,1)+1):end]
+            offset = size(distance_indices,1)
+        end
 
         if mode==1
             d = argmax(
                 diff_weights
-            )[1]
+            )[1] + offset
         elseif mode==2
             d = argmax(
                 top_dimension_violation
@@ -401,7 +444,8 @@ function top1_configure_split_heuristic(mode)
     end
 end
 
-function epsilon_split_heuristic(Zin,Zout,heuristics_info,distance_indices)
+function epsilon_split_heuristic(Zin,Zout,heuristics_info,verification_task)
+    # distance_indices = verification_task.distance_indices
     out_bounds = heuristics_info[1]
     epsilon = heuristics_info[2]
     focus_dim = heuristics_info[3]
