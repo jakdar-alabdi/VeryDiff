@@ -1,3 +1,103 @@
+# TODO:
+Fix generator issue:
+Z1 and Z2 right now have the same generators, but that's not how it's supposed to be.
+We need that Z2 has the generators of Z1 + the noise generators of partialZ.
+On the upside this will make it unnecessary to explicitly construct Z2 based on the bounds...
+
+Splitting and so on should stay the same
+
+-> Integrate bound constraints into final LP check
+
+## Simplest possible example
+1 input dimension
+x1 in [-1, 1]
+eps in [-0.1, 0.1]
+-> we are searching for an x2 in [-1,1] such that |x1-x2| in [-0.1,0.1]
+
+x1 = 0.95*e1 + 0.05*e2
+
+-> x1: Everything from -1 to 1 is reachable
+
+eps = 0.1*e3
+
+x2 = 0.95*e1 + 0.05*e4
+
+### Overapproximation
+x1  = 1.0 * e1
+x2  = 1.0 * e2
+eps = 0.1 * e3
+
+very overapproximating:
+x1 and x2 can take on completely independent values
+eps just tells us that in practice values are at most eps apart
+
+x1 = 1.0 * e1
+x2 = 1.0 * e2 + 0.1 * e3
+eps = 0.1 *e3
+
+difference is exact, but we cover more area than we wish to for x2
+
+x1 = 0.95 * e1 + 0.05 * e2
+x2 = 0.95 * e1 + 0.05 * e3
+eps = 0.05 * e2 - 0.05 * e3
+
+If we split up e1:
+
+x1 = 0.475 * e1 + 0.05 * e2 - 0.475
+x2 = 0.475 * e1 + 0.05 * e3 - 0.475
+eps = 0.05 * e2 - 0.05 * e3
+--
+x1 = 0.475 * e1 + 0.05 * e2 + 0.475
+x2 = 0.475 * e1 + 0.05 * e3 + 0.475
+eps = 0.05 * e2 - 0.05 * e3
+
+If we split up e2 from above
+
+x1 = 0.475 * e1 + 0.05 * e2 + 0.025
+x2 = 0.475 * e1 + 0.05 * e3
+eps = 0.025 * e2 - 0.05 * e3 + 0.025
+
+x1 = 0.475 * e1 + 0.05 * e2 - 0.025
+x2 = 0.475 * e1 + 0.05 * e3
+eps = 0.025 * e2 - 0.05 * e3 - 0.025
+
+Let x1, x2 in [-1,1] be such that |x1 - x2| <= 0.1
+Case 1: |x1 - x2| <= 0.05
+Case 1.1: x1 <= -0.95
+  Set e1=-1, set e2=(x1+0.95)/0.05
+  Then -0.95 + 0.05*(x1+0.95)/0.05 = x1
+  ...
+
+How would we split this? Let's say we want to split into x1<=0 / x1 >=0
+
+Then: x1  in [-1,0]
+      x2  in [-1,0.1]
+      eps in [-0.1,0.1]
+Find ``common center'' of x1 and x2
+-> Find minimal, symmetric cut off for both such that same center
+-> Need cut off of at least 0.1 for x2 then we would have [-0.9,0.0]
+
+x2 = 0.55 * e_ - 0.45
+   = 0.45 * e1 + 0.1  * e_ - 0.45
+   = 0.45 * e1 + 0.05 * e3 + 0.05 * e4 - 0.45
+x1 = 0.45 * e1 + 0.05 * e2 - 0.5 
+xd = 
+
+(a * e1 + b * e2 + c) - (d * e1 + e * e3 + f) <= 0.1
+< - > (a - d) * e1 + b * e2 + e * e3 + (c - f) <= 0.1
+
+Assume a,b,d,e>=0
+
+- a - b + c = l1
+  a + b + c = u1
+- d - e + f = l2
+  d + e + f = u2
+
+  min((a-d),(d-a)) - b - e + (c - f) <= ld
+  max((a-d),(d-a)) + b + e + (c - f) >= ud
+
+
+
 # VeryDiff
 
 VeryDiff is a tool for the equivalence verification of neural networks (NNs).
