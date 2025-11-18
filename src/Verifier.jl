@@ -30,6 +30,11 @@ function verify_network(
         non_zero_indices = findall((!).(iszero.(distance)))
         distance = distance[non_zero_indices]
         if init_eps > 0.0
+            if !all(init_eps .<= (2.0 .* distance))
+                println("ERROR: Initial epsilon too large for given bounds!")
+                println("Inital Epsilon: $(init_eps); Max Epsilon: $(2.0*minimum(distance))")
+                raise(ErrorException("Initial epsilon too large for given bounds!"))
+            end
             distance .-= (init_eps/2)
             distance1_secondary = fill(init_eps/2, input_dim)
             distance2_secondary = fill(init_eps/2, input_dim)
@@ -146,7 +151,7 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
             @timeit to "Zonotope Propagate" begin
             Zout = N(Zin, prop_state)
             end
-            if first
+            if first #k%5 == 0
                 #println("Zono Bounds:")
                 if VeryDiff.USE_DIFFZONO
                     bounds = zono_bounds(Zout.∂Z)

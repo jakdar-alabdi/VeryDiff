@@ -421,6 +421,9 @@ function top1_configure_split_heuristic(mode)
             diff_weights = @view diff_weights[(size(distance_indices,1) + size(verification_task.distance1_secondary,1)+1):end]
             offset = size(distance_indices,1) + size(verification_task.distance1_secondary,1)
         elseif split_stage == 3
+            # diff_weights = diff_weights
+            # offset = 0
+            #println(round.(diff_weights,digits=2))
             diff_weights = @view diff_weights[(size(distance_indices,1)+1):end]
             offset = size(distance_indices,1)
         end

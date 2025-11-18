@@ -5,7 +5,8 @@ using DataStructures
 
 struct VerificationTaskOrdering <: Ordering end
 lt(o::VerificationTaskOrdering, a, b) = b[1] < a[1] # By Workshare (largest first)
-# b[2].distance_bound < a[2].distance_bound
+#b[1] < a[1] # By Workshare (largest first)
+# b[2].distance_bound < a[2].distance_bound # By distance to bound (probable violation first)
 
 mutable struct Queue
     queue::BinaryHeap{Tuple{Float64,VerificationTask},VerificationTaskOrdering}
