@@ -4,6 +4,23 @@ mutable struct Zonotope
     influence::Union{Matrix{Float64},Nothing}
 end
 
+struct SplitNode
+    network :: Int64
+    layer :: Int64
+    neuron :: Int64
+    direction :: Int64
+end
+
+struct SplitGenerator
+    g :: Vector{Float64}
+    c :: Float64
+end
+
+mutable struct SplitCandidate
+    node :: SplitNode
+    err :: Float64
+end
+
 struct VerificationTask
     middle :: Vector{Float64}
     distance :: Vector{Float64}
@@ -29,8 +46,10 @@ mutable struct PropState
     i :: Int64
     num_relus :: Int64
     relu_config :: Vector{Int64}
+    split_generators :: Dict{String, SplitGenerator}
+    split_candidates :: Deque{SplitNode}
     function PropState(first :: Bool)
-        return new(first, 0, 0, Int64[])
+        return new(first, 0, 0, Int64[], Dict(), Deque{SplitNode}())
     end
 end
 
@@ -71,7 +90,7 @@ struct GeminiNetwork
                 @assert size(l1.W) == size(l2.W) "Mismatch in weight matrix size: $(size(l1.W)) vs $(size(l2.W))"
                 @assert size(l1.b) == size(l2.b)
                 push!(diff_layers, Dense(l1.W .- l2.W, l1.b .- l2.b))
-                println("Distance: ", sum(abs,diff_layers[end].W))
+                # println("Distance: ", sum(abs,diff_layers[end].W))
             elseif typeof(l1) == ReLU
                 push!(diff_layers, ReLU())
             else

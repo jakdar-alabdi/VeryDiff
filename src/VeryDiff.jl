@@ -5,6 +5,7 @@ using LinearAlgebra
 #using SparseArrays
 using VNNLib
 #using ThreadPinning
+using DataStructures
 
 using GLPK
 
@@ -53,13 +54,17 @@ include("MultiThreadding.jl")
 include("Properties.jl")
 include("Verifier.jl")
 include("Cli.jl")
+include("../dev/NeuronSplitting.jl")
+# include("../util.jl")
 
 export Network,GeminiNetwork,Layer,Dense,ReLU,WrappedReLU
 export parse_network
-export Zonotope, DiffZonotope, PropState
+export Zonotope, DiffZonotope, PropState, SplitNode, SplitCandidate
 export zono_optimize, zono_bounds
 export verify_network
 export get_epsilon_property, epsilon_split_heuristic, get_epsilon_property_naive
 export get_top1_property, top1_configure_split_heuristic
+export propagate_diff_layer
+export deepsplit_lp_search_epsilon
 
 end # module AlphaZono

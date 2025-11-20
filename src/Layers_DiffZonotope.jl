@@ -2,7 +2,7 @@ import VNNLib.NNLoader.Network
 import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
-function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState)
+function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, l :: Int64, split_nodes :: Vector{SplitNode}, split_candidate :: SplitCandidate)
     #println("Prop dense")
     return @timeit to "DiffZonotope_DenseProp" begin
     #println("Dense")
@@ -34,9 +34,9 @@ function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P
         mul!(∂c, ∂L.W, Z.Z₂.c, 1.0, 1.0)
         ∂c .+= ∂L.b
         ∂Z_new = Zonotope(∂G,∂c,Z.∂Z.influence)
-        diff_zono_new = DiffZonotope(L1(Z.Z₁,P),L2(Z.Z₂,P),∂Z_new,Z.num_approx₁,Z.num_approx₂,Z.∂num_approx)
+        diff_zono_new = DiffZonotope(L1(Z.Z₁,P,l,1,split_nodes,split_candidate),L2(Z.Z₂,P,l,2,split_nodes,split_candidate),∂Z_new,Z.num_approx₁,Z.num_approx₂,Z.∂num_approx)
     else
-        diff_zono_new = DiffZonotope(L1(Z.Z₁,P),L2(Z.Z₂,P),Z.∂Z,Z.num_approx₁,Z.num_approx₂,Z.∂num_approx)
+        diff_zono_new = DiffZonotope(L1(Z.Z₁,P,l,1,split_nodes,split_candidate),L2(Z.Z₂,P,l,2,split_nodes,split_candidate),Z.∂Z,Z.num_approx₁,Z.num_approx₂,Z.∂num_approx)
     end
     Debugger.@post_diffzono_prop_hook diff_zono_new context="Post Dense"
     return diff_zono_new
@@ -48,7 +48,7 @@ function two_generator_bound(G::Matrix{Float64}, b, H::Matrix{Float64})
     return [sum(j->abs(G[i,j]+b*H[i,j]),1:size(G,2)) for i in 1:size(G,1)]
 end
 
-function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState)
+function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, l :: Int64, split_nodes :: Vector{SplitNode}, split_candidate :: SplitCandidate)
     #println("Prop relu")
     return @timeit to "DiffZonotope_ReLUProp" begin
     #println("ReLU")
@@ -100,8 +100,8 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     upper₂ = @view bounds₂[:,2]
 
     # Compute Zonotopes for individual networks
-    Z₁_new = L1(Z.Z₁,P;bounds = bounds₁)
-    Z₂_new = L2(Z.Z₂,P;bounds = bounds₂)
+    Z₁_new = L1(Z.Z₁,P,l,1,split_nodes,split_candidate;bounds = bounds₁)
+    Z₂_new = L2(Z.Z₂,P,l,2,split_nodes,split_candidate;bounds = bounds₂)
     output_dim = size(Z.Z₂,1)
     num_approx₁ = size(Z₁_new.G,2)-input_dim
     num_approx₂ = size(Z₂_new.G,2)-input_dim
@@ -360,7 +360,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
         end
 
         if FIRST_ROUND
-            print("Instable Generators: ",instable_new_generators,"\n")
+            # print("Instable Generators: ",instable_new_generators,"\n")
         end
 
         ∂Z_new = Zonotope(Ĝ, ĉ, Z.∂Z.influence)
@@ -374,7 +374,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
 end
 
 
-function (N::GeminiNetwork)(Z :: DiffZonotope, P :: PropState)
+function (N::GeminiNetwork)(Z::DiffZonotope, P::PropState; split_nodes=SplitNode[], split_candidate=SplitCandidate(SplitNode(1, 1, 1, 0), -Inf))
     #println("Prop network")
-    return foldl((Z,Ls) -> propagate_diff_layer(Ls,Z,P),zip(N.network1.layers,N.diff_network.layers,N.network2.layers),init=Z)
+    return foldl((Z,(l,Ls)) -> propagate_diff_layer(Ls,Z,P, (l+1)÷2, split_nodes, split_candidate),enumerate(zip(N.network1.layers,N.diff_network.layers,N.network2.layers)),init=Z)
 end

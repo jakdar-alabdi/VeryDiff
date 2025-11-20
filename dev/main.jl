@@ -4,74 +4,88 @@ using JuMP, Gurobi
 
 VeryDiff.NEW_HEURISTIC = false
 
-eps = 0.1
+ϵ = 1.0e-5
 num_layer = rand(10:42)
-input_dim = rand(10:42)
-output_dim = 10
+input_dim, output_dim = (2, 2)
 layers1 = Layer[]
 layers2 = Layer[]
 
-next_dim = input_dim
-for l in 1:num_layer
-    if l == num_layer
-        new_out_dim = output_dim
-    else
-        new_out_dim = rand(10:42)
-    end
+# for l in 1:num_layer
+#     # new_input_dim = rand(10:42)
+#     W1 = randn(Float64, (2, 2))
+#     c1 = randn(Float64, 2)
+#     push!(layers1, Dense(W1, c1))
+#     push!(layers1, ReLU())
 
-    W1 = randn(Float64, (new_out_dim, next_dim))
-    c1 = randn(Float64, new_out_dim)
-    push!(layers1, Dense(W1, c1))
-    push!(layers1, ReLU())
+#     W2 = W1 + ϵ * Matrix(1.0I, (2, 2))
+#     c2 = c1 + ϵ * ones(Float64, 2)
+#     push!(layers2, Dense(W2, c2))
+#     push!(layers2, ReLU())
+# end
 
-    W2 = W1 + eps * randn(Float64, (new_out_dim, next_dim))
-    c2 = c1 + eps * randn(Float64, new_out_dim)
-    push!(layers2, Dense(W2, c2))
-    push!(layers2, ReLU())
+# input_range = max(4.0, 10.0 * rand())
 
-    next_dim = new_out_dim
-end
+layers1 = Layer[
+    Dense([1.7901994999337738 -0.4375139492492878; -0.6463011149536566 -0.294362301893835], [0.4858268442695409, -0.3083995832971191]),
+    ReLU(),
+    Dense([1.347707452913051 -0.3146188184438083; -0.1724980704319044 1.3150142870758215], [-1.6489691121810657, 0.3154201062043038]),
+    ReLU(),
+    Dense([0.031313002692325044 0.9255109945797536; -0.6436521744948884 1.2500342629765357], [0.8820501333110521, -0.4141060871972209]),
+    ReLU(),
+    Dense([0.9686008564499987 -1.802808013449341; -0.18884926111600128 0.7735822224964346], [0.4599300554775193, -0.27958078103580214]),
+    ReLU(),
+    Dense([-0.37566416722901746 0.5662474712485283; -1.152400376401409 -0.12230326369286959], [0.05556857907521722, 0.0887560097096626]),
+    ReLU(),
+    Dense([0.4877370152355362 0.3992903477728307; -0.4916371434675079 -1.1227964794060794], [0.29456667601848685, 1.083292811708767]),
+    ReLU(),
+    Dense([0.08926318457803685 0.765030610066109; 0.9024287529989173 -0.7545201379880397], [-0.015334676676834219, 0.5675979257285917]),
+    ReLU(),
+    Dense([0.7673904813047289 -1.542237049832504; 0.010884097127559778 0.9322644923018855], [-1.3651666407584295, 0.023879238059846247]),
+    ReLU(),
+    Dense([0.3180228415729041 -0.07903625695921851; 0.9425850271902696 -0.7464757431612407], [-0.624130698523964, -0.2697997653000221]),
+    ReLU(),
+    Dense([0.17872459879005195 -0.179797304032193; -2.1836695250289 1.3454711687175822], [-0.12013260230442856, -1.0314024426119974]),
+    ReLU(),
+    Dense([-2.045191560947058 0.45139193468340244; -0.38928407556392314 -0.39667410409807896], [-0.6058976531933701, -0.7965043036498215]),
+    ReLU()
+]
 
-N1 = Network(layers1)
-N2 = Network(layers2)
-N = GeminiNetwork(N1, N2)
+layers2 = Layer[
+    Dense([1.8001994999337738 -0.4375139492492878; -0.6463011149536566 -0.284362301893835], [0.49582684426954093, -0.2983995832971191]),
+    ReLU(),
+    Dense([1.357707452913051 -0.3146188184438083; -0.1724980704319044 1.3250142870758215], [-1.6389691121810657, 0.3254201062043038]),
+    ReLU(),
+    Dense([0.041313002692325046 0.9255109945797536; -0.6436521744948884 1.2600342629765358], [0.8920501333110521, -0.4041060871972209]),
+    ReLU(),
+    Dense([0.9786008564499987 -1.802808013449341; -0.18884926111600128 0.7835822224964346], [0.4699300554775193, -0.26958078103580213]),
+    ReLU(),
+    Dense([-0.36566416722901746 0.5662474712485283; -1.152400376401409 -0.1123032636928696], [0.06556857907521722, 0.0987560097096626]),
+    ReLU(),
+    Dense([0.4977370152355362 0.3992903477728307; -0.4916371434675079 -1.1127964794060794], [0.30456667601848686, 1.093292811708767]),
+    ReLU(),
+    Dense([0.09926318457803684 0.765030610066109; 0.9024287529989173 -0.7445201379880397], [-0.005334676676834219, 0.5775979257285917]),
+    ReLU(),
+    Dense([0.7773904813047289 -1.542237049832504; 0.010884097127559778 0.9422644923018855], [-1.3551666407584295, 0.033879238059846245]),
+    ReLU(),
+    Dense([0.3280228415729041 -0.07903625695921851; 0.9425850271902696 -0.7364757431612406], [-0.614130698523964, -0.2597997653000221]),
+    ReLU(),
+    Dense([0.18872459879005196 -0.179797304032193; -2.1836695250289 1.3554711687175822], [-0.11013260230442856, -1.0214024426119974]),
+    ReLU(),
+    Dense([-2.0351915609470583 0.45139193468340244; -0.38928407556392314 -0.38667410409807895], [-0.5958976531933701, -0.7865043036498215]),
+    ReLU()
+]
 
-input_range = max(eps, 3.0 * rand())
-
-Zin = Zonotope(Matrix(input_range * I, input_dim, input_dim), rand(input_dim), nothing)
-prop_state = PropState(true)
-
-L1 = N.network1.layers
-L2 = N.network2.layers
-∂L = N.diff_network.layers
-
-∂G = Matrix(1.0I, 2, 3)
-mul!((@view ∂G[:, 1:2]), [2.0 0; 0.0 2], [2.0 0; 0.0 2])
+input_range = 9.0
 
 Z = Zonotope(Matrix(input_range * I, input_dim, input_dim), rand(input_dim), nothing)
+N₁ = Network(layers1)
+N₂ = Network(layers2)
 
-bounds = zono_bounds(Z)
-lower = bounds[:, 1]
-upper = bounds[:, 2]
-
-split_index = argmax((i -> ifelse(lower[i] < 0 < upper[i], upper[i] - lower[i], 0)), 1:size(bounds, 1))
-model = JuMP.Model(() -> Gurobi.Optimizer(VeryDiff.GRB_ENV[]))
-set_time_limit_sec(model, 10)
-
-g = copy(Z.G[split_index, :])
-c = copy(Z.c[split_index])
-var_num = size(Z.G, 2)
-
-@variable(model, -1.0 <= x[1:var_num] <= 1.0)
-@constraint(model, g ⋅ x + c <= 0.0)
-@objective(model, Max, x)
+property_check = get_epsilon_property(ϵ)
 
 
-optimize!(model)
+verify_network(N₁, N₂, zono_bounds(Z), property_check, epsilon_split_heuristic)
 
-objective_value(model)
+println("\n#########################################\n")
 
-# println("Verify epsilon property:")
-# property = get_epsilon_property(eps)
-# input_split_heuristic = epsilon_split_heuristic
-
+deepsplit_lp_search_epsilon(ϵ)(N₁, N₂, Z)
