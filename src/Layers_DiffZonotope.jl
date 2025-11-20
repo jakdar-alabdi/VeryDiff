@@ -2,7 +2,7 @@ import VNNLib.NNLoader.Network
 import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
-function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, l :: Int64, split_nodes :: Vector{SplitNode}, split_candidate :: SplitCandidate)
+function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, l :: Int64, split_nodes :: Vector{SplitNode}, split_candidates :: Vector{SplitCandidate})
     #println("Prop dense")
     return @timeit to "DiffZonotope_DenseProp" begin
     #println("Dense")
@@ -34,9 +34,9 @@ function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P
         mul!(∂c, ∂L.W, Z.Z₂.c, 1.0, 1.0)
         ∂c .+= ∂L.b
         ∂Z_new = Zonotope(∂G,∂c,Z.∂Z.influence)
-        diff_zono_new = DiffZonotope(L1(Z.Z₁,P,l,1,split_nodes,split_candidate),L2(Z.Z₂,P,l,2,split_nodes,split_candidate),∂Z_new,Z.num_approx₁,Z.num_approx₂,Z.∂num_approx)
+        diff_zono_new = DiffZonotope(L1(Z.Z₁,P,l,1,split_nodes),L2(Z.Z₂,P,l,2,split_nodes),∂Z_new,Z.num_approx₁,Z.num_approx₂,Z.∂num_approx)
     else
-        diff_zono_new = DiffZonotope(L1(Z.Z₁,P,l,1,split_nodes,split_candidate),L2(Z.Z₂,P,l,2,split_nodes,split_candidate),Z.∂Z,Z.num_approx₁,Z.num_approx₂,Z.∂num_approx)
+        diff_zono_new = DiffZonotope(L1(Z.Z₁,P,l,1,split_nodes),L2(Z.Z₂,P,l,2,split_nodes),Z.∂Z,Z.num_approx₁,Z.num_approx₂,Z.∂num_approx)
     end
     Debugger.@post_diffzono_prop_hook diff_zono_new context="Post Dense"
     return diff_zono_new
@@ -48,7 +48,7 @@ function two_generator_bound(G::Matrix{Float64}, b, H::Matrix{Float64})
     return [sum(j->abs(G[i,j]+b*H[i,j]),1:size(G,2)) for i in 1:size(G,1)]
 end
 
-function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, l :: Int64, split_nodes :: Vector{SplitNode}, split_candidate :: SplitCandidate)
+function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, l :: Int64, split_nodes :: Vector{SplitNode}, split_candidates :: Vector{SplitCandidate})
     #println("Prop relu")
     return @timeit to "DiffZonotope_ReLUProp" begin
     #println("ReLU")
@@ -99,9 +99,22 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     lower₂ = @view bounds₂[:,1]
     upper₂ = @view bounds₂[:,2]
 
+    # Get split nodes corresponding to this layer
+    layer_split_nodes₁ = filter(node -> (node.network, node.layer) == (1, l), split_nodes)
+    layer_split_nodes₂ = filter(node -> (node.network, node.layer) == (2, l), split_nodes)
+
+    # For each node in this layer compute the splitting direction
+    # 0 no branching, 1 branch to >= 0, -1 branch to <= 0
+    nodes_direction₁ = zeros(Int64, size(lower₁))
+    nodes_direction₂ = zeros(Int64, size(lower₂))
+    for (node₁, node₂) in zip(layer_split_nodes₁, layer_split_nodes₂)
+        nodes_direction₁[node₁.neuron] = node₁.direction
+        nodes_direction₂[node₂.neuron] = node₂.direction
+    end
+
     # Compute Zonotopes for individual networks
-    Z₁_new = L1(Z.Z₁,P,l,1,split_nodes,split_candidate;bounds = bounds₁)
-    Z₂_new = L2(Z.Z₂,P,l,2,split_nodes,split_candidate;bounds = bounds₂)
+    Z₁_new = L1(Z.Z₁,P,l,1,split_nodes;bounds = bounds₁,split_candidates=split_candidates)
+    Z₂_new = L2(Z.Z₂,P,l,2,split_nodes;bounds = bounds₂,split_candidates=split_candidates)
     output_dim = size(Z.Z₂,1)
     num_approx₁ = size(Z₁_new.G,2)-input_dim
     num_approx₂ = size(Z₂_new.G,2)-input_dim
@@ -115,23 +128,23 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
         # Compute Phase Behaviour
         check = copy(zero_diff)
         
-        neg_neg = (upper₁ .<= 0.0) .&& (upper₂ .<= 0.0) .&& .!check
+        neg_neg = (upper₁ .<= 0.0 .|| isone.(-nodes_direction₁)) .&& (upper₂ .<= 0.0 .|| isone.(-nodes_direction₂)) .&& .!check
         check .|= neg_neg
-        neg_pos = (upper₁ .<= 0.0) .&& (lower₂ .>= 0.0) .&& .!check
+        neg_pos = (upper₁ .<= 0.0 .|| isone.(-nodes_direction₁)) .&& (lower₂ .>= 0.0 .|| isone.(nodes_direction₂)) .&& .!check
         check .|= neg_pos
-        pos_neg = (lower₁ .>= 0.0) .&& (upper₂ .<= 0.0) .&& .!check
+        pos_neg = (lower₁ .>= 0.0 .|| isone.(nodes_direction₁)) .&& (upper₂ .<= 0.0 .|| isone.(-nodes_direction₂)) .&& .!check
         check .|= pos_neg
-        pos_pos = (lower₁ .>= 0.0) .&& (lower₂ .>= 0.0) .&& .!check
+        pos_pos = (lower₁ .>= 0.0 .|| isone.(nodes_direction₁)) .&& (lower₂ .>= 0.0 .|| isone.(nodes_direction₂)) .&& .!check
         check .|= pos_pos
-        any_neg = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& (upper₂ .<= 0.0) .&& .!check
+        any_neg = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& iszero.(nodes_direction₁) .&& (upper₂ .<= 0.0 .|| isone.(-nodes_direction₂)) .&& .!check
         check .|= any_neg
-        neg_any = (upper₁ .<= 0.0) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& .!check
+        neg_any = (upper₁ .<= 0.0 .|| isone.(-nodes_direction₁)) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& iszero.(nodes_direction₂) .&& .!check
         check .|= neg_any
-        any_pos = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& (lower₂ .>= 0.0) .&& .!check
+        any_pos = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& iszero.(nodes_direction₁) .&& (lower₂ .>= 0.0 .|| isone.(nodes_direction₂)) .&& .!check
         check .|= any_pos
-        pos_any = (lower₁ .>= 0.0) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& .!check
+        pos_any = (lower₁ .>= 0.0 .|| isone.(nodes_direction₁)) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& iszero.(nodes_direction₂) .&& .!check
         check .|= pos_any
-        any_any = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& .!check
+        any_any = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& iszero.(nodes_direction₁) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& iszero.(nodes_direction₂) .&& .!check
         check .|= any_any
         @assert all(check) "Not all cases covered"
 
@@ -374,7 +387,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
 end
 
 
-function (N::GeminiNetwork)(Z::DiffZonotope, P::PropState; split_nodes=SplitNode[], split_candidate=SplitCandidate(SplitNode(1, 1, 1, 0), -Inf))
+function (N::GeminiNetwork)(Z::DiffZonotope, P::PropState; split_nodes=SplitNode[], split_candidates=SplitCandidate[])
     #println("Prop network")
-    return foldl((Z,(l,Ls)) -> propagate_diff_layer(Ls,Z,P, (l+1)÷2, split_nodes, split_candidate),enumerate(zip(N.network1.layers,N.diff_network.layers,N.network2.layers)),init=Z)
+    return foldl((Z,(l,Ls)) -> propagate_diff_layer(Ls,Z,P, (l+1)÷2, split_nodes, split_candidates), enumerate(zip(N.network1.layers,N.diff_network.layers,N.network2.layers)), init=Z)
 end

@@ -8,16 +8,16 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
         ∂Z = Zonotope(zeros(Float64, size(Zin.G)), zeros(size(Zin.c)), nothing)
         ∂Zin = DiffZonotope(Zin, deepcopy(Zin), ∂Z, 0, 0, 0)
 
-        splits = Deque{Tuple{DiffZonotope, Vector{SplitNode}}}()
-        push!(splits, (∂Zin, SplitNode[]))
+        splits = Deque{Vector{SplitNode}}()
+        push!(splits, SplitNode[])
 
         neuron_splits = 0
         
         while !isempty(splits)
-            ∂Zin, split_nodes = popfirst!(splits)
+            split_nodes = popfirst!(splits)
             
-            split_candidate = SplitCandidate(SplitNode(1, 1, 1, 0), -Inf64)
-            Zout = N(∂Zin, prop_state; split_nodes=split_nodes, split_candidate=split_candidate)
+            split_candidates = SplitCandidate[]
+            Zout = N(∂Zin, prop_state; split_nodes=split_nodes, split_candidates=split_candidates)
 
             prop_satisfied, cex, _, _, _ = property_check(N₁, N₂, ∂Zin, Zout, nothing)
 
@@ -39,8 +39,8 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
                 # Add split constraints
                 for split_node in split_nodes
                     (;g, c) = prop_state.split_generators[to_dict_key(split_node)]
-                    append!(g, zeros(var_num - size(g, 1)))
-                    @constraint(model, split_node.direction * (g' * x + c) >= 0.0)
+                    # append!(g, zeros(var_num - size(g, 1)))
+                    @constraint(model, split_node.direction * (g' * x[1:size(g, 1)] + c) >= 0.0)
                 end
 
                 @objective(model, Max, 0)
@@ -54,11 +54,12 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
                     end
                 end
 
-                # TODO add functionality for checking whether there are any split candidates
-                # if no more split candidates are left => status UNKNOWN
+                if isempty(split_candidates)
+                    return UNKNOWN
+                end
 
                 if termination_status(model) != MOI.INFEASIBLE
-                    split₁, split₂ = split_neuron(split_candidate.node, (∂Zin, split_nodes))
+                    split₁, split₂ = split_neuron(split_candidates[1].node, split_nodes)
                     push!(splits, split₁, split₂)
 
                     neuron_splits += 1
@@ -70,12 +71,12 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
     end
 end
 
-function split_neuron(node :: SplitNode, prev_split :: Tuple{DiffZonotope, Vector{SplitNode}})
+function split_neuron(node :: SplitNode, prev_split :: Vector{SplitNode})
     split₁ = prev_split
     split₂ = deepcopy(prev_split)
 
-    push!(split₁[2], SplitNode(node.network, node.layer, node.neuron, -1))
-    push!(split₂[2], SplitNode(node.network, node.layer, node.neuron, 1))
+    push!(split₁, SplitNode(node.network, node.layer, node.neuron, -1))
+    push!(split₂, SplitNode(node.network, node.layer, node.neuron, 1))
 
     return split₁, split₂
 end

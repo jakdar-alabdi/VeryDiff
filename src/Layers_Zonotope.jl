@@ -2,11 +2,11 @@ import VNNLib.NNLoader.Network
 import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
-function (N::Network)(Z :: Zonotope, P :: PropState, id :: Int64, split_nodes :: Vector{SplitNode}, split_candidate :: SplitCandidate)
-    return foldl((Z, (l, L)) -> L(Z, P, l, id, split_nodes, split_candidate), enumerate(N.layers), init=Z)
+function (N::Network)(Z :: Zonotope, P :: PropState, id :: Int64, split_nodes :: Vector{SplitNode})
+    return foldl((Z, (l, L)) -> L(Z, P, l, id, split_nodes), enumerate(N.layers), init=Z)
 end
 
-function (L::Dense)(Z :: Zonotope, P :: PropState, l :: Int64, id :: Int64, split_nodes :: Vector{SplitNode}, split_candidate :: SplitCandidate)
+function (L::Dense)(Z :: Zonotope, P :: PropState, l :: Int64, id :: Int64, split_nodes :: Vector{SplitNode})
     return @timeit to "Zonotope_DenseProp" begin
     G = L.W * Z.G
     c = L.W * Z.c .+ L.b
@@ -24,7 +24,7 @@ function get_slope(l,u, alpha)
     end
 end
 
-function (L::ReLU)(Z::Zonotope, P::PropState, l::Int64, id::Int64, split_nodes::Vector{SplitNode}, split_candidate :: SplitCandidate; bounds = nothing)
+function (L::ReLU)(Z::Zonotope, P::PropState, l::Int64, id::Int64, split_nodes::Vector{SplitNode}; bounds = nothing, split_candidates = SplitCandidate[])
     return @timeit to "Zonotope_ReLUProp" begin
     @timeit to "Bounds" begin
     row_count = size(Z.G,1)
@@ -99,9 +99,11 @@ function (L::ReLU)(Z::Zonotope, P::PropState, l::Int64, id::Int64, split_nodes::
     # Select a split candidate naively (a crossing node with highest upper bound) for next branching
     if any(crossing)
         neuron = argmin(i -> upper[i] + lower[i], (1:size(lower, 1))[crossing])
-        if isnothing(split_candidate) || split_candidate.err < upper[neuron]
-            split_candidate.err = upper[neuron]
-            split_candidate.node = SplitNode(id, l, neuron, 0)
+        split_candidate = SplitCandidate(SplitNode(id, l, neuron, 0), upper[neuron])
+        if isempty(split_candidates)
+            push!(split_candidates, split_candidate)
+        elseif split_candidates[1].err < split_candidate.err
+            split_candidates[1] = split_candidate
         end
     end
 
