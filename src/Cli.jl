@@ -33,6 +33,9 @@ function parse_commandline(cmd_args)
         "--naive"
             help        =   "Use naive verification (without differential verification)"
             action      =   :store_true
+        "--neuron-splitting"
+            help        =   "Leverage Neuron-Splitting for refinement"
+            action      =   :store_true
     end
     return parse_args(cmd_args, s)
 end
@@ -120,10 +123,21 @@ function run_cmd(args)
 
     result = SAFE
     try
+        cex = [0.6, 0.5, -0.5, 0.45, -0.5]
+        distance_vec = abs.(net1(cex)-net2(cex))
+        max_distance = maximum(distance_vec)
+        min_distance = minimum(distance_vec)
+        println("Is $cex with max distance $max_distance an counterexample: $(max_distance > epsilon)")
+        println("Is $cex with min distance $min_distance an counterexample: $(min_distance > epsilon)")
+        println("Distance vector: $distance_vec")
         # Run verification
         for (bounds, _, _, num) in spec
             passed_time = @timed begin
-                current_result = verify_network(net1, net2, bounds[1:n_inputs,:], property, split_heuristic, timeout=timeout)
+                if parsed_args["neuron-splitting"] && epsilon >= 0.0
+                    current_result = deepsplit_lp_search_epsilon(net1, net2, bounds[1:n_inputs,:], epsilon)
+                else
+                    current_result = verify_network(net1, net2, bounds[1:n_inputs,:], property, split_heuristic, timeout=timeout)
+                end
             end
             timeout -= passed_time[:time]
             if current_result == UNSAFE

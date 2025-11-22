@@ -65,6 +65,7 @@ export verify_network
 export get_epsilon_property, epsilon_split_heuristic, get_epsilon_property_naive
 export get_top1_property, top1_configure_split_heuristic
 export propagate_diff_layer
+export run_cmd
 export deepsplit_lp_search_epsilon
 
 end # module AlphaZono

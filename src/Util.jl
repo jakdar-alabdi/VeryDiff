@@ -29,3 +29,12 @@ function to_diff_zono(task :: VerificationTask)
     Z2 = deepcopy(Z1)
     return DiffZonotope(Z1, Z2, task.∂Z, 0, 0, 0)
 end
+
+function to_zonotope(lower::AbstractVector{N}, upper::AbstractVector{N}) where N<:Number
+    mid = (lower .+ upper) ./ 2
+    distance = (upper .- lower) ./ 2
+    input_dim = length(lower)
+    G = distance .* Matrix(I, input_dim, input_dim)[:, distance .> 0]
+    influence = Matrix(I, sum(distance .> 0), sum(distance .> 0))
+    return Zonotope(G, mid, influence)
+end

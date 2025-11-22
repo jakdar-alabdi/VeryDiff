@@ -44,8 +44,12 @@ function (L::ReLU)(Z::Zonotope, P::PropState, l::Int64, id::Int64, split_nodes::
     for node in layer_split_nodes
         nodes_direction[node.neuron] = node.direction
 
-        # Save the generators of split nodes before propagation
-        P.split_generators["$id,$l,$(node.neuron)"] = SplitGenerator(Z.G[node.neuron, :], Z.c[node.neuron])
+        # Update the generator of split node before propagation
+        generator = SplitGenerator(Z.G[node.neuron, :], Z.c[node.neuron])
+        current_generator = get!(P.split_generators, to_dict_key(node), generator)
+        if (sum(abs.(current_generator.g)) > sum(abs.(generator.g)))
+            P.split_generators[to_dict_key(node)] = generator
+        end
     end
 
     @timeit to "Vectors" begin
@@ -96,10 +100,10 @@ function (L::ReLU)(Z::Zonotope, P::PropState, l::Int64, id::Int64, split_nodes::
     Ĝ[:,size(Z.G,2)+1:end] .*= abs.(γ)
     end
 
-    # Select a split candidate naively (a crossing node with highest upper bound) for next branching
+    # Select a split candidate naively (by only considering each node's generator and their layer) for next branching
     if any(crossing)
-        neuron = argmin(i -> upper[i] + lower[i], (1:size(lower, 1))[crossing])
-        split_candidate = SplitCandidate(SplitNode(id, l, neuron, 0), upper[neuron])
+        neuron = argmax(i -> sum(abs.(Z.G[i, :])), (1:size(crossing, 1))[crossing])
+        split_candidate = SplitCandidate(SplitNode(id, l, neuron, 0), sum(abs.(Z.G[neuron, :])))
         if isempty(split_candidates)
             push!(split_candidates, split_candidate)
         elseif split_candidates[1].err < split_candidate.err
