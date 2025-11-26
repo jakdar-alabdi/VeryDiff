@@ -82,15 +82,6 @@ function to_diff_zono(task :: VerificationTask)
         avg_gen2_1 = mean(sum(abs.(generator2[:,1:size(task.distance,1)]), dims=2))
         avg_gen2_2 = mean(sum(abs.(generator2[:,(size(task.distance,1)+1):end]), dims=2))
         influence2[:,((size(task.distance,1)+1):end)] .*= (2*avg_gen2_1/avg_gen2_2)^2
-        # Scale by generator sizes
-        # influence1[:,1:size(task.distance,1)] .*= task.distance'
-        # influence2[:,1:size(task.distance,1)] .*= task.distance'
-        # influence1[:,(size(task.distance,1)+1):(size(task.distance,1)+input_dim)] .*= task.distance1_secondary'
-        # influence1[:,(size(task.distance,1)+input_dim+1):end] .*= 0.0
-        # influence2[:,(size(task.distance,1)+1):(size(task.distance,1)+input_dim)] .*= 0.0
-        # influence2[:,(size(task.distance,1)+input_dim+1):end] .*= task.distance2_secondary'
-        #println(diag(influence1))
-        #println(diag(influence2))
         influence_diff = nothing
     else
         influence1 = nothing

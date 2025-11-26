@@ -34,6 +34,10 @@ function parse_commandline(cmd_args)
             help        =   "Epsilon value for input perturbation in confidence based robustness"
             arg_type    =   Float64
             default     =   0.0
+        "--only-split-diff"
+            help        =   "Only split on differential dimensions (only relevant for robustness verification)"
+            action      =   :store_true
+            default     =   false
         "--timeout"
             help        =   "Timeout for verification"
             arg_type    =   Int
@@ -125,7 +129,11 @@ function run_cmd(args)
         @assert isnothing(property) "Cannot specify both epsilon and robustness delta"
         @assert 0.5 <= robustness_delta < 1.0 "Invalid delta value for robustness; must be in [0.5,1)"
         property = get_top1_property(delta=robustness_delta, naive=parsed_args["naive"])
-        split_heuristic = top1_configure_split_heuristic(1)
+        if parsed_args["only-split-diff"]
+            split_heuristic = top1_configure_split_heuristic(2)
+        else
+            split_heuristic = top1_configure_split_heuristic(1)
+        end
         @assert input_epsilon > 0.0 "Input epsilon must be positive for confidence based robustness verification"
     end
     if isnothing(property)

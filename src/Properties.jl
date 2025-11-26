@@ -397,7 +397,7 @@ function top1_configure_split_heuristic(mode)
             # TODO: Dynamics might be different for larger NNs?
          #   split_stage = 0
         #else
-        split_stage = 3 # Always consider all differential generators
+        #split_stage = 3 # Always consider all differential generators
         #end
 
         # Print (min, median, max) importance values for 1:size(distance_indices,1)
@@ -412,35 +412,14 @@ function top1_configure_split_heuristic(mode)
         # println("Diff Weights (min, median, max) Stage 3: ($min, $median, $max)")
 
         offset = 0
-        if split_stage == 0
-            diff_weights = @view diff_weights[1:size(distance_indices,1)]
-        elseif split_stage == 1
-            diff_weights = @view diff_weights[(size(distance_indices,1)+1):(size(distance_indices,1) + size(verification_task.distance1_secondary,1))]
-            offset = size(distance_indices,1)
-        elseif split_stage == 2
-            diff_weights = @view diff_weights[(size(distance_indices,1) + size(verification_task.distance1_secondary,1)+1):end]
-            offset = size(distance_indices,1) + size(verification_task.distance1_secondary,1)
-        elseif split_stage == 3
-            # diff_weights = diff_weights
-            # offset = 0
-            #println(round.(diff_weights,digits=2))
+        if mode == 2
             diff_weights = @view diff_weights[(size(distance_indices,1)+1):end]
             offset = size(distance_indices,1)
         end
 
-        if mode==1
-            d = argmax(
-                diff_weights
-            )[1] + offset
-        elseif mode==2
-            d = argmax(
-                top_dimension_violation
-            )[1]
-        elseif mode==3
-            d = argmax(
-                diff_weights .+ top_dimension_violation
-            )[1]
-        end
+        d = argmax(
+            diff_weights
+        )[1] + offset
         #return distance_indices[d]
         # println("Splitting on dimension $d")
         return d

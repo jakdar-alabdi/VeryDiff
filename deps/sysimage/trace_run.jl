@@ -92,3 +92,12 @@ VeryDiff.run_cmd([
     "--robustness-delta=0.75",
     "--input-epsilon=2e-2"
 ])
+
+VeryDiff.run_cmd([
+    "$sysimage_dir/../../test/examples/nets-new/german_credit-not-norm.onnx",
+    "-",
+    "$sysimage_dir/../../test/examples/specs-new/german-credit-bounds.vnnlib",
+    "--robustness-delta=0.75",
+    "--input-epsilon=2e-2",
+    "--only-split-diff"
+])
