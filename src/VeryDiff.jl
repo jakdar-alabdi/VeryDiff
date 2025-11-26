@@ -59,7 +59,7 @@ include("../dev/NeuronSplitting.jl")
 
 export Network,GeminiNetwork,Layer,Dense,ReLU,WrappedReLU
 export parse_network
-export Zonotope, DiffZonotope, PropState, SplitNode, SplitCandidate
+export Zonotope, DiffZonotope, PropState, SplitNode, Branch
 export zono_optimize, zono_bounds
 export verify_network
 export get_epsilon_property, epsilon_split_heuristic, get_epsilon_property_naive

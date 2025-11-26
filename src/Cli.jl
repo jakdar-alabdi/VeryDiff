@@ -123,13 +123,13 @@ function run_cmd(args)
 
     result = SAFE
     try
-        cex = [0.6, 0.5, -0.5, 0.45, -0.5]
-        distance_vec = abs.(net1(cex)-net2(cex))
-        max_distance = maximum(distance_vec)
-        min_distance = minimum(distance_vec)
-        println("Is $cex with max distance $max_distance an counterexample: $(max_distance > epsilon)")
-        println("Is $cex with min distance $min_distance an counterexample: $(min_distance > epsilon)")
-        println("Distance vector: $distance_vec")
+        # cex = [0.6, 0.0, 0.5, 0.45, -0.44999999999999996]
+        # distance_vec = abs.(net1(cex) - net2(cex))
+        # max_distance = maximum(distance_vec)
+        # min_distance = minimum(distance_vec)
+        # println("Is $cex with max distance $max_distance an counterexample: $(max_distance > epsilon)")
+        # println("Is $cex with min distance $min_distance an counterexample: $(min_distance > epsilon)")
+        # println("Distance vector: $distance_vec")
         # Run verification
         for (bounds, _, _, num) in spec
             passed_time = @timed begin

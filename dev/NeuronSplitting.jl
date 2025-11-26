@@ -1,9 +1,22 @@
+function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, Zin :: Zonotope, ϵ :: Float64)
+    return deepsplit_lp_search_epsilon(N₁, N₂, zono_bounds(Zin), ϵ)
+end
+
 function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsilon::Float64; timeout=Inf)
     lower = @view bounds[:, 1]
     upper = @view bounds[:, 2]
     Zin = to_zonotope(lower, upper)
 
-    status, cex = deepsplit_lp_search_epsilon(epsilon)(N₁, N₂, Zin)
+    mid = (upper .+ lower) ./ 2
+    distance = mid .- lower
+    non_zero_indices = findall((!).(iszero.(distance)))
+    distance = distance[non_zero_indices]
+
+    input_dim = length(lower)
+    ∂Z = Zonotope(Matrix(0.0I, input_dim, size(non_zero_indices, 1)), zeros(Float64, input_dim), nothing)
+    verification_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, 1.0, Branch())
+
+    status, cex = deepsplit_lp_search_epsilon(epsilon)(N₁, N₂, verification_task)
 
     show(VeryDiff.to)
     println()
@@ -27,35 +40,29 @@ end
 function deepsplit_lp_search_epsilon(epsilon::Float64)
     property_check = get_epsilon_property(epsilon)
 
-    return (N₁::Network, N₂::Network, Zin::Zonotope) -> begin
+    return (N₁::Network, N₂::Network, task::VerificationTask) -> begin
         reset_timer!(to)
         @timeit to "Initialize" begin
             VeryDiff.NEW_HEURISTIC = false
             N = GeminiNetwork(N₁, N₂)
-            prop_state = PropState(true)
-
-            generator = (node::SplitNode) -> prop_state.split_generators[to_dict_key(node)]
-
-            input_dim = size(Zin.G, 2)
-
-            ∂Z = Zonotope(zeros(Float64, size(Zin.G)), zeros(size(Zin.c)), nothing)
-            ∂Zin = DiffZonotope(Zin, deepcopy(Zin), ∂Z, 0, 0, 0)
-
-            splits = Deque{Tuple{BitMatrix, Vector{SplitNode}}}()
-            push!(splits, (hcat(falses(0), falses(0)), SplitNode[]))
+            
+            queue = Queue()
+            push!(queue, (1.0, task))
         end
         
         @timeit to "Search" begin
-            while !isempty(splits)
-                mask, split_nodes = popfirst!(splits)
+            while length(queue) > 0
+                work_share, task = pop!(queue)
                 
-                split_candidates = SplitCandidate[]
                 @timeit to "Zonotope Propagate" begin
-                Zout = N(∂Zin, prop_state; split_nodes=split_nodes, split_candidates=split_candidates)
+                    prop_state = PropState(true)
+                    prop_state.split_nodes = task.branch.split_nodes
+                    Zin = to_diff_zono(task)
+                    Zout = N(Zin, prop_state)
                 end
 
                 @timeit to "Property Check" begin
-                    prop_satisfied, cex, _, _, _ = property_check(N₁, N₂, ∂Zin, Zout, nothing)
+                    prop_satisfied, cex, _, _, _ = property_check(N₁, N₂, Zin, Zout, nothing)
                 end
 
                 if !prop_satisfied
@@ -73,25 +80,18 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
                         @variable(model, -1.0 <= x[1:var_num] <= 1.0)
 
                         # Add split constraints
-                        Gₛ = zeros(Float64, size(split_nodes, 1), var_num)
-                        cₛ = zeros(Float64, size(split_nodes))
-                        dₛ = zeros(Float64, size(split_nodes))
-                        for (i, split_node) in enumerate(split_nodes)
-                            (;g, c) = generator(split_node)
-                            Gₛ[i, 1:size(g, 1)] = g
-                            cₛ[i] = c
-                            dₛ[i] = split_node.direction
+                        for (;g, c, direction) in prop_state.split_nodes
+                            @constraint(model, direction * (g' * x[1:size(g, 1)] + c) >= 0.0)
                         end
-                        @constraint(model, dₛ .* (Gₛ * x + cₛ) .>= 0.0)
                     end
 
                     @timeit to "Solve LP" begin
+                        distance_bound = epsilon
                         bounds = zono_bounds(Zout.∂Z)
                         # Compute all output dimensions that still need to be proven
-                        mask = hcat(bounds[:, 1] .< -epsilon, bounds[:, 2] .> epsilon) .&& (isempty(mask) ? true : mask)
+                        mask = hcat(bounds[:, 1] .< -epsilon, bounds[:, 2] .> epsilon) .&& (isempty(task.branch.mask) ? true : task.branch.mask)
 
                         # For each unproven output dimension we solve a LP for corresponding lower and upper bound
-                        # for i in sort!((1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]], by=k->sum(abs.(bounds[k, :])))
                         for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
                             for (j, σ) in [(1, -1), (2, 1)][mask[i, :]]
 
@@ -100,32 +100,31 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
 
                                 @timeit to "Check LP value" begin
                                     if is_solved_and_feasible(model)
-                                        cex = Zin.G * value.(x)[1:input_dim] + Zin.c
+                                        cex = Zin.Z₁.G * value.(x)[1:size(Zin.Z₁.G, 1)] + Zin.Z₁.c
                                         sample_distance = get_sample_distance(N₁, N₂, cex)
                                         if sample_distance > epsilon
                                             @timeit to "LP Solution" begin
                                                 return UNSAFE, cex
                                             end
                                         end
+                                        distance_bound = max(distance_bound, abs(objective_value(model)))
                                     end
                                 end
 
                                 mask[i, j] = termination_status(model) != MOI.INFEASIBLE
                             end
                         end
+                        task.branch.mask = mask
                     end
 
                     if !any(mask)
                         continue
                     end
 
-                    if isempty(split_candidates)
-                        return UNKNOWN, nothing
-                    end
-
                     @timeit to "Split Neuron" begin
-                        split₁, split₂ = split_neuron(split_candidates[1].node, (mask, split_nodes))
-                        push!(splits, split₁, split₂)
+                        task₁, task₂ = split_neuron(prop_state.split_candidate, task, distance_bound)
+                        push!(queue, (work_share / 2.0, task₁))
+                        push!(queue, (work_share / 2.0, task₂))
                     end
                 end
             end
@@ -134,17 +133,18 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
     end
 end
 
-function split_neuron(node :: SplitNode, prev_split :: Tuple{BitMatrix, Vector{SplitNode}})
-    mask₁, split₁ = prev_split
-    mask₂, split₂ = deepcopy(prev_split)
+function split_neuron(node :: SplitNode, task :: VerificationTask, distance_bound :: Float64)
+    branch₁ = task.branch
+    branch₂ = deepcopy(task.branch)
 
-    push!(split₁, (SplitNode(node.network, node.layer, node.neuron, -1)))
-    push!(split₂, (SplitNode(node.network, node.layer, node.neuron, 1)))
+    push!(branch₁.split_nodes, (SplitNode(node.network, node.layer, node.neuron, -1)))
+    push!(branch₂.split_nodes, (SplitNode(node.network, node.layer, node.neuron, 1)))
 
-    return (mask₁, split₁), (mask₂, split₂)
-end
+    mid = task.middle
+    distance = task.distance
+    distance_indices = task.distance_indices
+    task₁ = VerificationTask(mid, distance, distance_indices, task.∂Z, nothing, distance_bound, branch₁)
+    task₂ = VerificationTask(mid, distance, distance_indices, task.∂Z, nothing, distance_bound, branch₂)
 
-function to_dict_key(node :: SplitNode)
-    (;network, layer, neuron) = node
-    return "$network,$layer,$neuron"
+    return task₁, task₂
 end

@@ -60,7 +60,7 @@ function verify_network(
     #end
     work_queue = Queue()
     push!(work_queue,
-        (1.0,VerificationTask(mid, distance, non_zero_indices, ∂Z_original, nothing, 1.0))
+        (1.0,VerificationTask(mid, distance, non_zero_indices, ∂Z_original, nothing, 1.0, Branch()))
     )
     end
     @timeit to "Verify" begin
@@ -233,7 +233,7 @@ function split_zono(d, verification_task :: VerificationTask, work_share, verifi
     middle1_vec = deepcopy(verification_task.middle)
     middle1_vec[d] = mid1
 
-    Z1 = VerificationTask(middle1_vec, distance1_vec, verification_task.distance_indices, deepcopy(verification_task.∂Z), verification_status, distance_bound)
+    Z1 = VerificationTask(middle1_vec, distance1_vec, verification_task.distance_indices, deepcopy(verification_task.∂Z), verification_status, distance_bound, verification_task.branch)
 
     mid2 = (mid+high)/2
     distance2 = mid2-mid
@@ -241,7 +241,7 @@ function split_zono(d, verification_task :: VerificationTask, work_share, verifi
     distance2_vec[distance_d] = distance2
     middle2_vec = verification_task.middle
     middle2_vec[d] = mid2
-    Z2 = VerificationTask(middle2_vec, distance2_vec, verification_task.distance_indices, verification_task.∂Z, deepcopy(verification_status), distance_bound)
+    Z2 = VerificationTask(middle2_vec, distance2_vec, verification_task.distance_indices, verification_task.∂Z, deepcopy(verification_status), distance_bound, verification_task.branch)
 
     return (work_share/2.0,Z1), (work_share/2.0,Z2)
 end

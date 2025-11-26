@@ -2,11 +2,11 @@ import VNNLib.NNLoader.Network
 import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
-function (N::Network)(Z :: Zonotope, P :: PropState, id :: Int64, split_nodes :: Vector{SplitNode})
-    return foldl((Z, (l, L)) -> L(Z, P, l, id, split_nodes), enumerate(N.layers), init=Z)
+function (N::Network)(Z :: Zonotope, P :: PropState, network :: Int64)
+    return foldl((Z, (layer, L)) -> L(Z, P, network, layer), enumerate(N.layers), init=Z)
 end
 
-function (L::Dense)(Z :: Zonotope, P :: PropState, l :: Int64, id :: Int64, split_nodes :: Vector{SplitNode})
+function (L::Dense)(Z :: Zonotope, P :: PropState, network :: Int64, layer :: Int64)
     return @timeit to "Zonotope_DenseProp" begin
     G = L.W * Z.G
     c = L.W * Z.c .+ L.b
@@ -24,40 +24,33 @@ function get_slope(l,u, alpha)
     end
 end
 
-function (L::ReLU)(Z::Zonotope, P::PropState, l::Int64, id::Int64, split_nodes::Vector{SplitNode}; bounds = nothing, split_candidates = SplitCandidate[])
+function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; bounds = nothing)
     return @timeit to "Zonotope_ReLUProp" begin
     @timeit to "Bounds" begin
     row_count = size(Z.G,1)
     if isnothing(bounds)
         bounds = zono_bounds(Z)
+
+        # Get split nodes corresponding to this layer
+        layer_split_nodes = filter(node -> node.network == network && node.layer == layer, P.split_nodes)
+
+        for node in layer_split_nodes
+            bounds[node.neuron, 1] *= node.direction == -1
+            bounds[node.neuron, 2] *= node.direction == 1
+            node.g = Z.G[node.neuron, :]
+            node.c = Z.c[node.neuron]
+        end
     end
     lower = @view bounds[:,1]
     upper = @view bounds[:,2]
     end
 
-    # Get split nodes corresponding to this layer
-    layer_split_nodes = filter(node -> (node.network, node.layer) == (id, l), split_nodes)
-
-    # For each node in this layer compute the splitting direction
-    # 0 no branching, 1 branch to >= 0, -1 branch to <= 0
-    nodes_direction = zeros(Int64, size(lower))
-    for node in layer_split_nodes
-        nodes_direction[node.neuron] = node.direction
-
-        # Update the generator of split node before propagation
-        generator = SplitGenerator(Z.G[node.neuron, :], Z.c[node.neuron])
-        current_generator = get!(P.split_generators, to_dict_key(node), generator)
-        if (sum(abs.(current_generator.g)) > sum(abs.(generator.g)))
-            P.split_generators[to_dict_key(node)] = generator
-        end
-    end
-
     @timeit to "Vectors" begin
     α = clamp.(upper ./ (upper .- lower), 0.0, 1.0)
     # Use is_onesided to compute 
-    λ = ifelse.(upper .<= 0.0 .|| isone.(-nodes_direction), 0.0, ifelse.(lower .>= 0.0 .|| isone.(nodes_direction), 1.0, α))
+    λ = ifelse.(upper .<= 0.0, 0.0, ifelse.(lower .>= 0.0, 1.0, α))
 
-    crossing = lower .< 0.0 .&& upper .> 0.0 .&& iszero.(nodes_direction)
+    crossing = lower .< 0.0 .&& upper .> 0.0
     
     γ = 0.5 .* max.(-λ .* lower, 0.0, ((-).(1.0, λ)) .* upper)  # Computed offset (-λl/2)
 
@@ -100,14 +93,12 @@ function (L::ReLU)(Z::Zonotope, P::PropState, l::Int64, id::Int64, split_nodes::
     Ĝ[:,size(Z.G,2)+1:end] .*= abs.(γ)
     end
 
-    # Select a split candidate naively (by only considering each node's generator and their layer) for next branching
+    # Select a split candidate naively (by only considering each node's generator) for next branching
     if any(crossing)
         neuron = argmax(i -> sum(abs.(Z.G[i, :])), (1:size(crossing, 1))[crossing])
-        split_candidate = SplitCandidate(SplitNode(id, l, neuron, 0), sum(abs.(Z.G[neuron, :])))
-        if isempty(split_candidates)
-            push!(split_candidates, split_candidate)
-        elseif split_candidates[1].err < split_candidate.err
-            split_candidates[1] = split_candidate
+        node = SplitNode(network, layer, neuron, 0, Z.G[neuron, :], Z.c[neuron])
+        if sum(abs.(node.g)) > sum(abs.(P.split_candidate.g))
+            P.split_candidate = node
         end
     end
 

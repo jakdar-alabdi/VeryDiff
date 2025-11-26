@@ -4,21 +4,25 @@ mutable struct Zonotope
     influence::Union{Matrix{Float64},Nothing}
 end
 
-struct SplitNode
+mutable struct SplitNode
     network :: Int64
     layer :: Int64
     neuron :: Int64
     direction :: Int64
-end
-
-struct SplitGenerator
     g :: Vector{Float64}
     c :: Float64
+
+    function SplitNode(network=0, layer=0, neuron=0, direction=0, g=zeros(1), c=0.0)
+        new(network, layer, neuron, direction, g, c)
+    end
 end
 
-mutable struct SplitCandidate
-    node :: SplitNode
-    err :: Float64
+mutable struct Branch
+    mask :: BitMatrix
+    split_nodes :: Vector{SplitNode}
+    function Branch(mask=falses(0, 0), split_nodes=SplitNode[])
+        new(mask, split_nodes)
+    end
 end
 
 struct VerificationTask
@@ -28,6 +32,7 @@ struct VerificationTask
     ∂Z::Zonotope
     verification_status
     distance_bound :: Float64
+    branch :: Branch
 end
 
 # Z₂ = Z₁ - ∂Z
@@ -43,13 +48,13 @@ end
 
 mutable struct PropState
     first :: Bool
-    i :: Int64
-    num_relus :: Int64
-    relu_config :: Vector{Int64}
-    split_generators :: Dict{String, SplitGenerator}
-    split_candidates :: Deque{SplitNode}
-    function PropState(first :: Bool)
-        return new(first, 0, 0, Int64[], Dict(), Deque{SplitNode}())
+    # i :: Int64
+    # num_relus :: Int64
+    # relu_config :: Vector{Int64}
+    split_nodes :: Vector{SplitNode}
+    split_candidate :: SplitNode
+    function PropState(first :: Bool, split_nodes=SplitNode[], split_candidate=SplitNode())
+        return new(first, split_nodes, split_candidate)
     end
 end
 
