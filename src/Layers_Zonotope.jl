@@ -101,6 +101,18 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
             P.split_candidate = node
         end
     end
+    # if any(crossing)
+    #     neuron = argmax(i -> sum(abs.(Ĝ[i, :])), (1:size(crossing, 1))[crossing])
+    #     node = SplitNode(network, layer, neuron, 0, Z.G[neuron, :], Z.c[neuron])
+    #     s = sum(abs.(P.split_candidate.g))
+    #     z̲ = P.split_candidate.c - s
+    #     z̅ = P.split_candidate.c + s
+    #     λ = z̅ / (z̅ - z̲)
+    #     err = λ * s - 0.5 * λ * z̲
+    #     if sum(abs.(Ĝ[neuron, :])) > err
+    #         P.split_candidate = node
+    #     end
+    # end
 
     return Zonotope(Ĝ, ĉ, influence_new)
     end

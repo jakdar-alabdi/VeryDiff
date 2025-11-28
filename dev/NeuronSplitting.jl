@@ -18,17 +18,16 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
 
     status, cex = deepsplit_lp_search_epsilon(epsilon)(N₁, N₂, verification_task)
 
+    println(status)
     show(VeryDiff.to)
     println()
-    println(status)
-    println(cex)
 
     try
         if !isnothing(cex)
             distance = get_sample_distance(N₁, N₂, cex)
-            @assert all(lower .<= (Zin.G * cex + Zin.c) .<= upper) "The found counterexample $cex is not within specified bounds"
-            @assert distance > epsilon "The found counterexample $cex with sample distance $distance is spurious"
-            println("Counterexample: $cex with sample distance: $distance")
+            @assert all(lower .<= (Zin.G * cex + Zin.c) .<= upper) "The found counterexample $cex with sample distance $distance is not within specified bounds $bounds."
+            @assert distance > epsilon "The found counterexample $cex with sample distance $distance is spurious."
+            println("Counterexample: $cex with sample distance: $distance.")
         end 
     catch e
         println(e)
@@ -37,8 +36,8 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
     return status
 end
 
-function deepsplit_lp_search_epsilon(epsilon::Float64)
-    property_check = get_epsilon_property(epsilon)
+function deepsplit_lp_search_epsilon(ϵ::Float64)
+    property_check = get_epsilon_property(ϵ)
 
     return (N₁::Network, N₂::Network, task::VerificationTask) -> begin
         reset_timer!(to)
@@ -62,7 +61,7 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
                 end
 
                 @timeit to "Property Check" begin
-                    prop_satisfied, cex, _, _, _ = property_check(N₁, N₂, Zin, Zout, nothing)
+                    prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing)
                 end
 
                 if !prop_satisfied
@@ -86,10 +85,10 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
                     end
 
                     @timeit to "Solve LP" begin
-                        distance_bound = epsilon
+                        distance_bound = 0.0
                         bounds = zono_bounds(Zout.∂Z)
                         # Compute all output dimensions that still need to be proven
-                        mask = hcat(bounds[:, 1] .< -epsilon, bounds[:, 2] .> epsilon) .&& (isempty(task.branch.mask) ? true : task.branch.mask)
+                        mask = hcat(bounds[:, 1] .< -ϵ, bounds[:, 2] .> ϵ) .&& (isempty(task.branch.mask) ? true : task.branch.mask)
 
                         # For each unproven output dimension we solve a LP for corresponding lower and upper bound
                         for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
@@ -98,20 +97,23 @@ function deepsplit_lp_search_epsilon(epsilon::Float64)
                                 @objective(model, Max, σ * (Zout.∂Z.G[i, :]' * x + Zout.∂Z.c[i]))
                                 optimize!(model)
 
-                                @timeit to "Check LP value" begin
-                                    if is_solved_and_feasible(model)
-                                        cex = Zin.Z₁.G * value.(x)[1:size(Zin.Z₁.G, 1)] + Zin.Z₁.c
-                                        sample_distance = get_sample_distance(N₁, N₂, cex)
-                                        if sample_distance > epsilon
-                                            @timeit to "LP Solution" begin
-                                                return UNSAFE, cex
-                                            end
+                                if is_solved_and_feasible(model)
+                                    cex = Zin.Z₁.G * value.(x)[1:size(Zin.Z₁.G, 1)] + Zin.Z₁.c
+                                    sample_distance = get_sample_distance(N₁, N₂, cex)
+                                    if sample_distance > ϵ
+                                        @timeit to "LP Solution" begin
+                                            return UNSAFE, cex
                                         end
-                                        distance_bound = max(distance_bound, abs(objective_value(model)))
                                     end
                                 end
 
-                                mask[i, j] = termination_status(model) != MOI.INFEASIBLE
+                                if has_values(model)
+                                    δ = objective_value(model)
+                                    mask[i, j] &= δ > ϵ
+                                    distance_bound = max(distance_bound, δ)
+                                end
+
+                                mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
                             end
                         end
                         task.branch.mask = mask
@@ -140,11 +142,8 @@ function split_neuron(node :: SplitNode, task :: VerificationTask, distance_boun
     push!(branch₁.split_nodes, (SplitNode(node.network, node.layer, node.neuron, -1)))
     push!(branch₂.split_nodes, (SplitNode(node.network, node.layer, node.neuron, 1)))
 
-    mid = task.middle
-    distance = task.distance
-    distance_indices = task.distance_indices
-    task₁ = VerificationTask(mid, distance, distance_indices, task.∂Z, nothing, distance_bound, branch₁)
-    task₂ = VerificationTask(mid, distance, distance_indices, task.∂Z, nothing, distance_bound, branch₂)
+    task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, nothing, distance_bound, branch₁)
+    task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, nothing, distance_bound, branch₂)
 
     return task₁, task₂
 end

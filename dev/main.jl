@@ -17,17 +17,16 @@ NET_COUNT = 0
 verydiff_status = VeryDiff.UNKNOWN
 deepsplit_status = VeryDiff.UNKNOWN
 
-while verydiff_status == deepsplit_status
+while deepsplit_status == VeryDiff.SAFE
     global NET_COUNT
     next_seed = rand(1:99999999999)
     Random.seed!(next_seed);
-    Random.seed!(93277004881)
     println("[FUZZER] SEED: $(next_seed)")
     NET_COUNT += 1
     println("[FUZZER] NET COUNT: $(NET_COUNT)")
     
-    ϵ = 1.0e-1
-    num_layers = rand(2:50)
+    ϵ = 1.0e-10
+    num_layers = rand(2:8)
     input_dim = rand(1:50)
     output_dim = 10
     cur_dim = input_dim
@@ -86,25 +85,39 @@ while verydiff_status == deepsplit_status
     N₁ = Network(layers1)
     N₂ = Network(layers2)
 
+    # println("Number layers net1: $(size(layers1, 1))")
+    # println("Number layers net2: $(size(layers2, 1))")
+
     # verydiff_status = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic)
 
     # println("\nVerDiff status: $verydiff_status")
 
-    println("\n###############################################################################################")
-
-    deepsplit_status = deepsplit_lp_search_epsilon(N₁, N₂, bounds, ϵ)
-
+    deepsplit_status, splits = deepsplit_lp_search_epsilon(N₁, N₂, bounds, ϵ)
     println("DeepSplit status: $deepsplit_status")
+
+    if splits > 0
+        break
+    end
+
+    println("\n###############################################################################################")
 end
 
-# sysimage_dir = @__DIR__
+sysimage_dir = @__DIR__
 
 # run_cmd([
-#     "--neuron-splitting", 
+#     "--neuron-splitting",
 #     "--epsilon", "0.005",
 #     "$sysimage_dir\\..\\test\\examples\\nets\\ACASXU_run2a_1_1_batch_2000.onnx",
 #     "$sysimage_dir\\..\\test\\examples\\nets\\ACASXU_run2a_1_1_batch_2000_pruned5.onnx",
 #     "$sysimage_dir\\..\\test\\examples\\specs\\prop_1.vnnlib"
 # ])
 
-# println("\n###############################################################################################")
+run_cmd([
+    # "--neuron-splitting",
+    "--epsilon", "54.26110066",
+    "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\nets\\2_20-1.onnx",
+    "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\nets_pruned\\2_20-0.1-0.5.onnx",
+    "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\specs\\sigma_0.1.vnnlib"
+])
+
+println("\n###############################################################################################")
