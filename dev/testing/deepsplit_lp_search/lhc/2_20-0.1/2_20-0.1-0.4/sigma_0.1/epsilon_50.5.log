@@ -1,0 +1,91 @@
+Parsing 2_20-0.1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (20, 16), bias: (20,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (20, 20), bias: (20,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 20), bias: (5,)
+Parsing 2_20-0.1-0.4.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (20, 16), bias: (20,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (20, 20), bias: (20,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 20), bias: (5,)
+
+Executing DeepSplit LP-based Search
+UNSAFE
+ ────────────────────────────────────────────────────────────────────────────────
+                                        Time                    Allocations      
+                               ───────────────────────   ────────────────────────
+       Tot / % measured:            12.7s /  99.1%           0.95GiB /  99.4%    
+
+ Section               ncalls     time    %tot     avg     alloc    %tot      avg
+ ────────────────────────────────────────────────────────────────────────────────
+ Search                     1    12.3s   98.0%   12.3s   0.95GiB  100.0%  0.95GiB
+   Zonotope Propagate      24    8.02s   63.8%   334ms    582MiB   60.0%  24.3MiB
+     DiffZonotope_R...     48   1.81ms    0.0%  37.7μs   2.14MiB    0.2%  45.7KiB
+       Zonotope_ReL...     96    719μs    0.0%  7.49μs   1.29MiB    0.1%  13.7KiB
+         Set Matrix        96    149μs    0.0%  1.55μs   38.2KiB    0.0%     408B
+         Vectors           96    137μs    0.0%  1.42μs    114KiB    0.0%  1.19KiB
+         Column Mul...     96    118μs    0.0%  1.23μs    419KiB    0.0%  4.36KiB
+         Allocation        96   97.7μs    0.0%  1.02μs    411KiB    0.0%  4.29KiB
+         Influence ...     96   14.6μs    0.0%   152ns     0.00B    0.0%    0.00B
+         Bounds            96   10.3μs    0.0%   107ns     0.00B    0.0%    0.00B
+     DiffZonotope_D...     72    523μs    0.0%  7.27μs    713KiB    0.1%  9.90KiB
+       Zonotope_Den...    144    162μs    0.0%  1.12μs    430KiB    0.0%  2.99KiB
+   Initialize LP-so...     23    2.24s   17.8%  97.2ms   66.0MiB    6.8%  2.87MiB
+   Solve LP                23    1.98s   15.8%  86.3ms    249MiB   25.6%  10.8MiB
+   Split Neuron            20   50.5ms    0.4%  2.53ms    132KiB    0.0%  6.60KiB
+   Random Test             20   24.0ms    0.2%  1.20ms   73.2MiB    7.5%  3.66MiB
+   Property Check          24    189μs    0.0%  7.88μs    317KiB    0.0%  13.2KiB
+ Initialize                 1    255ms    2.0%   255ms    295KiB    0.0%   295KiB
+ ────────────────────────────────────────────────────────────────────────────────
+Counterexample: [-0.1, -0.1, 0.1, 0.1, 0.1, 0.1, 0.1, -0.1, 0.1, -0.1, -0.1, 0.1, -0.1, 0.1, -0.1, -0.1] with sample distance: 50.55325370424207.
+
+######################################################################################
+
+Executing VeryDiff
+Running with 1 threads
+[Thread 1] Time to first task: 0.0s
+Zono Bounds:
+[-6.837025927630353, -54.69057470111489, -30.344285814907142, -11.03817016739594, -58.56102291534994]
+[15.022362545497757, -28.55301191668473, 20.954438945792884, 47.58412045191911, -36.45488787721003]
+[Thread 1] Processed 100 zonotopes (Work Done: 0.0%; Expected Zonos: Inf)
+[Thread 1] Processed 200 zonotopes (Work Done: 0.0%; Expected Zonos: Inf)
+
+Found counterexample: ([-0.1, -0.1, 0.1, 0.1, 0.1, 0.1, -0.1, -0.1, 0.1, -0.1, -0.1, 0.1, -0.1, 0.1, -0.1, 0.0], ([-16.9632937024799, 2.4517303461976137, 10.959093888417705, -49.46564893593356, -8.469549096066803], [-15.575602675316542, 41.31423034292545, 8.898911621891646, -67.72655549455317, 42.065536069482725], 50.53508516554953))
+[Thread 1] Total splits: 224
+Processed 225 zonotopes (Work Done: 0.0%); Generated 448 (0.0012784728888888888s/loop)
+UNSAFE
+ ────────────────────────────────────────────────────────────────────────────────
+                                        Time                    Allocations      
+                               ───────────────────────   ────────────────────────
+       Tot / % measured:            1.24s / 100.0%           64.7MiB / 100.0%    
+
+ Section               ncalls     time    %tot     avg     alloc    %tot      avg
+ ────────────────────────────────────────────────────────────────────────────────
+ Verify                     1    1.24s  100.0%   1.24s   64.7MiB  100.0%  64.7MiB
+   Zonotope Loop            1    288ms   23.2%   288ms   41.3MiB   63.8%  41.3MiB
+     Zonotope Propa...    225   11.7ms    0.9%  51.8μs   24.6MiB   38.1%   112KiB
+       DiffZonotope...    450   8.65ms    0.7%  19.2μs   18.3MiB   28.2%  41.5KiB
+         Zonotope_R...    900   4.13ms    0.3%  4.59μs   10.9MiB   16.9%  12.4KiB
+           Vectors        900    923μs    0.1%  1.03μs   1.04MiB    1.6%  1.19KiB
+           Column M...    900    836μs    0.1%   929ns   3.58MiB    5.5%  4.08KiB
+           Allocation     900    575μs    0.0%   639ns   3.51MiB    5.4%  3.99KiB
+           Set Matrix     900    482μs    0.0%   536ns    323KiB    0.5%     368B
+           Influenc...    900   55.2μs    0.0%  61.3ns     0.00B    0.0%    0.00B
+           Bounds         900   52.8μs    0.0%  58.7ns     0.00B    0.0%    0.00B
+       DiffZonotope...    675   2.55ms    0.2%  3.78μs   6.26MiB    9.7%  9.50KiB
+         Zonotope_D...  1.35k   1.29ms    0.1%   959ns   3.82MiB    5.9%  2.90KiB
+     Property Check       225   1.47ms    0.1%  6.53μs   2.89MiB    4.5%  13.2KiB
+     Compute Split        224    783μs    0.1%  3.49μs   1.43MiB    2.2%  6.52KiB
+ Initialize                 1   32.3μs    0.0%  32.3μs   12.3KiB    0.0%  12.3KiB
+ ────────────────────────────────────────────────────────────────────────────────
+
+DeepSplit Time: 12.7779767
+VeryDiff Time: 1.2404752

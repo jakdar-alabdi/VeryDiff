@@ -1,3 +1,5 @@
+LP_BOUND_TESTING = true
+
 function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, Zin :: Zonotope, ϵ :: Float64)
     return deepsplit_lp_search_epsilon(N₁, N₂, zono_bounds(Zin), ϵ)
 end
@@ -14,9 +16,9 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
 
     input_dim = length(lower)
     ∂Z = Zonotope(Matrix(0.0I, input_dim, size(non_zero_indices, 1)), zeros(Float64, input_dim), nothing)
-    verification_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, 1.0, Branch())
+    verification_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, epsilon, Branch())
 
-    status, cex = deepsplit_lp_search_epsilon(epsilon)(N₁, N₂, verification_task)
+    status, cex = deepsplit_lp_search_epsilon(epsilon)(N₁, N₂, verification_task, input_dim)
 
     println(status)
     show(VeryDiff.to)
@@ -39,7 +41,7 @@ end
 function deepsplit_lp_search_epsilon(ϵ::Float64)
     property_check = get_epsilon_property(ϵ)
 
-    return (N₁::Network, N₂::Network, task::VerificationTask) -> begin
+    return (N₁::Network, N₂::Network, task::VerificationTask, input_dim::Int64) -> begin
         reset_timer!(to)
         @timeit to "Initialize" begin
             VeryDiff.NEW_HEURISTIC = false
@@ -50,8 +52,9 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
         end
         
         @timeit to "Search" begin
-            while length(queue) > 0
+            while !isempty(queue)
                 work_share, task = pop!(queue)
+                # println(task.distance_bound)
                 
                 @timeit to "Zonotope Propagate" begin
                     prop_state = PropState(true)
@@ -119,14 +122,43 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         task.branch.mask = mask
                     end
 
-                    if !any(mask)
-                        continue
-                    end
+                    if any(mask)
+                        # Tests empirically whether the bounds computed by LP are valid
+                        global LP_BOUND_TESTING
+                        if LP_BOUND_TESTING
+                            @timeit to "Random Test" begin
+                                δ = distance_bound
+                                if !isempty(queue)
+                                    _, next_task = first(queue)
+                                    δ = max(next_task.distance_bound, distance_bound)
+                                end
+                                for _ in 1:1000
+                                    x = Zin.Z₁.G * rand(Float64, input_dim) + Zin.Z₁.c
+                                    sample_distance = get_sample_distance(N₁, N₂, x)
+                                    @assert sample_distance <= δ "Input x = $x has a difference distance of $sample_distance which is not within $δ-bounds, seems like a bug."
+                                end
+                            end
+                        end
 
-                    @timeit to "Split Neuron" begin
-                        task₁, task₂ = split_neuron(prop_state.split_candidate, task, distance_bound)
-                        push!(queue, (work_share / 2.0, task₁))
-                        push!(queue, (work_share / 2.0, task₂))
+                        @timeit to "Split Neuron" begin
+                            # net, col, score = 1, 0, 0.0
+                            # for i in 1:(size(Zout.Z₁.G, 2) - input_dim)
+                            #     err = sum(abs.(Zout.Z₁.G[:, i + input_dim]))
+                            #     if err > score
+                            #         col, score = i, err
+                            #     end
+                            # end
+                            # for i in 1:(size(Zout.Z₂.G, 2) - input_dim)
+                            #     err = sum(abs.(Zout.Z₂.G[:, i + input_dim]))
+                            #     if err > score
+                            #         net, col, score = 2, i, err
+                            #     end
+                            # end
+                            # split_candidate = prop_state.instable_nodes[net][col]
+                            task₁, task₂ = split_neuron(prop_state.split_candidate, task, distance_bound)
+                            push!(queue, (work_share / 2.0, task₁))
+                            push!(queue, (work_share / 2.0, task₂))
+                        end
                     end
                 end
             end
