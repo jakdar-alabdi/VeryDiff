@@ -158,6 +158,8 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
                 first=false
             end
 
+            # println(verification_task.distance_bound)
+
             @timeit to "Property Check" begin
             prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout, verification_task.verification_status)
             end

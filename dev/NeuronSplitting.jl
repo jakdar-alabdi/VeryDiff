@@ -1,4 +1,4 @@
-LP_BOUND_TESTING = true
+LP_BOUND_TESTING = false
 
 function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, Zin :: Zonotope, ϵ :: Float64)
     return deepsplit_lp_search_epsilon(N₁, N₂, zono_bounds(Zin), ϵ)
@@ -46,6 +46,15 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
         @timeit to "Initialize" begin
             VeryDiff.NEW_HEURISTIC = false
             N = GeminiNetwork(N₁, N₂)
+            Zin = to_diff_zono(task)
+
+            if DEEPPSPLIT_HUERISTIC_ALTERNATIVE
+                split_heuristic = deepsplit_heuristic_alternative
+            else
+                split_heuristic = deepsplit_heuristic
+            end
+
+            first = true
             
             queue = Queue()
             push!(queue, (1.0, task))
@@ -54,12 +63,12 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
         @timeit to "Search" begin
             while !isempty(queue)
                 work_share, task = pop!(queue)
-                # println(task.distance_bound)
+                println(task.distance_bound)
                 
                 @timeit to "Zonotope Propagate" begin
                     prop_state = PropState(true)
                     prop_state.split_nodes = task.branch.split_nodes
-                    Zin = to_diff_zono(task)
+                    # Zin = to_diff_zono(task)
                     Zout = N(Zin, prop_state)
                 end
 
@@ -91,7 +100,8 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         distance_bound = 0.0
                         bounds = zono_bounds(Zout.∂Z)
                         # Compute all output dimensions that still need to be proven
-                        mask = hcat(bounds[:, 1] .< -ϵ, bounds[:, 2] .> ϵ) .&& (isempty(task.branch.mask) ? true : task.branch.mask)
+                        # mask = hcat(bounds[:, 1] .< -ϵ, bounds[:, 2] .> ϵ) .&& (isempty(task.branch.mask) ? true : task.branch.mask)
+                        mask = abs.(bounds) .> ϵ .&& (isempty(task.branch.undetermined) || task.branch.undetermined)
 
                         # For each unproven output dimension we solve a LP for corresponding lower and upper bound
                         for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
@@ -101,7 +111,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 optimize!(model)
 
                                 if is_solved_and_feasible(model)
-                                    cex = Zin.Z₁.G * value.(x)[1:size(Zin.Z₁.G, 1)] + Zin.Z₁.c
+                                    cex = Zin.Z₁.G * value.(x)[1:size(Zin.Z₁.G, 2)] + Zin.Z₁.c
                                     sample_distance = get_sample_distance(N₁, N₂, cex)
                                     if sample_distance > ϵ
                                         @timeit to "LP Solution" begin
@@ -111,7 +121,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 end
 
                                 if has_values(model)
-                                    δ = objective_value(model)
+                                    δ = abs(objective_value(model))
                                     mask[i, j] &= δ > ϵ
                                     distance_bound = max(distance_bound, δ)
                                 end
@@ -119,45 +129,39 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
                             end
                         end
-                        task.branch.mask = mask
+                        task.branch.undetermined = mask
                     end
 
-                    if any(mask)
+                    if any(task.branch.undetermined)
                         # Tests empirically whether the bounds computed by LP are valid
-                        global LP_BOUND_TESTING
-                        if LP_BOUND_TESTING
-                            @timeit to "Random Test" begin
-                                δ = distance_bound
-                                if !isempty(queue)
-                                    _, next_task = first(queue)
-                                    δ = max(next_task.distance_bound, distance_bound)
-                                end
-                                for _ in 1:1000
-                                    x = Zin.Z₁.G * rand(Float64, input_dim) + Zin.Z₁.c
-                                    sample_distance = get_sample_distance(N₁, N₂, x)
-                                    @assert sample_distance <= δ "Input x = $x has a difference distance of $sample_distance which is not within $δ-bounds, seems like a bug."
-                                end
-                            end
-                        end
+                        # global LP_BOUND_TESTING
+                        # if LP_BOUND_TESTING
+                        #     @timeit to "Random Test" begin
+                        #         δ = distance_bound
+                        #         if !isempty(queue)
+                        #             _, next_task = first(queue)
+                        #             δ = max(next_task.distance_bound, distance_bound)
+                        #         end
+                        #         for _ in 1:1000
+                        #             x = Zin.Z₁.G * rand(Float64, input_dim) + Zin.Z₁.c
+                        #             sample_distance = get_sample_distance(N₁, N₂, x)
+                        #             @assert sample_distance <= δ "Input x = $x has a difference distance of $sample_distance which is not within $δ-bounds, seems like a bug."
+                        #         end
+                        #     end
+                        # end
 
                         @timeit to "Split Neuron" begin
-                            # net, col, score = 1, 0, 0.0
-                            # for i in 1:(size(Zout.Z₁.G, 2) - input_dim)
-                            #     err = sum(abs.(Zout.Z₁.G[:, i + input_dim]))
-                            #     if err > score
-                            #         col, score = i, err
-                            #     end
+                            # split_candidate = prop_state.split_candidate
+                            split_candidate = split_heuristic(Zout, prop_state, mask[:, 1] .|| mask[:, 2])
+                            # println(split_candidate.score)
+                            # @assert split_candidate.score > 0.0
+                            # if !first
+                            #     distance_bound = min(distance_bound, task.distance_bound)
                             # end
-                            # for i in 1:(size(Zout.Z₂.G, 2) - input_dim)
-                            #     err = sum(abs.(Zout.Z₂.G[:, i + input_dim]))
-                            #     if err > score
-                            #         net, col, score = 2, i, err
-                            #     end
-                            # end
-                            # split_candidate = prop_state.instable_nodes[net][col]
-                            task₁, task₂ = split_neuron(prop_state.split_candidate, task, distance_bound)
+                            task₁, task₂ = split_neuron(split_candidate, task, distance_bound)
                             push!(queue, (work_share / 2.0, task₁))
                             push!(queue, (work_share / 2.0, task₂))
+                            first = false
                         end
                     end
                 end
@@ -171,8 +175,8 @@ function split_neuron(node :: SplitNode, task :: VerificationTask, distance_boun
     branch₁ = task.branch
     branch₂ = deepcopy(task.branch)
 
-    push!(branch₁.split_nodes, (SplitNode(node.network, node.layer, node.neuron, -1)))
-    push!(branch₂.split_nodes, (SplitNode(node.network, node.layer, node.neuron, 1)))
+    push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, node.score, -1))
+    push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, node.score, 1))
 
     task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, nothing, distance_bound, branch₁)
     task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, nothing, distance_bound, branch₂)

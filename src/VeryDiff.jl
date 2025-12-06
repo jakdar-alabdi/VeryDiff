@@ -55,6 +55,7 @@ include("Properties.jl")
 include("Verifier.jl")
 include("Cli.jl")
 include("../dev/NeuronSplitting.jl")
+include("../dev/DeepSplitHeuristic.jl")
 # include("../util.jl")
 
 export Network,GeminiNetwork,Layer,Dense,ReLU,WrappedReLU
@@ -67,5 +68,6 @@ export get_top1_property, top1_configure_split_heuristic
 export propagate_diff_layer
 export run_cmd
 export deepsplit_lp_search_epsilon
+export deepsplit_heuristic
 
 end # module AlphaZono

@@ -104,20 +104,20 @@ end
 
 sysimage_dir = @__DIR__
 
-# run_cmd([
-#     "--neuron-splitting",
-#     "--epsilon", "0.005",
-#     "$sysimage_dir\\..\\test\\examples\\nets\\ACASXU_run2a_1_1_batch_2000.onnx",
-#     "$sysimage_dir\\..\\test\\examples\\nets\\ACASXU_run2a_1_1_batch_2000_pruned5.onnx",
-#     "$sysimage_dir\\..\\test\\examples\\specs\\prop_1.vnnlib"
-# ])
-
 run_cmd([
-    # "--neuron-splitting",
-    "--epsilon", "54.26110066",
-    "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\nets\\2_20-1.onnx",
-    "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\nets_pruned\\2_20-0.1-0.5.onnx",
-    "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\specs\\sigma_0.1.vnnlib"
+    "--neuron-splitting",
+    "--epsilon", "0.05",
+    "$sysimage_dir\\..\\test\\examples\\nets\\ACASXU_run2a_1_1_batch_2000.onnx",
+    "$sysimage_dir\\..\\test\\examples\\nets\\ACASXU_run2a_1_1_batch_2000_pruned5.onnx",
+    "$sysimage_dir\\..\\test\\examples\\specs\\prop_1.vnnlib"
 ])
+
+# run_cmd([
+#     # "--neuron-splitting",
+#     "--epsilon", "54.26110066",
+#     "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\nets\\2_20-1.onnx",
+#     "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\nets_pruned\\2_20-0.1-0.5.onnx",
+#     "$sysimage_dir\\..\\..\\verydiff-experiments\\new_benchmarks\\lhc\\specs\\sigma_0.1.vnnlib"
+# ])
 
 println("\n###############################################################################################")

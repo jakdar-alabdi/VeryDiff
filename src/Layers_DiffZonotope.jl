@@ -99,14 +99,16 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     lower₂ = @view bounds₂[:,1]
     upper₂ = @view bounds₂[:,2]
 
-    # Get split nodes corresponding to this layer
-    layer_split_nodes = filter(node -> node.layer == layer, P.split_nodes)
-
     lowers = [lower₁, lower₂]
     uppers = [upper₁, upper₂]
     zonos = [Z.Z₁, Z.Z₂]
 
-    for node in layer_split_nodes
+    # Get split nodes corresponding to this layer
+    indices = map(node -> node.layer == layer, P.split_nodes)
+    # layer_split_nodes = @view P.split_nodes[indices]
+    # layer_split_nodes = filter(node -> node.layer == layer, P.split_nodes)
+
+    for node in P.split_nodes[indices]
         lowers[node.network][node.neuron] *= node.direction == -1
         uppers[node.network][node.neuron] *= node.direction == 1
         node.g = zonos[node.network].G[node.neuron, :]

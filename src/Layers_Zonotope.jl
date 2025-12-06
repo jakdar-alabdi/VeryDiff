@@ -32,9 +32,9 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
         bounds = zono_bounds(Z)
 
         # Get split nodes corresponding to this layer
-        layer_split_nodes = filter(node -> node.network == network && node.layer == layer, P.split_nodes)
-
-        for node in layer_split_nodes
+        # layer_split_nodes = filter(node -> node.network == network && node.layer == layer, P.split_nodes)
+        indices = map(node -> node.network == network && node.layer == layer, P.split_nodes)
+        for node in P.split_nodes[indices]
             bounds[node.neuron, 1] *= node.direction == -1
             bounds[node.neuron, 2] *= node.direction == 1
             node.g = Z.G[node.neuron, :]
@@ -45,12 +45,29 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
     upper = @view bounds[:,2]
     end
 
+    if DEEPPSPLIT_HUERISTIC_ALTERNATIVE
+        crossings = P.instable_nodes[network]
+        relative_impactes = P.relative_impactes[network]
+        push!(relative_impactes, Matrix{Float64}[])
+        k = 0
+        for l in (layer - 1):-1:1
+            num_instable = count(crossings[l])
+            ϵ = Z.G[:, end - k - num_instable + 1 : end - k]
+            α = ifelse.(lower .>= 0 .|| upper .<= 0, 0.0, ifelse.(ϵ .>= 0.0, ϵ ./ upper, ϵ ./ lower))
+            push!(relative_impactes[l], α)
+            k += num_instable
+        end
+    else
+        push!(P.intermediate_zonotopes[network], Z)
+    end
+
     @timeit to "Vectors" begin
     α = clamp.(upper ./ (upper .- lower), 0.0, 1.0)
     # Use is_onesided to compute 
     λ = ifelse.(upper .<= 0.0, 0.0, ifelse.(lower .>= 0.0, 1.0, α))
 
     crossing = lower .< 0.0 .&& upper .> 0.0
+    push!(P.instable_nodes[network], crossing)
     
     γ = 0.5 .* max.(-λ .* lower, 0.0, ((-).(1.0, λ)) .* upper)  # Computed offset (-λl/2)
 
@@ -94,22 +111,10 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
     end
 
     # Select a split candidate naively (by only considering each node's generator) for next branching
-    if any(crossing)
-        neuron = argmax(i -> sum(abs.(Z.G[i, :])), (1:size(crossing, 1))[crossing])
-        node = SplitNode(network, layer, neuron, 0, Z.G[neuron, :], Z.c[neuron])
-        if sum(abs.(node.g)) > sum(abs.(P.split_candidate.g))
-            P.split_candidate = node
-        end
-    end
     # if any(crossing)
-    #     neuron = argmax(i -> sum(abs.(Ĝ[i, :])), (1:size(crossing, 1))[crossing])
-    #     node = SplitNode(network, layer, neuron, 0, Z.G[neuron, :], Z.c[neuron])
-    #     s = sum(abs.(P.split_candidate.g))
-    #     z̲ = P.split_candidate.c - s
-    #     z̅ = P.split_candidate.c + s
-    #     λ = z̅ / (z̅ - z̲)
-    #     err = λ * s - 0.5 * λ * z̲
-    #     if sum(abs.(Ĝ[neuron, :])) > err
+    #     neuron = argmax(i -> sum(abs.(Z.G[i, :])), (1:size(crossing, 1))[crossing])
+    #     node = SplitNode(network, layer, neuron, 0.0, 0, Z.G[neuron, :], Z.c[neuron])
+    #     if sum(abs.(node.g)) > sum(abs.(P.split_candidate.g))
     #         P.split_candidate = node
     #     end
     # end
