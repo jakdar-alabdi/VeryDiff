@@ -378,3 +378,8 @@ function (N::GeminiNetwork)(Z :: DiffZonotope, P :: PropState)
     #println("Prop network")
     return foldl((Z,Ls) -> propagate_diff_layer(Ls,Z,P),zip(N.network1.layers,N.diff_network.layers,N.network2.layers),init=Z)
 end
+
+
+
+    
+

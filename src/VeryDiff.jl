@@ -41,12 +41,17 @@ using Gurobi
 const GRB_ENV = Ref{Any}(nothing)
 
 include("Debugger.jl")
-include("Definitions.jl")
+include("SortedVector.jl")
+include("Definitions/Definitions.jl")
+using .Definitions
+include("PropState.jl")
 include("Util.jl")
 include("Network.jl")
 include("Zonotope.jl")
-include("Layers_Zonotope.jl")
-include("Layers_DiffZonotope.jl")
+
+include("Transformers/Transformers.jl")
+using .Transformers
+
 include("MultiThreadding.jl")
 include("Properties.jl")
 include("Verifier.jl")

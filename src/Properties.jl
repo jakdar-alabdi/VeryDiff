@@ -386,20 +386,6 @@ function top1_configure_split_heuristic(mode)
             diff_weights ./= norm(diff_weights,2)
         end
 
-        task_split_stage = (verification_task.split_stage[1] + 1) % 10
-        verification_task.split_stage[1] = task_split_stage
-        #if task_split_stage <= 1
-            # Instable Gens: (6,5,2,4)
-            # -1: 2227
-            # 0: 6021
-            # 1: 50k = 99.99993%
-            # 8: 50k =  0.74158%
-            # TODO: Dynamics might be different for larger NNs?
-         #   split_stage = 0
-        #else
-        #split_stage = 3 # Always consider all differential generators
-        #end
-
         # Print (min, median, max) importance values for 1:size(distance_indices,1)
         # min = minimum(diff_weights[1:size(distance_indices,1)])
         # max = maximum(diff_weights[1:size(distance_indices,1)])

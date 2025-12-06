@@ -64,15 +64,15 @@ module Debugger
         global DEBUG_STATE.inv_dim_ranges = ranges
     end
 
-    macro propagation_init_hook(N, prop_state)
+    macro propagation_init_hook(N)
         if is_debug_active()
-            return esc(:(VeryDiff.Debugger.propagation_init_fn($N, $prop_state)))
+            return esc(:(VeryDiff.Debugger.propagation_init_fn($N)))
         else
             return esc(:(nothing))
         end
     end
 
-    function propagation_init_fn(N, prop_state)
+    function propagation_init_fn(N)
         global DEBUG_STATE
         DS = VeryDiff.Debugger.DEBUG_STATE
         if DS.active && !isnothing(DS.inspection_point)
