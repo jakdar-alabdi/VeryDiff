@@ -2,11 +2,6 @@ import Base: size
 
 using Statistics
 
-function size(Z::Zonotope, d::Integer)
-    @assert d<=2
-    return size(Z.G,d)
-end
-
 function truncate_network(T::Type,N::Network)
     layers = []
     for l in N.layers

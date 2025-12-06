@@ -14,7 +14,7 @@ mutable struct PropState
     end
 end
 
-function reset!(PS :: PropState)
+function reset_ps!(PS :: PropState)
     PS.first = false
 end
 
@@ -40,9 +40,9 @@ end
 
 
 function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
-    z1_generators = Vector{Matrix{Float64}}()
+    z1_generators = Vector{AbstractMatrix{Float64}}()
     z1_generator_ids = SortedVector{Int64}()
-    z2_generators = Vector{Matrix{Float64}}()
+    z2_generators = Vector{AbstractMatrix{Float64}}()
     z2_generator_ids = SortedVector{Int64}()
     free_generator_id = 2
     push!(z1_generators, zeros(Float64, size(task.middle,1), length(task.distance_indices)))
@@ -51,7 +51,7 @@ function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
     push!(z2_generators, zeros(Float64, size(task.middle,1), length(task.distance_indices)))
     push!(z2_generator_ids, 1)
     z2_center = zeros(Float64, size(task.middle,1))
-    diff_generators = Vector{Matrix{Float64}}()
+    diff_generators = Vector{AbstractMatrix{Float64}}()
     diff_generator_ids = SortedVector{Int64}()
     zd_center = zeros(Float64, size(task.middle,1))
     if !isnothing(task.distance1_secondary)
@@ -71,8 +71,8 @@ function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
     influence1 = nothing
     influence2 = nothing
     if NEW_HEURISTIC
-        influence1 = Vector{Matrix{Float64}}()
-        influence2 = Vector{Matrix{Float64}}()
+        influence1 = Vector{AbstractMatrix{Float64}}()
+        influence2 = Vector{AbstractMatrix{Float64}}()
         for g in z1_generators
             push!(influence1, Matrix(1.0I, size(g,2), size(g,2)))
         end
@@ -90,6 +90,7 @@ function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
             0, # First usage is the input layer itself => Noone is allowed to take over owned generators
         )
     )
+    PS.zono_storage.zonotopes[1].zonotope = PS.zono_storage.zonotopes[1].zonotope_proto
     PS.free_generator_id = free_generator_id
 end
 
@@ -101,26 +102,29 @@ function prepare_prop_state!(PS :: PropState, task :: VerificationTask)
     @assert length(PS.zono_storage.zonotopes) > 0 "Zonotope storage should have been initialized"
     Zin = PS.zono_storage.zonotopes[1].zonotope
     # Fill in generators and centers
-    generator1_common = Zin.Z₁.G[1]
-    generator2_common = Zin.Z₂.G[1]
-    @inbounds for (i, idx) in enumerate(task.distance_indices)
-        generator1_common[idx,i] .= task.distance[i]
-        generator2_common[idx,i] .= task.distance[i]
+    generator1_common = Zin.Z₁.Gs[1]
+    generator2_common = Zin.Z₂.Gs[1]
+    #@inbounds 
+    for (i, idx) in enumerate(task.distance_indices)
+        generator1_common[idx,i] = task.distance[i]
+        generator2_common[idx,i] = task.distance[i]
     end
     if !isnothing(task.distance1_secondary)
-        generator1_secondary = Zin.Z₁.G[2]
-        generator1_diff = Zin.∂Z.G[1]
-        @inbounds for (i, idx) in enumerate(task.distance_indices)
-            generator1_secondary[idx,i] .= task.distance1_secondary[i]
-            generator1_diff[idx,i] .= task.distance1_secondary[i]
+        generator1_secondary = Zin.Z₁.Gs[2]
+        generator1_diff = Zin.∂Z.Gs[1]
+        #@inbounds
+        for (i, idx) in enumerate(task.distance_indices)
+            generator1_secondary[idx,i] = task.distance1_secondary[i]
+            generator1_diff[idx,i] = task.distance1_secondary[i]
         end
     end
     if !isnothing(task.distance2_secondary)
-        generator2_secondary = Zin.Z₂.G[2]
-        generator2_diff = Zin.∂Z.G[2]
-        @inbounds for (i, idx) in enumerate(task.distance_indices)
-            generator2_secondary[idx,i] .= task.distance2_secondary[i]
-            generator2_diff[idx,i] .= -task.distance2_secondary[i]
+        generator2_secondary = Zin.Z₂.Gs[2]
+        generator2_diff = Zin.∂Z.Gs[2]
+        #@inbounds 
+        for (i, idx) in enumerate(task.distance_indices)
+            generator2_secondary[idx,i] = task.distance2_secondary[i]
+            generator2_diff[idx,i] = -task.distance2_secondary[i]
         end
     end
     Zin.Z₁.c .= task.middle
@@ -141,7 +145,12 @@ function prepare_prop_state!(PS :: PropState, task :: VerificationTask)
 end
 
 function has_layer(PS :: PropState, layer :: DiffLayer) :: Bool
-    return length(PS.zono_storage.zonotopes) >= layer.layer_idx + 1
+    return length(PS.zono_storage.zonotopes) >= layer.layer_idx
+end
+
+function get_layer(PS :: PropState, layer :: DiffLayer) :: CachedZonotope
+    @assert has_layer(PS, layer) "Layer $(layer.layer_idx) not initialized in PropState!"
+    return PS.zono_storage.zonotopes[layer.layer_idx]
 end
 
 function get_free_generator_id!(PS :: PropState) :: Int64

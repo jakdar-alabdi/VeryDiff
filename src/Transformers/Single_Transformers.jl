@@ -6,6 +6,22 @@ function (N::Network)(Z :: Zonotope, P :: PropState)
     return foldl((Z,L) -> L(Z,P),N.layers,init=Z)
 end
 
+function propagate_layer!(ZoutRef :: Zonotope, L :: Dense, inputs :: Vector{Zonotope})
+    @assert length(inputs) == 1 "Dense layer should have exactly one input"
+    Zin = inputs[1]
+    return propagate_layer!(ZoutRef, L, Zin)
+end
+
+function propagate_layer!(ZoutRef :: Zonotope, L :: Dense, Zin :: Zonotope)
+    # Zout must have exactly the same ids as Zin
+    @assert all(ZoutRef.generator_ids .== Zin.generator_ids) "Zonotope generator IDs do not match during Dense propagation!"
+    for i in 1:length(Zin.Gs)
+        mul!(ZoutRef.Gs[i], L.W, Zin.Gs[i])
+    end
+    mul!(ZoutRef.c, L.W, Zin.c)
+    ZoutRef.c .+= L.b
+end
+
 function (L::Dense)(Z :: Zonotope,P :: PropState)
     return @timeit to "Zonotope_DenseProp" begin
     G = L.W * Z.G

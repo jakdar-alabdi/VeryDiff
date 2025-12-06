@@ -19,7 +19,7 @@ function get_input_indices(layer_idx :: Int64, :: Layer)
     return Int64[layer_idx - 1]
 end
 
-struct DiffLayer{L1, Ld, L2} where {L1<:Layer, Ld<:Layer, L2<:Layer}
+struct DiffLayer{L1<:Layer, Ld<:Layer, L2<:Layer}
     layer_idx :: Int64
     inputs :: Vector{Int64}
     layer1 :: L1

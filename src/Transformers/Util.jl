@@ -1,6 +1,6 @@
-function init_zonotope(layer :: Dense, input :: Zonotope, influence::Union{Vector{Matrix{Float64}},Nothing}, owned_generators :: Union{Int64, Nothing})
+function init_zonotope(layer :: Dense, input :: Zonotope, influence::Union{Vector{AbstractMatrix{Float64}},Nothing}, owned_generators :: Union{Int64, Nothing})
     # Compute new generators
-    generators = Matrix{Float64}[]
+    generators = AbstractMatrix{Float64}[]
     generator_ids = deepcopy(input.generator_ids)
     for g in input.Gs
         new_g = zeros(Float64, size(layer.W,1), size(g,2))
@@ -10,7 +10,7 @@ function init_zonotope(layer :: Dense, input :: Zonotope, influence::Union{Vecto
     return Zonotope(generators, c, influence, generator_ids, owned_generators)
 end
 
-function init_layer_dense_z1_z2(L1 :: Dense, L2 :: Dense, input_zono :: Zonotope, input_zono_cache :: CachedZonotope, layer_idx :: Int64) :: Tuple{Zonotope,Zonotope}
+function init_layer_dense_z1_z2(L1 :: Dense, L2 :: Dense, input_zono :: DiffZonotope, input_zono_cache :: CachedZonotope, layer_idx :: Int64) :: Tuple{Zonotope,Zonotope}
     # Instantiate Z₁
     # Dense Layer can reuse influence matrix from input (nocopy)
     influence = input_zono.Z₁.influence
@@ -22,7 +22,7 @@ function init_layer_dense_z1_z2(L1 :: Dense, L2 :: Dense, input_zono :: Zonotope
     Z₁ = init_zonotope(L1, input_zono.Z₁, influence, owned_generators)
     # Instantiate Z₂
     influence = input_zono.Z₂.influence
-    if diff_layer.layer_idx == input_zono_cache.first_usage
+    if layer_idx == input_zono_cache.first_usage
         owned_generators = input_zono.Z₂.owned_generators
     else
         owned_generators = nothing

@@ -40,13 +40,10 @@ using Gurobi
 
 const GRB_ENV = Ref{Any}(nothing)
 
-include("Debugger.jl")
-include("SortedVector.jl")
+include("Debugger/Debugger.jl")
 include("Definitions/Definitions.jl")
 using .Definitions
-include("PropState.jl")
 include("Util.jl")
-include("Network.jl")
 include("Zonotope.jl")
 
 include("Transformers/Transformers.jl")

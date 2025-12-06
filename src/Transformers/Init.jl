@@ -24,7 +24,7 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ReLU, ReLU, ReLU},
     # First build union of generator ids
     generator_ids = union(input_zono.∂Z.generator_ids, union(Z₁.generator_ids, Z₂.generator_ids))
     owned_generator_id = nothing
-    if diff_layer.layer_idx == input_zono_cache.first_usage
+    if diff_layer.layer_idx == input_zono_cache.first_usage && !isnothing(input_zono.∂Z.owned_generators)
         owned_generator_id = input_zono.∂Z.generator_ids[input_zono.∂Z.owned_generators]
     end
     # Now iterate over generator ids and figure out where the generators come from
@@ -54,7 +54,7 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ReLU, ReLU, ReLU},
         push!(generators_d, new_g)
         push!(generator_ids, owned_generator_id)
     end
-    c = similar(input_zono.∂Z.c, size(Z₂.c,1))
+    c = zeros(Float64, size(Z₂.c,1))
     ∂Z = Zonotope(generators_d, c, input_zono.∂Z.influence, generator_ids, findfirst(==(owned_generator_id), generator_ids))
     @assert isnothing(input_zono.∂Z.influence) "ReLU DiffLayer does not support influenced zonotopes (yet?)"
     push!(PS.zono_storage.zonotopes, CachedZonotope(
@@ -94,53 +94,54 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{Dense,Dense,Dense}
     L1 = get_layer1(diff_layer)
     diff_layer_output =get_diff_layer(diff_layer)
     L2 = get_layer2(diff_layer)
-    @assert size(L1.W,2) == size(input_zono.Z₁,1) "Input dimension mismatch for Dense layer 1"
-    @assert size(L2.W,2) == size(input_zono.Z₂,1) "Input dimension mismatch for Dense layer 2"
+    @assert size(L1.W,2) == size(input_zono.Z₁.Gs[1],1) "Input dimension mismatch for Dense layer 1"
+    @assert size(L2.W,2) == size(input_zono.Z₂.Gs[1],1) "Input dimension mismatch for Dense layer 2"
     Z₁, Z₂ = init_layer_dense_z1_z2(L1, L2, input_zono, input_zono_cache, diff_layer.layer_idx)
     # Instantiate ∂Z
     influence = input_zono.∂Z.influence
-    if diff_layer.layer_idx == input_zono_cache.first_usage
+    if diff_layer.layer_idx == input_zono_cache.first_usage && !isnothing(input_zono.∂Z.owned_generators)
         owned_generator_id = input_zono.∂Z.generator_ids[input_zono.∂Z.owned_generators]
     else
         owned_generator_id = nothing
     end
-    generators = Matrix{Float64}[]
-    generator_ids = Int64[]
+    generators = AbstractMatrix{Float64}[]
+    generator_ids = SortedVector{Int64}()
     i_d = 1
     i_2 = 1
     while i_d <= length(input_zono.∂Z.generator_ids) && i_2 <= length(input_zono.Z₂.generator_ids)
         if input_zono.∂Z.generator_ids[i_d] == input_zono.Z₂.generator_ids[i_2]
-            new_g = similar(input_zono.∂Z.Gs[i_d], size(diff_layer_output.W,1), size(input_zono.∂Z.Gs[i_d],2))
+            new_g = zeros(Float64, size(diff_layer_output.W,1), size(input_zono.∂Z.Gs[i_d],2))
             push!(generators, new_g)
             push!(generator_ids, input_zono.∂Z.generator_ids[i_d])
             i_d += 1
             i_2 += 1
         elseif input_zono.∂Z.generator_ids[i_d] < input_zono.Z₂.generator_ids[i_2]
-            new_g = similar(input_zono.∂Z.Gs[i_d], size(diff_layer_output.W,1), size(input_zono.∂Z.Gs[i_d],2))
+            new_g = zeros(Float64, size(diff_layer_output.W,1), size(input_zono.∂Z.Gs[i_d],2))
             push!(generators, new_g)
             push!(generator_ids, input_zono.∂Z.generator_ids[i_d])
             i_d += 1
         else
             # input_zono.∂Z.generator_ids[i_d] > input_zono.Z₂.generator_ids[i_2]
-            new_g = similar(input_zono.Z₂.Gs[i_2], size(diff_layer_output.W,1), size(input_zono.Z₂.Gs[i_2],2))
+            new_g = zeros(Float64, size(diff_layer_output.W,1), size(input_zono.Z₂.Gs[i_2],2))
             push!(generators, new_g)
             push!(generator_ids, input_zono.Z₂.generator_ids[i_2])
             i_2 += 1
         end
     end
     while i_d <= length(input_zono.∂Z.generator_ids)
-        new_g = similar(input_zono.∂Z.Gs[i_d], size(diff_layer_output.W,1), size(input_zono.∂Z.Gs[i_d],2))
+        new_g = zeros(Float64, size(diff_layer_output.W,1), size(input_zono.∂Z.Gs[i_d],2))
         push!(generators, new_g)
         push!(generator_ids, input_zono.∂Z.generator_ids[i_d])
         i_d += 1
     end
     while i_2 <= length(input_zono.Z₂.generator_ids)
-        new_g = similar(input_zono.Z₂.Gs[i_2], size(diff_layer_output.W,1), size(input_zono.Z₂.Gs[i_2],2))
+        new_g = zeros(Float64, size(diff_layer_output.W,1), size(input_zono.Z₂.Gs[i_2],2))
         push!(generators, new_g)
         push!(generator_ids, input_zono.Z₂.generator_ids[i_2])
         i_2 += 1
     end
-    ∂Z = Zonotope(generators, similar(input_zono.∂Z.c, size(diff_layer_output.W,1)), influence, generator_ids, owned_generator_id === nothing ? nothing : findfirst(==(owned_generator_id), generator_ids))
+    ∂Z = Zonotope(generators,
+    zeros(Float64, size(diff_layer_output.W,1)), influence, generator_ids, owned_generator_id === nothing ? nothing : findfirst(==(owned_generator_id), generator_ids))
     push!(PS.zono_storage.zonotopes, CachedZonotope(
         DiffZonotope(
             Z₁,

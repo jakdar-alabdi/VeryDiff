@@ -179,7 +179,7 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         if k%100 == 0
             println("[Thread $(threadid)] Processed $(total_zonos) zonotopes (Work Done: $(round(100*total_work;digits=5))%; Expected Zonos: $(total_zonos/total_work))")
         end
-        reset!(prop_state)
+        reset_ps!(prop_state)
         #end
     end
     end

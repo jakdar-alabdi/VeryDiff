@@ -2,6 +2,65 @@ import VNNLib.NNLoader.Network
 import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
+function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense,Dense}, inputs :: Vector{DiffZonotope})
+    @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
+    @debug "Propagating DiffDense Layer"
+    Zin = inputs[1]
+    @timeit to "DiffZonotope_GetZonotope" begin
+        # Compute differential zonotope dimensions
+        # TODO(steuber): Is there a more elegant way?
+        # At the very least we could probably extract this into a function
+        id = 1
+        i2 = 1
+        ∂g_dims = Int64[]
+        while id <= length(Zin.∂Z.generator_ids) && i2 <= length(Zin.Z₂.generator_ids)
+            if Zin.∂Z.generator_ids[id] == Zin.Z₂.generator_ids[i2]
+                push!(∂g_dims, size(Zin.∂Z.Gs[id],2))
+                id += 1
+                i2 += 1
+            elseif Zin.∂Z.generator_ids[id] < Zin.Z₂.generator_ids[i2]
+                push!(∂g_dims, size(Zin.∂Z.Gs[id],2))
+                id += 1
+            else
+                # Zin.∂Z.generator_ids[id] > Zin.Z₂.generator_ids[i2]
+                push!(∂g_dims, size(Zin.Z₂.Gs[i2],2))
+                i2 += 1
+            end
+        end
+        while id <= length(Zin.∂Z.generator_ids)
+            push!(∂g_dims, size(Zin.∂Z.Gs[id],2))
+            id += 1
+        end
+        while i2 <= length(Zin.Z₂.generator_ids)
+            push!(∂g_dims, size(Zin.Z₂.Gs[i2],2))
+            i2 += 1
+        end
+        Zout = get_zonotope!(ZoutRef, size.(Zin.Z₁.Gs,2), size.(Zin.Z₂.Gs,2), ∂g_dims)
+    end
+    L1 = get_layer1(Ls)
+    ∂L = get_diff_layer(Ls)
+    L2 = get_layer2(Ls)
+    if USE_DIFFZONO
+        ∂indices = intersect_indices(Zout.∂Z.generator_ids, Zin.∂Z.generator_ids)
+        for (i, g) in zip(∂indices, Zin.∂Z.Gs)
+            mul!(Zout.∂Z.Gs[i], L1.W, g)
+        end
+        indices₂ = intersect_indices(Zout.Z₂.generator_ids, Zin.Z₂.generator_ids)
+        for (i, g) in zip(indices₂, Zin.Z₂.Gs)
+            mul!(Zout.∂Z.Gs[i], ∂L.W, g, 1.0, 1.0)
+        end
+        mul!(Zout.∂Z.c, L1.W, Zin.∂Z.c)
+        mul!(Zout.∂Z.c, ∂L.W, Zin.Z₂.c, 1.0, 1.0)
+        Zout.∂Z.c .+= ∂L.b
+    end
+    propagate_layer!(Zout.Z₁, L1, Zin.Z₁)
+    propagate_layer!(Zout.Z₂, L2, Zin.Z₂)
+    # Print Bounds:
+    # @info "Z₁ Bounds: $(zono_bounds(Zout.Z₁))"
+    # @info "Z₂ Bounds: $(zono_bounds(Zout.Z₂))"
+    # @info "∂Z Bounds: $(zono_bounds(Zout.∂Z))"
+end
+
 function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState)
     #println("Prop dense")
     return @timeit to "DiffZonotope_DenseProp" begin
