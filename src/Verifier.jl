@@ -10,6 +10,8 @@ function verify_network(
     split_heuristic;
     timeout=Inf)
     global FIRST_ROUND = true
+    global DEEPSPLITT_NEURON_SPLITTING
+    DEEPSPLITT_NEURON_SPLITTING = false
     verification_result = nothing
     # Timing
     reset_timer!(to)
@@ -243,7 +245,7 @@ function split_zono(d, verification_task :: VerificationTask, work_share, verifi
     distance2_vec[distance_d] = distance2
     middle2_vec = verification_task.middle
     middle2_vec[d] = mid2
-    Z2 = VerificationTask(middle2_vec, distance2_vec, verification_task.distance_indices, verification_task.∂Z, deepcopy(verification_status), distance_bound, verification_task.branch)
+    Z2 = VerificationTask(middle2_vec, distance2_vec, verification_task.distance_indices, verification_task.∂Z, deepcopy(verification_status), distance_bound, deepcopy(verification_task.branch))
 
     return (work_share/2.0,Z1), (work_share/2.0,Z2)
 end

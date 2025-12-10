@@ -99,38 +99,51 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     lower₂ = @view bounds₂[:,1]
     upper₂ = @view bounds₂[:,2]
 
-    lowers = [lower₁, lower₂]
-    uppers = [upper₁, upper₂]
-    zonos = [Z.Z₁, Z.Z₂]
+    global DEEPSPLITT_NEURON_SPLITTING
+    if DEEPSPLITT_NEURON_SPLITTING
+        
+        lowers = [lower₁, lower₂]
+        uppers = [upper₁, upper₂]
+        zonos = [Z.Z₁, Z.Z₂]
 
-    # Get split nodes corresponding to this layer
-    indices = map(node -> node.layer == layer, P.split_nodes)
-    # layer_split_nodes = @view P.split_nodes[indices]
-    # layer_split_nodes = filter(node -> node.layer == layer, P.split_nodes)
+        for net in 1:2
+            Z̃ = zonos[net]
+            if DEEPPSPLIT_HUERISTIC_ALTERNATIVE
+                lower = lowers[net]
+                upper = uppers[net]
+                crossings = P.instable_nodes[net]
+                relative_impactes = P.relative_impactes[net]
+    
+                push!(relative_impactes, Matrix{Float64}[])
+                
+                input_relative_impactes = P.input_relative_impactes[net]
+                bounds_width = upper - lower
+                c = 2 .* abs.(Z̃.G[:, 1:input_dim])
+                push!(input_relative_impactes, ifelse.(bounds_width .== 0.0, 0.0, c ./ bounds_width))
+    
+                offset = 0
+                for l in (layer - 1):-1:1
+                    num_instable = count(crossings[l])
+                    ϵ = Z̃.G[:, end - offset - num_instable + 1 : end - offset]
+                    α = ifelse.(lower .>= 0 .|| upper .<= 0, 0.0, ifelse.(ϵ .>= 0.0, ϵ ./ upper, ϵ ./ lower))
+                    push!(relative_impactes[l], α)
+                    offset += num_instable
+                end
+            else
+                push!(P.intermediate_zonos[net], Z̃)
+            end
+        end
 
-    for node in P.split_nodes[indices]
-        lowers[node.network][node.neuron] *= node.direction == -1
-        uppers[node.network][node.neuron] *= node.direction == 1
-        node.g = zonos[node.network].G[node.neuron, :]
-        node.c = zonos[node.network].c[node.neuron]
+        # Get split nodes corresponding to this layer
+        indices_mask = map(node -> node.layer == layer, P.split_nodes)
+    
+        for node in P.split_nodes[indices_mask]
+            lowers[node.network][node.neuron] *= node.direction == -1
+            uppers[node.network][node.neuron] *= node.direction == 1
+            node.g = zonos[node.network].G[node.neuron, :]
+            node.c = zonos[node.network].c[node.neuron]
+        end
     end
-
-    # layer_split_nodes₁ = filter(node -> node.network == 1 && node.layer == layer, P.split_nodes)
-    # layer_split_nodes₂ = filter(node -> node.network == 2 && node.layer == layer, P.split_nodes)
-
-    # for node in layer_split_nodes₁
-    #     lower₁[node.neuron] *= node.direction == -1
-    #     upper₁[node.neuron] *= node.direction == 1
-    #     node.g = Z.Z₁.G[node.neuron, :]
-    #     node.c = Z.Z₁.c[node.neuron]
-    # end
-
-    # for node in layer_split_nodes₂
-    #     lower₂[node.neuron] *= node.direction == -1
-    #     upper₂[node.neuron] *= node.direction == 1
-    #     node.g = Z.Z₂.G[node.neuron, :]
-    #     node.c = Z.Z₂.c[node.neuron]
-    # end
 
     # Compute Zonotopes for individual networks
     Z₁_new = L1(Z.Z₁, P, 1, layer; bounds=bounds₁)

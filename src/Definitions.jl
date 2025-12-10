@@ -12,7 +12,7 @@ mutable struct SplitNode
     direction :: Int64
     g :: Vector{Float64}
     c :: Float64
-    function SplitNode(network=0, layer=0, neuron=0, score=0.0, direction=0, g=zeros(1), c=0.0)
+    function SplitNode(network=-1, layer=-1, neuron=-1, score=-Inf64, direction=0, g=zeros(0), c=0.0)
         new(network, layer, neuron, score, direction, g, c)
     end
 end
@@ -54,10 +54,11 @@ mutable struct PropState
     split_nodes :: Vector{SplitNode}
     split_candidate :: SplitNode
     instable_nodes :: Tuple{Vector{BitVector}, Vector{BitVector}}
-    intermediate_zonotopes :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
+    intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
     relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
+    input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
     function PropState(first :: Bool, split_nodes=SplitNode[], split_candidate=SplitNode())
-        return new(first, split_nodes, split_candidate, (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]))
+        return new(first, split_nodes, split_candidate, (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix[], Matrix[]))
     end
 end
 

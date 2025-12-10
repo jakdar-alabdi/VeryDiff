@@ -1,6 +1,7 @@
 LP_BOUND_TESTING = false
+global DEEPSPLITT_NEURON_SPLITTING = true
 
-function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, Zin :: Zonotope, ϵ :: Float64)
+function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, Zin::Zonotope, ϵ::Float64)
     return deepsplit_lp_search_epsilon(N₁, N₂, zono_bounds(Zin), ϵ)
 end
 
@@ -16,7 +17,7 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
 
     input_dim = length(lower)
     ∂Z = Zonotope(Matrix(0.0I, input_dim, size(non_zero_indices, 1)), zeros(Float64, input_dim), nothing)
-    verification_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, epsilon, Branch())
+    verification_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, Inf64, Branch(trues(1, 2)))
 
     status, cex = deepsplit_lp_search_epsilon(epsilon)(N₁, N₂, verification_task, input_dim)
 
@@ -40,6 +41,7 @@ end
 
 function deepsplit_lp_search_epsilon(ϵ::Float64)
     property_check = get_epsilon_property(ϵ)
+    global DEEPSPLITT_NEURON_SPLITTING = true
 
     return (N₁::Network, N₂::Network, task::VerificationTask, input_dim::Int64) -> begin
         reset_timer!(to)
@@ -53,8 +55,6 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
             else
                 split_heuristic = deepsplit_heuristic
             end
-
-            first = true
             
             queue = Queue()
             push!(queue, (1.0, task))
@@ -68,7 +68,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 @timeit to "Zonotope Propagate" begin
                     prop_state = PropState(true)
                     prop_state.split_nodes = task.branch.split_nodes
-                    # Zin = to_diff_zono(task)
+                    Zin = to_diff_zono(task)
                     Zout = N(Zin, prop_state)
                 end
 
@@ -101,7 +101,8 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         bounds = zono_bounds(Zout.∂Z)
                         # Compute all output dimensions that still need to be proven
                         # mask = hcat(bounds[:, 1] .< -ϵ, bounds[:, 2] .> ϵ) .&& (isempty(task.branch.mask) ? true : task.branch.mask)
-                        mask = abs.(bounds) .> ϵ .&& (isempty(task.branch.undetermined) || task.branch.undetermined)
+                        # mask = abs.(bounds) .> ϵ .&& (isempty(task.branch.undetermined) || task.branch.undetermined)
+                        mask = abs.(bounds) .> ϵ .&& task.branch.undetermined
 
                         # For each unproven output dimension we solve a LP for corresponding lower and upper bound
                         for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
@@ -152,16 +153,11 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
 
                         @timeit to "Split Neuron" begin
                             # split_candidate = prop_state.split_candidate
-                            split_candidate = split_heuristic(Zout, prop_state, mask[:, 1] .|| mask[:, 2])
-                            # println(split_candidate.score)
-                            # @assert split_candidate.score > 0.0
-                            # if !first
-                            #     distance_bound = min(distance_bound, task.distance_bound)
-                            # end
-                            task₁, task₂ = split_neuron(split_candidate, task, distance_bound)
-                            push!(queue, (work_share / 2.0, task₁))
-                            push!(queue, (work_share / 2.0, task₂))
-                            first = false
+                            split_candidate = split_heuristic(Zin.Z₁, Zout, prop_state, mask[:, 1] .|| mask[:, 2])
+                            distance_bound = min(distance_bound, task.distance_bound)
+                            task₁, task₂ = split_node(split_candidate, task, work_share, distance_bound)
+                            push!(queue, task₁)
+                            push!(queue, task₂)
                         end
                     end
                 end
@@ -171,7 +167,14 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
     end
 end
 
-function split_neuron(node :: SplitNode, task :: VerificationTask, distance_bound :: Float64)
+function split_node(node::SplitNode, task::VerificationTask, work_share::Float64, distance_bound::Float64)
+    if node.layer == 0
+        return split_zono(node.neuron, task, work_share, nothing, distance_bound)
+    end
+    return split_neuron(node, task, work_share, distance_bound)
+end
+
+function split_neuron(node::SplitNode, task::VerificationTask, work_share::Float64, distance_bound::Float64)
     branch₁ = task.branch
     branch₂ = deepcopy(task.branch)
 
@@ -181,5 +184,5 @@ function split_neuron(node :: SplitNode, task :: VerificationTask, distance_boun
     task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, nothing, distance_bound, branch₁)
     task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, nothing, distance_bound, branch₂)
 
-    return task₁, task₂
+    return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
 end
