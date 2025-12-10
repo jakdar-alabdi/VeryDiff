@@ -167,6 +167,12 @@ using Random
                 input_component2 = Zout.Z₂.c .+ Zout.Z₂.Gs[1]*x
                 @test all(input_component2 .- Z2_range .<= y2 .+ 1e-8)
                 @test all(y2 .<= input_component2 .+ Z2_range .+ 1e-8)
+                if !all(input_component2 .- Z2_range .<= y2 .+ 1e-8) || !all(y2 .<= input_component2 .+ Z2_range .+ 1e-8)
+                    @info "Output: $y2"
+                    @info "Zonotope bounds (agnostic): $(bounds_z2)"
+                    @info "Zonotope bounds (generator sum): $((input_component2 .- Z2_range, input_component2 .+ Z2_range))"
+                    return
+                end
                 # Difference Zonotope
                 diff_range = sum(g->sum(abs, g, dims=2),Zout.∂Z.Gs[2:end];init=zeros(size(Zout.∂Z.c)))
                 input_component_diff = Zout.∂Z.c .+ Zout.∂Z.Gs[1]*x
