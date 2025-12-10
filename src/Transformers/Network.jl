@@ -1,7 +1,9 @@
 function propagate!(N :: GeminiNetwork, P :: PropState)
     for diff_layer in get_layers(N)
         @debug "Propagating layer: $(typeof(diff_layer))"
-        inputs = get_layer_inputs(get_inputs(diff_layer), P)
+        input_positions = get_inputs(diff_layer)
+        @debug "Input Positions: $input_positions"
+        inputs = get_layer_inputs(input_positions, P)
         if first_pass(P)
             configure_first_usage!(diff_layer.layer_idx, inputs)
         end
@@ -12,7 +14,13 @@ function propagate!(N :: GeminiNetwork, P :: PropState)
         @assert has_layer(P, diff_layer)
         input_zonotopes = get_zonotope.(inputs)
         output_zonotope_ref = get_layer(P, diff_layer)
-        propagate_layer!(output_zonotope_ref, diff_layer, input_zonotopes)
+        if haskey(P.task_bounds.bounds_cache, diff_layer.layer_idx)
+            bounds_cache = P.task_bounds.bounds_cache[diff_layer.layer_idx]
+        else
+            bounds_cache = BoundsCache()
+            P.task_bounds.bounds_cache[diff_layer.layer_idx] = bounds_cache
+        end
+        propagate_layer!(output_zonotope_ref, diff_layer, input_zonotopes; bounds_cache=bounds_cache)
     end
     return P
 end

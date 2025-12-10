@@ -1,6 +1,6 @@
-function init_zonotope(layer :: Dense, input :: Zonotope, influence::Union{Vector{AbstractMatrix{Float64}},Nothing}, owned_generators :: Union{Int64, Nothing})
+function init_zonotope(layer :: Dense, input :: Zonotope, influence::Union{Vector{<:AbstractMatrix{Float64}},Nothing}, owned_generators :: Union{Int64, Nothing})
     # Compute new generators
-    generators = AbstractMatrix{Float64}[]
+    generators = Vector{AbstractMatrix{Float64}}()
     generator_ids = deepcopy(input.generator_ids)
     for g in input.Gs
         new_g = zeros(Float64, size(layer.W,1), size(g,2))
@@ -79,27 +79,29 @@ end
 function init_relu_zonotope(PS :: PropState, input_zono_cache :: CachedZonotope, input_zono :: Zonotope, new_generators :: Int64, layer_idx :: Int64)
     # Compute new generators
     generators = Matrix{Float64}[]
-    generator_ids = Int64[]
+    generator_ids = SortedVector{Int64}()
     owned_generators = input_zono.owned_generators
     if input_zono_cache.first_usage != layer_idx
         owned_generators = nothing
     end
     for (gid, g) in enumerate(input_zono.Gs)
         if !isnothing(owned_generators) && gid == owned_generators
-            # Skip owned generator, will be replaced
-            cols = size(g,2) + new_generators - 1
+            cols = size(g,2) + new_generators
             new_g = zeros(Float64, size(g,1), cols)
+            # @info "Generator ID $gid: $(size(new_g,2)) columns (owned, adding $new_generators new)"
             push!(generators, new_g)
             push!(generator_ids, input_zono.generator_ids[gid])
         else
             new_g = zeros(Float64, size(g))
             push!(generators, new_g)
+            # @info "Generator ID $gid: $(size(new_g,2)) columns"
             push!(generator_ids, input_zono.generator_ids[gid])
         end
     end
     if isnothing(owned_generators)
         owned_generators = get_free_generator_id!(PS)
         new_g = zeros(Float64, size(input_zono.Gs[1],1), new_generators)
+        # @info "Generator ID $owned_generators: $(size(new_g,2)) columns (new owned generator)"
         push!(generators, new_g)
         push!(generator_ids, owned_generators)
         owned_generators = length(generator_ids)

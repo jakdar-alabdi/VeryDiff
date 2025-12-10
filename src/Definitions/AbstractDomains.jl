@@ -1,11 +1,11 @@
 struct Zonotope
     # Vector of Generator Matrices
-    Gs::Vector{AbstractMatrix{Float64}}
+    Gs::Vector{<:AbstractMatrix{Float64}}
     # Center of Zonotope
     c::Vector{Float64}
     # Influence Matrix (necessary for input splitting heuristic)
     # TODO: Move this to PropState at some point?
-    influence::Union{Vector{AbstractMatrix{Float64}},Nothing}
+    influence::Union{Vector{<:AbstractMatrix{Float64}},Nothing}
     # ID of generator matrices
     # must be same length as G
     generator_ids :: SortedVector{Int64}
@@ -15,9 +15,9 @@ struct Zonotope
     # If no owned generator matrix has been allocated, this field is nothing
     owned_generators :: Union{Int64, Nothing}
     function Zonotope(
-        Gs::Vector{AbstractMatrix{Float64}},
+        Gs::Vector{<:AbstractMatrix{Float64}},
         c::Vector{Float64},
-        influence::Union{Vector{AbstractMatrix{Float64}},Nothing},
+        influence::Union{Vector{<:AbstractMatrix{Float64}},Nothing},
         generator_ids :: SortedVector{Int64},
         owned_generators :: Union{Int64, Nothing}
     )
@@ -36,8 +36,16 @@ struct DiffZonotope
 end
 
 mutable struct BoundsCache
-    lower :: Vector{Vector{Float64}}
-    upper :: Vector{Vector{Float64}}
+    initialized :: Bool
+    lower₁ :: Union{Vector{Float64}, Nothing}
+    upper₁ :: Union{Vector{Float64}, Nothing}
+    lower₂ :: Union{Vector{Float64}, Nothing}
+    upper₂ :: Union{Vector{Float64}, Nothing}
+    ∂lower :: Union{Vector{Float64}, Nothing}
+    ∂upper :: Union{Vector{Float64}, Nothing}
+    function BoundsCache()
+        return new(false, nothing,nothing,nothing,nothing,nothing,nothing)
+    end
 end
 
 mutable struct CachedZonotope
@@ -59,46 +67,30 @@ function get_zonotope!(
     needed_columns₂ :: Vector{Int64},
     needed_columns_∂ :: Vector{Int64}) :: DiffZonotope
     # Check if we already have the needed columns
-    @assert all(needed_columns₁ .<= size.(zono.zonotope_proto.Z₁.Gs,2)) "Requested more generator columns than available in Zonotope 1!"
-    @assert all(needed_columns₂ .<= size.(zono.zonotope_proto.Z₂.Gs,2)) "Requested more generator columns than available in Zonotope 2!"
-    @assert all(needed_columns_∂ .<= size.(zono.zonotope_proto.∂Z.Gs,2)) "Requested more generator columns than available in Differential Zonotope!"
+    #@assert all(needed_columns₁ .<= size.(zono.zonotope_proto.Z₁.Gs,2)) "Requested more generator columns than available in Zonotope 1!"
+    #@assert all(needed_columns₂ .<= size.(zono.zonotope_proto.Z₂.Gs,2)) "Requested more generator columns than available in Zonotope 2!"
+    #@assert all(needed_columns_∂ .<= size.(zono.zonotope_proto.∂Z.Gs,2)) "Requested more generator columns than available in Differential Zonotope!"
     # Create view based new Zonotope
-    Z₁_gs = AbstractMatrix{Float64}[]
-    influence = nothing
-    for (g, needed_columns) in zip(zono.zonotope_proto.Z₁.Gs, needed_columns₁)
-        push!(Z₁_gs, @view g[:, 1:needed_columns])
-    end
-    if !isnothing(zono.zonotope_proto.Z₁.influence)
-        influence = AbstractMatrix{Float64}[]
-        for (inf, needed_columns) in zip(zono.zonotope_proto.Z₁.influence, needed_columns₁)
-            push!(influence, @view inf[:, 1:needed_columns])
+    for (i, needed_columns) in enumerate(needed_columns₁)
+        @assert needed_columns <= size(zono.zonotope.Z₁.Gs[i],2) "Requested $needed_columns columns, but only $(size(zono.zonotope.Z₁.Gs[i],2)) available in generator matrix $i of Z₁!"
+        zono.zonotope.Z₁.Gs[i] = @view zono.zonotope_proto.Z₁.Gs[i][:, 1:needed_columns]
+        if !isnothing(zono.zonotope.Z₁.influence)
+            zono.zonotope.Z₁.influence[i] = @view zono.zonotope_proto.Z₁.influence[i][:, 1:needed_columns]
         end
     end
-    Z₁ = Zonotope(Z₁_gs, zono.zonotope_proto.Z₁.c, influence, zono.zonotope_proto.Z₁.generator_ids, zono.zonotope_proto.Z₁.owned_generators)
-    Z₂_gs = AbstractMatrix{Float64}[]
-    influence = nothing
-    for (g, needed_columns) in zip(zono.zonotope_proto.Z₂.Gs, needed_columns₂)
-        push!(Z₂_gs, @view g[:, 1:needed_columns])
-    end
-    if !isnothing(zono.zonotope_proto.Z₂.influence)
-        influence = AbstractMatrix{Float64}[]
-        for (inf, needed_columns) in zip(zono.zonotope_proto.Z₂.influence, needed_columns₂)
-            push!(influence, @view inf[:, 1:needed_columns])
+    for (i, needed_columns) in enumerate(needed_columns₂) "Requested $needed_columns columns, but only $(size(zono.zonotope.Z₂.Gs[i],2)) available in generator matrix $i of Z₂!"
+        @assert needed_columns <= size(zono.zonotope.Z₂.Gs[i],2)
+        zono.zonotope.Z₂.Gs[i] = @view zono.zonotope_proto.Z₂.Gs[i][:, 1:needed_columns]
+        if !isnothing(zono.zonotope.Z₂.influence)
+            zono.zonotope.Z₂.influence[i] = @view zono.zonotope_proto.Z₂.influence[i][:, 1:needed_columns]
         end
     end
-    Z₂ = Zonotope(Z₂_gs, zono.zonotope_proto.Z₂.c, influence, zono.zonotope_proto.Z₂.generator_ids, zono.zonotope_proto.Z₂.owned_generators)
-    ∂Z_gs = AbstractMatrix{Float64}[]
-    influence = nothing
-    for (g, needed_columns) in zip(zono.zonotope_proto.∂Z.Gs, needed_columns_∂)
-        push!(∂Z_gs, @view g[:, 1:needed_columns])
-    end
-    if !isnothing(zono.zonotope_proto.∂Z.influence)
-        influence = AbstractMatrix{Float64}[]
-        for (inf, needed_columns) in zip(zono.zonotope_proto.∂Z.influence, needed_columns_∂)
-            push!(influence, @view inf[:, 1:needed_columns])
+    for (i, needed_columns) in enumerate(needed_columns_∂)
+        @assert needed_columns <= size(zono.zonotope.∂Z.Gs[i],2) "Requested $needed_columns columns, but only $(size(zono.zonotope.∂Z.Gs[i],2)) available in generator matrix $i of ∂Z!"
+        zono.zonotope.∂Z.Gs[i] = @view zono.zonotope_proto.∂Z.Gs[i][:, 1:needed_columns]
+        if !isnothing(zono.zonotope.∂Z.influence)
+            zono.zonotope.∂Z.influence[i] = @view zono.zonotope_proto.∂Z.influence[i][:, 1:needed_columns]
         end
     end
-    ∂Z = Zonotope(∂Z_gs, zono.zonotope_proto.∂Z.c, influence, zono.zonotope_proto.∂Z.generator_ids, zono.zonotope_proto.∂Z.owned_generators)
-    zono.zonotope = DiffZonotope(Z₁, Z₂, ∂Z)
     return zono.zonotope
 end

@@ -2,14 +2,14 @@
 
 mutable struct PropState
     first :: Bool
-    current_bounds :: BoundsCache
     zono_storage :: ZonotopeStorage
     free_generator_id :: Int64
+    task_bounds :: TaskBounds
     function PropState(first :: Bool)
         return new(first,
-                    BoundsCache(Vector{Vector{Float64}}(), Vector{Vector{Float64}}()),
                     ZonotopeStorage(Vector{Zonotope}()),
-                    -1
+                    -1,
+                    TaskBounds()
                     )
     end
 end
@@ -103,7 +103,9 @@ function prepare_prop_state!(PS :: PropState, task :: VerificationTask)
     Zin = PS.zono_storage.zonotopes[1].zonotope
     # Fill in generators and centers
     generator1_common = Zin.Z₁.Gs[1]
+    generator1_common .= 0.0
     generator2_common = Zin.Z₂.Gs[1]
+    generator2_common .= 0.0
     #@inbounds 
     for (i, idx) in enumerate(task.distance_indices)
         generator1_common[idx,i] = task.distance[i]
@@ -111,20 +113,24 @@ function prepare_prop_state!(PS :: PropState, task :: VerificationTask)
     end
     if !isnothing(task.distance1_secondary)
         generator1_secondary = Zin.Z₁.Gs[2]
+        generator1_secondary .= 0.0
         generator1_diff = Zin.∂Z.Gs[1]
+        generator1_diff .= 0.0
         #@inbounds
-        for (i, idx) in enumerate(task.distance_indices)
-            generator1_secondary[idx,i] = task.distance1_secondary[i]
-            generator1_diff[idx,i] = task.distance1_secondary[i]
+        for (i, dist) in enumerate(task.distance1_secondary)
+            generator1_secondary[i,i] = dist
+            generator1_diff[i,i] = dist
         end
     end
     if !isnothing(task.distance2_secondary)
         generator2_secondary = Zin.Z₂.Gs[2]
+        generator2_secondary .= 0.0
         generator2_diff = Zin.∂Z.Gs[2]
+        generator2_diff .= 0.0
         #@inbounds 
-        for (i, idx) in enumerate(task.distance_indices)
-            generator2_secondary[idx,i] = task.distance2_secondary[i]
-            generator2_diff[idx,i] = -task.distance2_secondary[i]
+        for (i, dist) in enumerate(task.distance2_secondary)
+            generator2_secondary[i,i] = dist
+            generator2_diff[i,i] = -dist
         end
     end
     Zin.Z₁.c .= task.middle
@@ -142,6 +148,11 @@ function prepare_prop_state!(PS :: PropState, task :: VerificationTask)
     if !isnothing(task.distance2_secondary)
         Zin.∂Z.c .-= task.middle2_secondary
     end
+    @debug "Initialized Zonotopes:"
+    @debug "Z₁: $(Zin.Z₁)"
+    @debug "Z₂: $(Zin.Z₂)"
+    @debug "∂Z: $(Zin.∂Z)"
+    PS.task_bounds = task.task_bounds
 end
 
 function has_layer(PS :: PropState, layer :: DiffLayer) :: Bool

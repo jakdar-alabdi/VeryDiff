@@ -1,3 +1,10 @@
+struct TaskBounds
+    bounds_cache :: Dict{Int, BoundsCache}
+    function TaskBounds()
+        return new(Dict{Int, BoundsCache}())
+    end
+end
+
 struct VerificationTask
     middle :: Vector{Float64}
     distance :: Vector{Float64}
@@ -9,7 +16,7 @@ struct VerificationTask
     verification_status
     distance_bound :: Float64
     work_share :: Float64
-    bounds_cache :: BoundsCache
+    task_bounds :: TaskBounds
     function VerificationTask(middle :: Vector{Float64},
                               distance :: Vector{Float64},
                               distance_indices :: Vector{Int},
@@ -21,16 +28,16 @@ struct VerificationTask
                               distance_bound :: Float64,
                               work_share :: Float64)
         return new(middle,
-                   distance,
-                   distance_indices,
-                   distance1_secondary,
-                   middle1_secondary,
-                   distance2_secondary,
-                   middle2_secondary,
-                   verification_status,
-                   distance_bound,
-                   work_share,
-                   BoundsCache(Vector{Vector{Float64}}(), Vector{Vector{Float64}}())
+                    distance,
+                    distance_indices,
+                    distance1_secondary,
+                    middle1_secondary,
+                    distance2_secondary,
+                    middle2_secondary,
+                    verification_status,
+                    distance_bound,
+                    work_share,
+                    TaskBounds()
                 )
     end
 end

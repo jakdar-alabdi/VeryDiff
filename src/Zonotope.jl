@@ -8,9 +8,15 @@ end
 
 function zono_bounds(Z::Zonotope)
     #return @timeit to "Zonotope_Bounds" begin
-    b = sum(map(x->sum(abs,x;dims=2), Z.Gs))
-    #b = abs.(Z.G)*ones(size(Z.G,2))
-    return [Z.c.-b b.+Z.c]
+    if length(Z.Gs) > 0
+        b = sum(abs,Z.Gs[1];dims=2)
+        for i in 2:length(Z.Gs)
+            b .+= sum(abs,Z.Gs[i];dims=2)
+        end
+        return [Z.c.-b b.+Z.c]
+    else
+        return [Z.c Z.c]
+    end
     #end
 end
 

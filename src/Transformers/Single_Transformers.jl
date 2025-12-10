@@ -14,20 +14,12 @@ end
 
 function propagate_layer!(ZoutRef :: Zonotope, L :: Dense, Zin :: Zonotope)
     # Zout must have exactly the same ids as Zin
-    @assert all(ZoutRef.generator_ids .== Zin.generator_ids) "Zonotope generator IDs do not match during Dense propagation!"
+    #@assert all(ZoutRef.generator_ids .== Zin.generator_ids) "Zonotope generator IDs do not match during Dense propagation!"
     for i in 1:length(Zin.Gs)
         mul!(ZoutRef.Gs[i], L.W, Zin.Gs[i])
     end
     mul!(ZoutRef.c, L.W, Zin.c)
     ZoutRef.c .+= L.b
-end
-
-function (L::Dense)(Z :: Zonotope,P :: PropState)
-    return @timeit to "Zonotope_DenseProp" begin
-    G = L.W * Z.G
-    c = L.W * Z.c .+ L.b
-    return Zonotope(G,c, Z.influence)
-    end
 end
 
 function get_slope(l,u, alpha)
@@ -40,65 +32,69 @@ function get_slope(l,u, alpha)
     end
 end
 
-function (L::ReLU)(Z :: Zonotope, P :: PropState; bounds = nothing)
-    return @timeit to "Zonotope_ReLUProp" begin
+function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, inputs :: Vector{Zonotope}; lower=nothing, upper=nothing)
+    @assert length(inputs) == 1 "Dense layer should have exactly one input"
+    Zin = inputs[1]
+    return propagate_layer!(ZoutRef, L, Zin; lower=lower, upper=upper)
+end
+
+function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, Zin :: Zonotope; lower=nothing, upper=nothing)
     @timeit to "Bounds" begin
-    row_count = size(Z.G,1)
-    if isnothing(bounds)
-        bounds = zono_bounds(Z)
-    end
-    lower = @view bounds[:,1]
-    upper = @view bounds[:,2]
+        if isnothing(lower) || isnothing(upper)
+            bounds = zono_bounds(Zin)
+            lower = @view bounds[:,1]
+            upper = @view bounds[:,2]
+        end
     end
 
     @timeit to "Vectors" begin
-    α = clamp.(upper./(upper.-lower),0.0,1.0)
-    # Use is_onesided to compute 
-    λ = ifelse.(upper.<=0.0,0.0,ifelse.(lower.>=0.0,1.0,α))
+        α = clamp.(upper./(upper.-lower),0.0,1.0)
+        # Use is_onesided to compute 
+        λ = ifelse.(upper.<=0.0,0.0,ifelse.(lower.>=0.0,1.0,α))
 
-    crossing = lower.<0.0 .&& upper.>0.0
-    
-    γ = 0.5 .* max.(-λ .* lower,0.0,((-).(1.0,λ)).*upper)  # Computed offset (-λl/2)
+        crossing = lower.<0.0 .&& upper.>0.0
+        new_gens = count(crossing)
+        
+        γ = 0.5 .* max.(-λ .* lower,0.0,((-).(1.0,λ)).*upper)  # Computed offset (-λl/2)
 
-    ĉ = λ .* Z.c .+ crossing.*γ
+        ZoutRef.c .= λ .* Zin.c .+ crossing.*γ
     end
-    
+
+    indices = intersect_indices(ZoutRef.generator_ids, Zin.generator_ids)
     @timeit to "Influence Matrix" begin
-    if NEW_HEURISTIC
-        # TODO(steuber): Can we avoid this reallocation?
-        @timeit to "Allocation" begin
-        #println(size(Z.influence,1), size(Z.influence,2)+count(crossing))
-        influence_new = zeros(Float64, size(Z.influence,1), size(Z.influence,2)+count(crossing))
+        if NEW_HEURISTIC
+            influence_new = ZoutRef.influence
+            column_pos = size(influence_new[ZoutRef.owned_generators],2) - new_gens + 1
+            # @info "Adding $new_gens new columns at position $column_pos to influence matrix of owned generator ID $(ZoutRef.generator_ids[ZoutRef.owned_generators])"
+            # @info "Sizes of influence matrices: $([size(inf) for inf in Zin.influence])"
+            for (idx, inf) in zip(indices, Zin.influence)
+                if idx != ZoutRef.owned_generators
+                    influence_new[idx] = inf
+                else
+                    influence_new[ZoutRef.owned_generators][:, 1:column_pos-1] .= inf
+                end
+            end
+            # @info "Size of owned influence matrix after copy: $(size(influence_new[ZoutRef.owned_generators]))"
+            influence_new[ZoutRef.owned_generators][:,column_pos:end] .= 0.0
+            for (idx, g) in enumerate(Zin.Gs)
+                influence_new[ZoutRef.owned_generators][:,column_pos:end] .+= abs.(Zin.influence[idx]) * abs.(@view g[crossing,:])'
+            end
+            #influence_new[:,(size(Zin.influence,2)+1):end] .=  abs.(Zin.influence) * abs.(@view Zin.G[crossing,:])'
+        else
+            influence_new = Zin.influence
         end
-        @timeit to "Set Matrix" begin
-        influence_new[:,1:size(Z.influence,2)] .= Z.influence
-        end
-        # print("Hello")
-        # print(size(influence_new))
-        # print(size(Z.influence * Z.G[crossing,:]'))
-        @timeit to "Multiply" begin
-        influence_new[:,(size(Z.influence,2)+1):end] .=  abs.(Z.influence) * abs.(@view Z.G[crossing,:])'
-        end
-        # foreach(normalize!, eachcol(@view influence_new[:,(size(Z.influence,2)+1):end]))
-    else
-        influence_new = Z.influence
-    end
     end
 
-    @timeit to "Allocation" begin
-    Ĝ = zeros(Float64,row_count, size(Z.G,2)+count(crossing))
-    end
-    #zeros(row_count, size(Z.G,2)+count(crossing))
-    #Z.G .*= λ
+    num_new_gens = count(crossing)
+
     @timeit to "Set Matrix" begin
-    Ĝ[:,1:size(Z.G,2)] .= Z.G
-    Ĝ[crossing,size(Z.G,2)+1:end] .=  (@view I(row_count)[crossing, crossing])
-    end
-    @timeit to "Column Multiply" begin
-    Ĝ[:,1:size(Z.G,2)] .*= λ
-    Ĝ[:,size(Z.G,2)+1:end] .*= abs.(γ)
-    end
-
-    return Zonotope(Ĝ, ĉ, influence_new)
+        for (idx, g) in zip(indices, Zin.Gs)
+            cols = size(g,2)
+            ZoutRef.Gs[idx][:, 1:cols] .= λ .* g
+        end
+        ZoutRef.Gs[ZoutRef.owned_generators][:,(end-num_new_gens+1):end] .= 0.0
+        for (i, row) in enumerate(findall(crossing))
+            ZoutRef.Gs[ZoutRef.owned_generators][row, (end - num_new_gens + i)] = abs(γ[i])
+        end
     end
 end

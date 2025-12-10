@@ -4,7 +4,7 @@ using LinearAlgebra
 
 using TimerOutputs
 
-import ..VeryDiff: NEW_HEURISTIC, to, USE_DIFFZONO
+import ..VeryDiff: NEW_HEURISTIC, to, USE_DIFFZONO, zono_bounds
 
 using ..Definitions
 using ..Debugger

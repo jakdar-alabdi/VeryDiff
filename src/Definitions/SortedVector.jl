@@ -61,7 +61,14 @@ function Base.union(vs::Vararg{SortedVector{T},N}) where {T,N}
     end
     return result
 end
+"""
 
+    intersect_indices(v1::SortedVector{T}, v2::SortedVector{T}) where T
+
+This method computes the indices of the elements of v2 in v1.
+    It is assumed that all elements of v2 are contained in v1.
+
+"""
 function intersect_indices(v1::SortedVector{T}, v2::SortedVector{T}) where T
     @assert length(v1) >= length(v2)
     result = SortedVector{T}()
@@ -83,4 +90,49 @@ function intersect_indices(v1::SortedVector{T}, v2::SortedVector{T}) where T
         throw("v2 contains element not in v1: $(v2.data[i2])")
     end
     return result
+end
+
+"""
+
+    find_index_position(v1::SortedVector{T}, v1_id :: Int64) where T
+
+This method finds the position of v1_id in v1.
+    It is assumed that v1_id is contained in v1.
+
+"""
+function find_index_position(v1::SortedVector{T}, v1_id :: Int64) where T
+    i1 = 1
+    @inbounds while i1 <= length(v1)
+        if v1.data[i1] == v1_id
+            return i1
+        elseif v1.data[i1] < v1_id
+            i1 += 1
+        else
+            throw("Index $v1_id not found in v1")
+        end
+    end
+    throw("Index $v1_id not found in v1")
+end
+
+"""
+
+    attempt_find_index_position(v1::SortedVector{T}, v1_id :: Int64) where T
+
+This method attempts to find the position of v1_id in v1.
+
+    It returns -1 if v1_id is not contained in v1.
+
+"""
+function attempt_find_index_position(v1::SortedVector{T}, v1_id :: Int64) where T
+    i1 = 1
+    @inbounds while i1 <= length(v1)
+        if v1.data[i1] == v1_id
+            return i1
+        elseif v1.data[i1] < v1_id
+            i1 += 1
+        else
+            return -1
+        end
+    end
+    return -1
 end

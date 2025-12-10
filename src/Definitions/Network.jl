@@ -58,8 +58,8 @@ struct GeminiNetwork
                     push!(diff_layers, ZeroDense())
                 else
                     push!(diff_layers, Dense(new_W, new_b))
+                    println("Distance: ", sum(abs,diff_layers[end].W))
                 end
-                println("Distance: ", sum(abs,diff_layers[end].W))
             elseif typeof(l1) == ReLU
                 push!(diff_layers, ReLU())
             else
