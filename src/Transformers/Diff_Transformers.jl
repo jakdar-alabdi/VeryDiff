@@ -5,7 +5,7 @@ import VNNLib.NNLoader.ReLU
 # TODO: ReLU, ZeroDense layers
 
 function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense,Dense}, inputs :: Vector{DiffZonotope}; bounds_cache :: Union{Nothing,BoundsCache}=nothing)
-    #@assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
+    @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     @debug "Propagating DiffDense Layer"
     Zin = inputs[1]
     #@timeit to "DiffZonotope_GetZonotope" begin
@@ -151,9 +151,21 @@ function propagate_layer_new!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,Re
         gen_sizes₂[idx] = size(Zin.Z₂.Gs[i],2)
     end
     gen_sizes₂[Zout_proto.Z₂.owned_generators] += new_gen₂
+    # This mayoverwrite sizes, but columns should be consistent
+    # TODO(steuber): Can we make this cleaner?
     for (i, idx) in enumerate(∂pre_indices)
+        # @info "Setting ∂Z generator $idx size to $(size(Zin.∂Z.Gs[i],2)) (from ∂Z)"
         ∂gen_sizes[idx] = size(Zin.∂Z.Gs[i],2)
     end
+    for (i, idx) in enumerate(pre_indices₁)
+        # @info "Setting ∂Z generator $idx size to $(size(Zin.Z₁.Gs[i],2)) (from Z₁)"
+        ∂gen_sizes[idx] = size(Zin.Z₁.Gs[i],2)
+    end
+    for (i, idx) in enumerate(pre_indices₂)
+        # @info "Setting ∂Z generator $idx size to $(size(Zin.Z₂.Gs[i],2)) (from Z₂)"
+        ∂gen_sizes[idx] = size(Zin.Z₂.Gs[i],2)
+    end
+    # @info "Generator sizes before new gens: Z₁=$(gen_sizes₁), Z₂=$(gen_sizes₂), ∂Z=$(∂gen_sizes)"
     ∂old_gen = ∂gen_sizes[Zout_proto.∂Z.owned_generators]
     ∂gen_sizes[Zout_proto.∂Z.owned_generators] += ∂new_gen
     # Find idx of generators owned by Z₁ and Z₂ in ∂Z
@@ -259,10 +271,10 @@ end
 function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,ReLU}, inputs :: Vector{DiffZonotope}; bounds_cache :: Union{Nothing,BoundsCache}=nothing)
 
     # Deepcopy all inputs and run new implementation
-    # ZoutRef_new = deepcopy(ZoutRef)
-    # inputs_new = [deepcopy(inp) for inp in inputs]
-    # bounds_cache_new = deepcopy(bounds_cache)
-    # propagate_layer_new!(ZoutRef_new, Ls, inputs_new; bounds_cache=bounds_cache_new)
+    ZoutRef_new = deepcopy(ZoutRef)
+    inputs_new = [deepcopy(inp) for inp in inputs]
+    bounds_cache_new = deepcopy(bounds_cache)
+    propagate_layer_new!(ZoutRef_new, Ls, inputs_new; bounds_cache=bounds_cache_new)
 
     @assert length(inputs) == 1 "ReLU layer should have exactly one input zonotope"
     Zin = inputs[1]
@@ -336,6 +348,12 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
     gen_sizes₂[Zout_proto.Z₂.owned_generators] += new_gen₂
     for (i, idx) in enumerate(∂pre_indices)
         ∂gen_sizes[idx] = size(Zin.∂Z.Gs[i],2)
+    end
+    for (i, idx) in enumerate(pre_indices₁)
+        ∂gen_sizes[idx] = size(Zin.Z₁.Gs[i],2)
+    end
+    for (i, idx) in enumerate(pre_indices₂)
+        ∂gen_sizes[idx] = size(Zin.Z₂.Gs[i],2)
     end
     ∂old_gen = ∂gen_sizes[Zout_proto.∂Z.owned_generators]
     ∂gen_sizes[Zout_proto.∂Z.owned_generators] += ∂new_gen
@@ -482,7 +500,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
             Debugger.@diffrelu_case_hook selector context="Any Any"
             # Find cases where ∂upper and ∂lower are 0
             α = ∂upper[selector]
-            α ./= (α .- ∂lower[selector])
+            α ./= (∂upper[selector] .- ∂lower[selector])
             # TODO: what's this?
             α .= clamp.(α,0.0,1.0)
             @assert all(α .>= 0.0) && all(α .<= 1.0) "Alpha had wrong values: $(α)"
@@ -497,8 +515,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
                 Zout.∂Z.Gs[Zout.∂Z.owned_generators][row, generator_offset] = abs(μ[i])
                 generator_offset += 1
             end
-            Zout.∂Z.c[selector] .+= α 
-            Zout.∂Z.c[selector] .-= μ
+            Zout.∂Z.c[selector] .+= (α .- μ)
         end
 
         # if FIRST_ROUND
@@ -507,60 +524,61 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
     end
     Debugger.@post_diffzono_prop_hook diff_zono_new context="Post ReLU"
 
-    # # Compare both implementations
-    # diff_zono_new = ZoutRef_new.zonotope
-    # diff_zono_old = ZoutRef.zonotope
-    # # Compare centers
-    # tolerance = 1e-8
-    # @assert all(abs.(diff_zono_new.Z₁.c .- diff_zono_old.Z₁.c) .< tolerance) "Z₁ centers do not match!"
-    # @assert all(abs.(diff_zono_new.Z₂.c .- diff_zono_old.Z₂.c) .< tolerance) "Z₂ centers do not match!"
-    # if !all(abs.(diff_zono_new.∂Z.c .- diff_zono_old.∂Z.c) .< tolerance)
-    #     println("∂Z centers do not match!")
-    #     for i in 1:length(diff_zono_new.∂Z.c)
-    #         if abs(diff_zono_new.∂Z.c[i] - diff_zono_old.∂Z.c[i]) >= tolerance
-    #             println(" Index $i: Deviation = $(abs(diff_zono_new.∂Z.c[i] - diff_zono_old.∂Z.c[i]))")
-    #             println(" Bounds: Z₁=[$(lower₁[i]), $(upper₁[i])], Z₂=[$(lower₂[i]), $(upper₂[i])], ∂Z=[$(∂lower[i]), $(∂upper[i])]")
-    #         end
-    #     end
-    #     @assert false
-    # end
-    # # Compare generators
-    # for (g_new, g_old) in zip(diff_zono_new.Z₁.Gs, diff_zono_old.Z₁.Gs)
-    #     @assert all(abs.(g_new .- g_old) .< tolerance) "Z₁ generators do not match!"
-    # end
-    # for (g_new, g_old) in zip(diff_zono_new.Z₂.Gs, diff_zono_old.Z₂.Gs)
-    #     @assert all(abs.(g_new .- g_old) .< tolerance) "Z₂ generators do not match!"
-    # end
-    # for (i,(g_new, g_old)) in enumerate(zip(diff_zono_new.∂Z.Gs, diff_zono_old.∂Z.Gs))
-    #     if i == diff_zono_new.∂Z.owned_generators
-    #         # Can only compare "old" generators here -- new ones may be reordered
-    #         if isnothing(Zin.∂Z.owned_generators)
-    #             continue
-    #         else
-    #             cols = size(Zin.∂Z.Gs[Zin.∂Z.owned_generators],2)
-    #         end
-    #     else
-    #         cols = size(g_new,2)
-    #     end
-    #     if !all(abs.(g_new[:,1:cols] .- g_old[:,1:cols]) .< tolerance)
-    #         println("∂Z generators do not match for block $i ($(diff_zono_new.∂Z.generator_ids[i]))!")
-    #         println("Rows with differences:")
-    #         for row in 1:size(g_new,1)
-    #             if any(abs.(g_new[row,:] .- g_old[row,:]) .>= tolerance)
-    #                 println(" Row $row: Deviation = $(maximum(abs.(g_new[row,:] .- g_old[row,:])))")
-    #                 println(" Bounds: Z₁=[$(lower₁[row]), $(upper₁[row])], Z₂=[$(lower₂[row]), $(upper₂[row])], ∂Z=[$(∂lower[row]), $(∂upper[row])]")
-    #             end
-    #         end
-    #         @assert false
-    #     end
-    # end
-    # # Compare bounds cache
-    # @assert all(abs.(bounds_cache_new.lower₁ .- bounds_cache.lower₁) .< tolerance) "Bounds Cache lower₁ do not match!"
-    # @assert all(abs.(bounds_cache_new.upper₁ .- bounds_cache.upper₁) .< tolerance) "Bounds Cache upper₁ do not match!"
-    # @assert all(abs.(bounds_cache_new.lower₂ .- bounds_cache.lower₂) .< tolerance) "Bounds Cache lower₂ do not match!"
-    # @assert all(abs.(bounds_cache_new.upper₂ .- bounds_cache.upper₂) .< tolerance) "Bounds Cache upper₂ do not match!"
-    # @assert all(abs.(bounds_cache_new.∂lower .- bounds_cache.∂lower) .< tolerance) "Bounds Cache ∂lower do not match!"
-    # @assert all(abs.(bounds_cache_new.∂upper .- bounds_cache.∂upper) .< tolerance) "Bounds Cache ∂upper do not match!"
+    # Compare both implementations
+    diff_zono_new = ZoutRef_new.zonotope
+    diff_zono_old = ZoutRef.zonotope
+    # Compare centers
+    abstolerance = 1e-7
+    reltolerance = 1e-7
+    @assert all(isapprox.(diff_zono_new.Z₁.c, diff_zono_old.Z₁.c; atol=abstolerance,rtol=reltolerance)) "Z₁ centers do not match!"
+    @assert all(isapprox.(diff_zono_new.Z₂.c, diff_zono_old.Z₂.c; atol=abstolerance,rtol=reltolerance)) "Z₂ centers do not match!"
+    if !all(isapprox.(diff_zono_new.∂Z.c, diff_zono_old.∂Z.c; atol=abstolerance,rtol=reltolerance)) 
+        println("∂Z centers do not match!")
+        for i in 1:length(diff_zono_new.∂Z.c)
+            if !isapprox(diff_zono_new.∂Z.c[i], diff_zono_old.∂Z.c[i]; atol=abstolerance,rtol=reltolerance)
+                println(" Index $i: Deviation = $(abs(diff_zono_new.∂Z.c[i] - diff_zono_old.∂Z.c[i])) (New=$(diff_zono_new.∂Z.c[i]), Old=$(diff_zono_old.∂Z.c[i]))")
+                println(" Bounds: Z₁=[$(lower₁[i]), $(upper₁[i])], Z₂=[$(lower₂[i]), $(upper₂[i])], ∂Z=[$(∂lower[i]), $(∂upper[i])]")
+            end
+        end
+        @assert false
+    end
+    # Compare generators
+    for (g_new, g_old) in zip(diff_zono_new.Z₁.Gs, diff_zono_old.Z₁.Gs)
+        @assert all(isapprox.(g_new, g_old; atol=abstolerance, rtol=reltolerance)) "Z₁ generators do not match!"
+    end
+    for (g_new, g_old) in zip(diff_zono_new.Z₂.Gs, diff_zono_old.Z₂.Gs)
+        @assert all(isapprox.(g_new, g_old; atol=abstolerance, rtol=reltolerance)) "Z₂ generators do not match!"
+    end
+    for (i,(g_new, g_old)) in enumerate(zip(diff_zono_new.∂Z.Gs, diff_zono_old.∂Z.Gs))
+        if i == diff_zono_new.∂Z.owned_generators
+            # Can only compare "old" generators here -- new ones may be reordered
+            if isnothing(Zin.∂Z.owned_generators)
+                continue
+            else
+                cols = size(Zin.∂Z.Gs[Zin.∂Z.owned_generators],2)
+            end
+        else
+            cols = size(g_new,2)
+        end
+        if !all(isapprox.(g_new[:,1:cols], g_old[:,1:cols]; atol=abstolerance, rtol=reltolerance))
+            println("∂Z generators do not match for block $i ($(diff_zono_new.∂Z.generator_ids[i]))!")
+            println("Rows with differences:")
+            for row in 1:size(g_new,1)
+                if any(.!isapprox.(g_new[row,1:cols], g_old[row,1:cols]; atol=abstolerance, rtol=reltolerance))
+                    println(" Row $row: Deviation = $(maximum(abs.(g_new[row,:] .- g_old[row,:])))")
+                    println(" Bounds: Z₁=[$(lower₁[row]), $(upper₁[row])], Z₂=[$(lower₂[row]), $(upper₂[row])], ∂Z=[$(∂lower[row]), $(∂upper[row])]")
+                end
+            end
+            @assert false
+        end
+    end
+    # Compare bounds cache
+    @assert all(isapprox.(bounds_cache_new.lower₁, bounds_cache.lower₁; atol=abstolerance, rtol=reltolerance)) "Bounds Cache lower₁ do not match!"
+    @assert all(isapprox.(bounds_cache_new.upper₁, bounds_cache.upper₁; atol=abstolerance, rtol=reltolerance)) "Bounds Cache upper₁ do not match!"
+    @assert all(isapprox.(bounds_cache_new.lower₂, bounds_cache.lower₂; atol=abstolerance, rtol=reltolerance)) "Bounds Cache lower₂ do not match!"
+    @assert all(isapprox.(bounds_cache_new.upper₂, bounds_cache.upper₂; atol=abstolerance, rtol=reltolerance)) "Bounds Cache upper₂ do not match!"
+    @assert all(isapprox.(bounds_cache_new.∂lower, bounds_cache.∂lower; atol=abstolerance, rtol=reltolerance)) "Bounds Cache ∂lower do not match!"
+    @assert all(isapprox.(bounds_cache_new.∂upper, bounds_cache.∂upper; atol=abstolerance, rtol=reltolerance)) "Bounds Cache ∂upper do not match!"
 end
 
 

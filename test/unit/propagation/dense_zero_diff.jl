@@ -5,7 +5,7 @@ using LinearAlgebra
 using Random
 
 @testset "Dense Layer Propagation Tests (Zero Diff)" begin
-    @info "Starting Dense Layer Propagation Tests"
+    @info "Starting Dense Layer Propagation Tests (Zero Diff)"
     
     if "VERYDIFF_TEST_SEED" in keys(ENV)
         test_seed = parse(Int, ENV["VERYDIFF_TEST_SEED"])

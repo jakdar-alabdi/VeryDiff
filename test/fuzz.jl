@@ -4,6 +4,7 @@ if "VERYDIFF_FUZZ" in keys(ENV)
         i = 1
         @info "Starting fuzzing with $(iterations > 0 ? iterations : "infinite") iterations"
         while true
+            ENV["VERYDIFF_TEST_SEED"] = string(rand(1:999999))
             cur_ts = @testset "Fuzzing iteration $i" begin
                 @info "Fuzzing iteration $i"
                 include("unit/propagation/dense.jl")

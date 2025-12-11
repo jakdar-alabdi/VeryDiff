@@ -154,7 +154,18 @@ using Random
                 Zout = prop_state.zono_storage.zonotopes[end].zonotope
                 @test Zout.Z₁.c .+ Zout.Z₁.Gs[1]*x ≈ y1 atol=1e-8
                 @test Zout.Z₂.c .+ Zout.Z₂.Gs[1]*x ≈ y2 atol=1e-8
-                @test Zout.∂Z.c .+ Zout.∂Z.Gs[1]*x ≈ (y1 .- y2) atol=1e-8
+                if length(Zout.∂Z.Gs) >= 1
+                    @test Zout.∂Z.c .+ Zout.∂Z.Gs[1]*x ≈ (y1 .- y2) atol=1e-8
+                else
+                    @test Zout.∂Z.c ≈ (y1 .- y2) atol=1e-8
+                    if !isapprox(Zout.∂Z.c, (y1 .- y2); atol=1e-8)
+                        @info "Diff output mismatch: Zonotope diff $(Zout.∂Z.c) vs actual diff $(y1 .- y2)"
+                        @info "Input x: $x"
+                        @info "Zonotope Z1 c: $(Zout.Z₁.c), Gs: $(Zout.Z₁.Gs)"
+                        @info "Zonotope Z2 c: $(Zout.Z₂.c), Gs: $(Zout.Z₂.Gs)"
+                        return
+                    end
+                end
                 
                 # Check if outputs are within bounds
                 for d in 1:size(y1, 1)

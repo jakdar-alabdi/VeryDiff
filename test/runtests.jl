@@ -10,4 +10,5 @@ VeryDiff.NEW_HEURISTIC = true
         include("unit/propagation/main.jl")
     end
 end
+
 include("fuzz.jl")

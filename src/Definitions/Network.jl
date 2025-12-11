@@ -55,6 +55,7 @@ struct GeminiNetwork
                 new_W = l1.W .- l2.W
                 new_b = l1.b .- l2.b
                 if all(iszero.(new_W)) && all(iszero.(new_b))
+                    @info "Detected zero difference in Dense layer, replacing with ZeroDense layer."
                     push!(diff_layers, ZeroDense())
                 else
                     push!(diff_layers, Dense(new_W, new_b))
