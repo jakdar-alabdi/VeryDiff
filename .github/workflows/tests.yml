@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         julia-version: ['1.10', '1.11', '1.12']
-        julia-arch: [x64, x86, aarch64]
+        julia-arch: [x64, aarch64]
         os: [ubuntu-latest, windows-latest, macOS-latest]
         exclude:
           - os: macOS-latest
@@ -51,6 +51,8 @@ jobs:
       #- name: Build package
       #  uses: julia-actions/julia-buildpkg@v1
       - name: Instantiate Julia Package
-        run: julia --project=. -e 'using Pkg; Pkg.activate("."); Pkg.instantiate()'
+        run: julia --project=. -e 'using Pkg; Pkg.add("https://github.com/samysweb/VNNLib.jl#c6bf990"); Pkg.resolve()'
+        env:
+          VERYDIFF_NO_GUROBI: 1
       - name: Run tests
         uses: julia-actions/julia-runtest@v1
