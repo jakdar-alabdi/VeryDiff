@@ -24,6 +24,8 @@ function __init__()
         GRBsetintparam(GRB_ENV[], "OutputFlag", 0)
         GRBsetintparam(GRB_ENV[], "LogToConsole", 0)
         GRBsetintparam(GRB_ENV[], "Threads", 0)
+    else
+        @info "Gurobi not used, falling back to GLPK."
     end
     #GRBsetintparam(GRB_ENV[], "Method", 2)
     #       mnist_19_local_21.vnnlib        mnist_18_local_18
