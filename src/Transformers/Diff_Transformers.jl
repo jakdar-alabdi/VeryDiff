@@ -211,6 +211,183 @@ function propagate_layer_matmul!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU
     L1 = get_layer1(Ls)
     L2 = get_layer2(Ls)
     # Compute Zonotopes for individual networks
+    propagate_layer_new!(Zout.Z₁, L1, Zin.Z₁;lower=lower₁, upper=upper₁)
+    propagate_layer_new!(Zout.Z₂, L2, Zin.Z₂;lower=lower₂, upper=upper₂)
+
+    if USE_DIFFZONO
+        dim = length(any_neg)
+        â₁_pos = @simd_bool_expr dim (any_neg | pos_neg)
+        a₁_pos = any_pos
+        â₂_pos = @simd_bool_expr dim (neg_any | neg_pos)
+        a₂_pos = pos_any
+        ∂a_pos_∂λ = any_any
+        # This one *must* be addition
+        ∂a_pos_1 = @simd_bool_expr dim (any_pos | pos_any)
+        ∂a_pos_1_assign = pos_pos
+        
+        # Reset to zero
+        Zout.∂Z.c .= 0.0
+        for g in Zout.∂Z.Gs
+            g[neg_neg, :] .= 0.0
+        end
+        
+        # Assign Zin.Z₁ with a₁
+        cur_α₁ = .-α.((@view lower₁[a₁_pos]), (@view upper₁[a₁_pos]))
+        updateGeneratorsMul!(Zout.∂Z.Gs, pre_indices₁, Zin.Z₁.Gs, cur_α₁, a₁_pos)
+        Zout.∂Z.c[a₁_pos] .= cur_α₁ .* (@view Zin.Z₁.c[a₁_pos])
+
+        # Assign Zout.Z₁ with â₁ = 1
+        updateGenerators!(Zout.∂Z.Gs, post_indices₁, Zout.Z₁.Gs, â₁_pos)
+        Zout.∂Z.c[â₁_pos] .= (@view Zout.Z₁.c[â₁_pos])
+
+        # Assign Zin.Z₂ with a₂
+        cur_α₂ = α.((@view lower₂[a₂_pos]), (@view upper₂[a₂_pos]))
+        updateGeneratorsMul!(Zout.∂Z.Gs, pre_indices₂, Zin.Z₂.Gs, cur_α₂, a₂_pos)
+        Zout.∂Z.c[a₂_pos] .= cur_α₂ .* (@view Zin.Z₂.c[a₂_pos])
+
+        # Assign Zout.Z₂ with â₂ = -1
+        updateGeneratorsMul!(Zout.∂Z.Gs, post_indices₂, Zout.Z₂.Gs, -1.0, â₂_pos)
+        Zout.∂Z.c[â₂_pos] .= .-(@view Zout.Z₂.c[â₂_pos])
+
+        # Add Zin.∂Z with 1.0
+        updateGeneratorsAdd!(Zout.∂Z.Gs, ∂pre_indices, Zin.∂Z.Gs, ∂a_pos_1)
+        Zout.∂Z.c[∂a_pos_1] .+= (@view Zin.∂Z.c[∂a_pos_1])
+
+        # Assign Zin.∂Z with 1.0
+        updateGenerators!(Zout.∂Z.Gs, ∂pre_indices, Zin.∂Z.Gs, ∂a_pos_1_assign)
+        Zout.∂Z.c[∂a_pos_1_assign] .= (@view Zin.∂Z.c[∂a_pos_1_assign])
+
+        # Add Zin.∂Z with ∂λ
+        cur_∂λ = ∂λ.((@view ∂lower[any_any]), (@view ∂upper[any_any]))
+        # TODO(steuber): Add requires copy vs. assign does not!
+        updateGeneratorsMul!(Zout.∂Z.Gs, ∂pre_indices, Zin.∂Z.Gs, cur_∂λ, ∂a_pos_∂λ)
+        Zout.∂Z.c[∂a_pos_∂λ] .= cur_∂λ .* (@view Zin.∂Z.c[∂a_pos_∂λ])
+
+        # Add new generators from c
+        c_pos = findall(@simd_bool_expr dim (any_any | any_pos | pos_any))
+        A = Zout.∂Z.Gs[Zout.∂Z.owned_generators]
+        @inbounds for i in 1:length(c_pos)
+            row = c_pos[i]
+            col = ∂old_gen + i
+            if any_any[row]
+                A[row, col] = ∂μ(∂lower[row], ∂upper[row])
+            elseif any_pos[row]
+                A[row, col] = μ(lower₁[row], upper₁[row])
+            else # pos_any[row]
+                A[row, col] = μ(lower₂[row], upper₂[row])
+            end
+        end
+
+        # Add bias
+        Zout.∂Z.c .+= ifelse.(
+            any_any, ∂ν.(∂lower, ∂upper) .- ∂μ.(∂lower, ∂upper),
+                ifelse.(any_pos, μ.(lower₁,upper₁),
+                    ifelse.(pos_any, .-μ.(lower₂,upper₂), 0.0)))
+    end
+end
+
+function propagate_layer_legacy!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,ReLU}, inputs :: Vector{DiffZonotope}; bounds_cache :: Union{Nothing,BoundsCache}=nothing)
+    @assert length(inputs) == 1 "ReLU layer should have exactly one input zonotope"
+    Zin = inputs[1]
+
+    @assert !isnothing(bounds_cache)
+
+    # Compute Bounds
+    bounds₁ = zono_bounds(Zin.Z₁)
+    bounds₂ = zono_bounds(Zin.Z₂)
+    ∂bounds = zono_bounds(Zin.∂Z)
+
+    if !bounds_cache.initialized
+        bounds_cache.lower₁ = copy(bounds₁[:,1])
+        bounds_cache.upper₁ = copy(bounds₁[:,2])
+        bounds_cache.lower₂ = copy(bounds₂[:,1])
+        bounds_cache.upper₂ = copy(bounds₂[:,2])
+        bounds_cache.∂lower = copy(∂bounds[:,1])
+        bounds_cache.∂upper = copy(∂bounds[:,2])
+        bounds_cache.initialized = true
+    else
+        bounds_cache.lower₁ .= max.(bounds₁[:,1], bounds_cache.lower₁)
+        bounds_cache.upper₁ .= min.(bounds₁[:,2], bounds_cache.upper₁)
+        bounds_cache.lower₂ .= max.(bounds₂[:,1], bounds_cache.lower₂)
+        bounds_cache.upper₂ .= min.(bounds₂[:,2], bounds_cache.upper₂)
+        bounds_cache.∂lower .= max.(∂bounds[:,1], bounds_cache.∂lower)
+        bounds_cache.∂upper .= min.(∂bounds[:,2], bounds_cache.∂upper)
+    end
+    lower₁ = bounds_cache.lower₁
+    upper₁ = bounds_cache.upper₁
+    lower₂ = bounds_cache.lower₂
+    upper₂ = bounds_cache.upper₂
+    ∂lower = bounds_cache.∂lower
+    ∂upper = bounds_cache.∂upper
+    #@info "Bounds Cache: Z₁=[$(lower₁), $(upper₁)], Z₂=[$(lower₂), $(upper₂)], ∂Z=[$(∂lower), $(∂upper)]"
+
+    (
+        zero_diff,
+        neg_neg,
+        neg_pos,
+        pos_neg,
+        pos_pos,
+        any_neg,
+        neg_any,
+        any_pos,
+        pos_any,
+        any_any
+    ) = get_selectors(bounds₁, bounds₂, ∂bounds)
+    # Do NOT use counts created above for new_gen₁ / new_gen₂,
+    # because these omit dimensions where difference is still zero
+    new_gen₁ = count(lower₁ .< 0.0 .&& upper₁ .> 0.0)
+    new_gen₂ = count(lower₂ .< 0.0 .&& upper₂ .> 0.0)
+    ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
+    Zout_proto = ZoutRef.zonotope_proto # Need this to be able to access the generator ids
+    gen_sizes₁ = zeros(Int64,length(Zout_proto.Z₁.generator_ids))
+    gen_sizes₂ = zeros(Int64,length(Zout_proto.Z₂.generator_ids))
+    ∂gen_sizes = zeros(Int64,length(Zout_proto.∂Z.generator_ids))
+
+    pre_indices_Z₁ = intersect_indices(Zout_proto.Z₁.generator_ids, Zin.Z₁.generator_ids)
+    pre_indices_Z₂ = intersect_indices(Zout_proto.Z₂.generator_ids, Zin.Z₂.generator_ids)
+    pre_indices₁ = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.Z₁.generator_ids)
+    pre_indices₂ = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.Z₂.generator_ids)
+    ∂pre_indices = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.∂Z.generator_ids)
+
+    for (i, idx) in enumerate(pre_indices_Z₁)
+        gen_sizes₁[idx] = size(Zin.Z₁.Gs[i],2)
+    end
+    gen_sizes₁[Zout_proto.Z₁.owned_generators] += new_gen₁
+    for (i, idx) in enumerate(pre_indices_Z₂)
+        gen_sizes₂[idx] = size(Zin.Z₂.Gs[i],2)
+    end
+    gen_sizes₂[Zout_proto.Z₂.owned_generators] += new_gen₂
+    # This mayoverwrite sizes, but columns should be consistent
+    # TODO(steuber): Can we make this cleaner?
+    for (i, idx) in enumerate(∂pre_indices)
+        # @info "Setting ∂Z generator $idx size to $(size(Zin.∂Z.Gs[i],2)) (from ∂Z)"
+        ∂gen_sizes[idx] = size(Zin.∂Z.Gs[i],2)
+    end
+    for (i, idx) in enumerate(pre_indices₁)
+        # @info "Setting ∂Z generator $idx size to $(size(Zin.Z₁.Gs[i],2)) (from Z₁)"
+        ∂gen_sizes[idx] = size(Zin.Z₁.Gs[i],2)
+    end
+    for (i, idx) in enumerate(pre_indices₂)
+        # @info "Setting ∂Z generator $idx size to $(size(Zin.Z₂.Gs[i],2)) (from Z₂)"
+        ∂gen_sizes[idx] = size(Zin.Z₂.Gs[i],2)
+    end
+    # @info "Generator sizes before new gens: Z₁=$(gen_sizes₁), Z₂=$(gen_sizes₂), ∂Z=$(∂gen_sizes)"
+    ∂old_gen = ∂gen_sizes[Zout_proto.∂Z.owned_generators]
+    ∂gen_sizes[Zout_proto.∂Z.owned_generators] += ∂new_gen
+    # Find idx of generators owned by Z₁ and Z₂ in ∂Z
+    idx1 = find_index_position(Zout_proto.∂Z.generator_ids, Zout_proto.Z₁.generator_ids[Zout_proto.Z₁.owned_generators])
+    idx2 = find_index_position(Zout_proto.∂Z.generator_ids, Zout_proto.Z₂.generator_ids[Zout_proto.Z₂.owned_generators])
+    ∂gen_sizes[idx1] += new_gen₁
+    ∂gen_sizes[idx2] += new_gen₂
+    Zout_proto = nothing # Avoid missuse
+    # @info "ReLU DiffZonotope Generators: Z₁=$(gen_sizes₁), Z₂=$(gen_sizes₂), ∂Z=$(∂gen_sizes)"
+    Zout = get_zonotope!(ZoutRef, gen_sizes₁, gen_sizes₂, ∂gen_sizes)
+    post_indices₁ = intersect_indices(Zout.∂Z.generator_ids, Zout.Z₁.generator_ids)
+    post_indices₂ = intersect_indices(Zout.∂Z.generator_ids, Zout.Z₂.generator_ids)
+
+    L1 = get_layer1(Ls)
+    L2 = get_layer2(Ls)
+    # Compute Zonotopes for individual networks
     propagate_layer!(Zout.Z₁, L1, Zin.Z₁;lower=lower₁, upper=upper₁)
     propagate_layer!(Zout.Z₂, L2, Zin.Z₂;lower=lower₂, upper=upper₂)
 
@@ -286,266 +463,6 @@ function propagate_layer_matmul!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU
     end
 end
 
-
-function propagate_layer_row_wise!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,ReLU}, inputs :: Vector{DiffZonotope}; bounds_cache :: Union{Nothing,BoundsCache}=nothing)
-    @assert length(inputs) == 1 "ReLU layer should have exactly one input zonotope"
-    Zin = inputs[1]
-
-    @assert !isnothing(bounds_cache)
-
-    # Compute Bounds
-    bounds₁ = zono_bounds(Zin.Z₁)
-    bounds₂ = zono_bounds(Zin.Z₂)
-    ∂bounds = zono_bounds(Zin.∂Z)
-
-    if !bounds_cache.initialized
-        bounds_cache.lower₁ = copy(bounds₁[:,1])
-        bounds_cache.upper₁ = copy(bounds₁[:,2])
-        bounds_cache.lower₂ = copy(bounds₂[:,1])
-        bounds_cache.upper₂ = copy(bounds₂[:,2])
-        bounds_cache.∂lower = copy(∂bounds[:,1])
-        bounds_cache.∂upper = copy(∂bounds[:,2])
-        bounds_cache.initialized = true
-    else
-        bounds_cache.lower₁ .= max.(bounds₁[:,1], bounds_cache.lower₁)
-        bounds_cache.upper₁ .= min.(bounds₁[:,2], bounds_cache.upper₁)
-        bounds_cache.lower₂ .= max.(bounds₂[:,1], bounds_cache.lower₂)
-        bounds_cache.upper₂ .= min.(bounds₂[:,2], bounds_cache.upper₂)
-        bounds_cache.∂lower .= max.(∂bounds[:,1], bounds_cache.∂lower)
-        bounds_cache.∂upper .= min.(∂bounds[:,2], bounds_cache.∂upper)
-    end
-    lower₁ = bounds_cache.lower₁
-    upper₁ = bounds_cache.upper₁
-    lower₂ = bounds_cache.lower₂
-    upper₂ = bounds_cache.upper₂
-    ∂lower = bounds_cache.∂lower
-    ∂upper = bounds_cache.∂upper
-    #@info "Bounds Cache: Z₁=[$(lower₁), $(upper₁)], Z₂=[$(lower₂), $(upper₂)], ∂Z=[$(∂lower), $(∂upper)]"
-
-    (
-        zero_diff,
-        neg_neg,
-        neg_pos,
-        pos_neg,
-        pos_pos,
-        any_neg,
-        neg_any,
-        any_pos,
-        pos_any,
-        any_any
-    ) = get_selectors(bounds₁, bounds₂, ∂bounds)
-    # Do NOT use counts created above for new_gen₁ / new_gen₂,
-    # because these omit dimensions where difference is still zero
-    new_gen₁ = count(lower₁ .< 0.0 .&& upper₁ .> 0.0)
-    new_gen₂ = count(lower₂ .< 0.0 .&& upper₂ .> 0.0)
-    ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
-    Zout_proto = ZoutRef.zonotope_proto # Need this to be able to access the generator ids
-    gen_sizes₁ = zeros(Int64,length(Zout_proto.Z₁.generator_ids))
-    gen_sizes₂ = zeros(Int64,length(Zout_proto.Z₂.generator_ids))
-    ∂gen_sizes = zeros(Int64,length(Zout_proto.∂Z.generator_ids))
-
-    pre_indices_Z₁ = intersect_indices(Zout_proto.Z₁.generator_ids, Zin.Z₁.generator_ids)
-    pre_indices_Z₂ = intersect_indices(Zout_proto.Z₂.generator_ids, Zin.Z₂.generator_ids)
-    pre_indices₁ = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.Z₁.generator_ids)
-    pre_indices₂ = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.Z₂.generator_ids)
-    ∂pre_indices = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.∂Z.generator_ids)
-
-    for (i, idx) in enumerate(pre_indices_Z₁)
-        gen_sizes₁[idx] = size(Zin.Z₁.Gs[i],2)
-    end
-    gen_sizes₁[Zout_proto.Z₁.owned_generators] += new_gen₁
-    for (i, idx) in enumerate(pre_indices_Z₂)
-        gen_sizes₂[idx] = size(Zin.Z₂.Gs[i],2)
-    end
-    gen_sizes₂[Zout_proto.Z₂.owned_generators] += new_gen₂
-    for (i, idx) in enumerate(∂pre_indices)
-        ∂gen_sizes[idx] = size(Zin.∂Z.Gs[i],2)
-    end
-    for (i, idx) in enumerate(pre_indices₁)
-        ∂gen_sizes[idx] = size(Zin.Z₁.Gs[i],2)
-    end
-    for (i, idx) in enumerate(pre_indices₂)
-        ∂gen_sizes[idx] = size(Zin.Z₂.Gs[i],2)
-    end
-    ∂old_gen = ∂gen_sizes[Zout_proto.∂Z.owned_generators]
-    ∂gen_sizes[Zout_proto.∂Z.owned_generators] += ∂new_gen
-    # Find idx of generators owned by Z₁ and Z₂ in ∂Z
-    idx1 = find_index_position(Zout_proto.∂Z.generator_ids, Zout_proto.Z₁.generator_ids[Zout_proto.Z₁.owned_generators])
-    idx2 = find_index_position(Zout_proto.∂Z.generator_ids, Zout_proto.Z₂.generator_ids[Zout_proto.Z₂.owned_generators])
-    ∂gen_sizes[idx1] += new_gen₁
-    ∂gen_sizes[idx2] += new_gen₂
-    Zout_proto = nothing # Avoid missuse
-    # @info "ReLU DiffZonotope Generators: Z₁=$(gen_sizes₁), Z₂=$(gen_sizes₂), ∂Z=$(∂gen_sizes)"
-    Zout = get_zonotope!(ZoutRef, gen_sizes₁, gen_sizes₂, ∂gen_sizes)
-
-    L1 = get_layer1(Ls)
-    L2 = get_layer2(Ls)
-    # Compute Zonotopes for individual networks
-    propagate_layer!(Zout.Z₁, L1, Zin.Z₁;lower=lower₁, upper=upper₁)
-    propagate_layer!(Zout.Z₂, L2, Zin.Z₂;lower=lower₂, upper=upper₂)
-
-    if USE_DIFFZONO
-        #selector = zeros(Bool,size(Zout.∂Z.c,1))
-        selector = falses(size(Zout.∂Z.c,1))
-
-        Debugger.@diffrelu_case_hook zero_diff context="Zero Diff"
-        Debugger.@diffrelu_case_hook neg_neg context="Neg Neg"
-
-        post_indices₁ = intersect_indices(Zout.∂Z.generator_ids, Zout.Z₁.generator_ids)
-        post_indices₂ = intersect_indices(Zout.∂Z.generator_ids, Zout.Z₂.generator_ids)
-        
-
-        # Reset everything to zero (this also covers zero_diff and neg_neg cases)
-        Zout.∂Z.c .= 0.0
-        for g in Zout.∂Z.Gs
-            g .= 0.0
-        end
-
-        # Neg Pos:
-        selector .= neg_pos
-        if any(selector)
-            Debugger.@diffrelu_case_hook selector context="Neg Pos"
-            Zout.∂Z.c[selector] .-= (@view Zout.Z₂.c[selector])
-            updateGeneratorsSub!(Zout.∂Z.Gs, post_indices₂, Zout.Z₂.Gs, selector)
-            # for (i, g) in zip(post_indices₂, Zout.Z₂.Gs)
-            #     Zout.∂Z.Gs[i][selector,:] .-= (@view g[selector,:])
-            # end
-        end
-
-        # Pos Neg:
-        selector .= pos_neg
-        if any(selector)
-            Debugger.@diffrelu_case_hook selector context="Pos Neg"
-            Zout.∂Z.c[selector] .+= (@view Zout.Z₁.c[selector])
-            updateGeneratorsAdd!(Zout.∂Z.Gs, post_indices₁, Zout.Z₁.Gs, selector)
-            # for (i, g) in zip(post_indices₁, Zout.Z₁.Gs)
-            #     Zout.∂Z.Gs[i][selector,:] .+= (@view g[selector,:])
-            # end
-        end
-
-        # Pos Pos:
-        # This just copies the row from the input ∂Z
-        # We also need this for Any Pos and Pos Any and thus we copy for those as well
-        selector .= pos_pos .| any_pos .| pos_any
-        if any(selector)
-            Debugger.@diffrelu_case_hook selector context="Pos Pos+"
-            Zout.∂Z.c[selector] .= (@view Zin.∂Z.c[selector])
-            updateGenerators!(Zout.∂Z.Gs, ∂pre_indices, Zin.∂Z.Gs, selector)
-            # for (i, g) in zip(∂pre_indices, Zin.∂Z.Gs)
-            #     cols = size(g,2)
-            #     Zout.∂Z.Gs[i][selector,1:cols] .= (@view g[selector,:])
-            # end
-        end
-
-        # Any Neg
-        selector .= any_neg
-        if any(selector)
-            Debugger.@diffrelu_case_hook selector context="Any Neg"
-            Zout.∂Z.c[selector] .+= (@view Zout.Z₁.c[selector])
-            updateGeneratorsAdd!(Zout.∂Z.Gs, post_indices₁, Zout.Z₁.Gs, selector)
-            # for (i, g) in zip(post_indices₁, Zout.Z₁.Gs)
-            #     cols = size(g,2)
-            #     Zout.∂Z.Gs[i][selector,1:cols] .+= (@view g[selector,:])
-            # end
-        end
-
-        # Neg Any
-        selector .= neg_any
-        if any(selector)
-            Debugger.@diffrelu_case_hook selector context="Neg Any"
-            Zout.∂Z.c[selector] .-= (@view Zout.Z₂.c[selector])
-            updateGeneratorsSub!(Zout.∂Z.Gs, post_indices₂, Zout.Z₂.Gs, selector)
-            # for (i, g) in zip(post_indices₂, Zout.Z₂.Gs)
-            #     cols = size(g,2)
-            #     Zout.∂Z.Gs[i][selector,1:cols] .-= (@view g[selector,:])
-            # end
-        end
-
-        instable_new_generators = 0
-
-        generator_offset = ∂old_gen + 1
-        # Any Pos
-        selector .= any_pos
-        instable_new_generators += count(selector)
-        if any(selector)
-            Debugger.@diffrelu_case_hook selector context="Any Pos"
-            # println("ANY_POS")
-            α = -lower₁[selector]
-            α ./= (upper₁[selector] .- lower₁[selector])
-            Zout.∂Z.c[selector] .-= α .* (@view Zin.Z₁.c[selector])
-            updateGeneratorsSubMul!(Zout.∂Z.Gs, pre_indices₁, Zin.Z₁.Gs, α, selector)
-            # for (i, g) in zip(pre_indices₁, Zin.Z₁.Gs)
-            #     cols = size(g,2)
-            #     Zout.∂Z.Gs[i][selector,1:cols] .-= α .* (@view g[selector,:])
-            # end
-            @assert all(α .> 0.0)
-            α .*= 0.5 .* upper₁[selector]
-            Zout.∂Z.c[selector] .+= α
-            for (i,row) in enumerate(findall(selector))
-                Zout.∂Z.Gs[Zout.∂Z.owned_generators][row, generator_offset] = abs(α[i])
-                generator_offset += 1
-            end
-        end
-
-        # Pos Any
-        selector .= pos_any
-        instable_new_generators += count(selector)
-        if any(selector)
-            Debugger.@diffrelu_case_hook selector context="Pos Any"
-            
-            # println("POS_ANY")
-            α = -lower₂[selector]
-            α ./= (upper₂[selector] .- lower₂[selector])
-            Zout.∂Z.c[selector] .+= α .* (@view Zin.Z₂.c[selector])
-            updateGeneratorsAddMul!(Zout.∂Z.Gs, pre_indices₂, Zin.Z₂.Gs, α, selector)
-            # for (i, g) in zip(pre_indices₂, Zin.Z₂.Gs)
-            #     cols = size(g,2)
-            #     Zout.∂Z.Gs[i][selector,1:cols] .+= α .* (@view g[selector,:])
-            # end
-            @assert all(α .> 0.0)
-            #α .= max.(0.5.*α.*upper₂[selector],(1.0.-α).*((-).(lower₂[selector])))
-            α .*= 0.5 .* upper₂[selector] #max.((-).(lower₂[selector]), upper₂[selector])
-            #0.5 .* max.((-).(lower₂[selector]), upper₂[selector])
-            Zout.∂Z.c[selector] .-= α
-            for (i,row) in enumerate(findall(selector))
-                Zout.∂Z.Gs[Zout.∂Z.owned_generators][row, generator_offset] = abs(α[i])
-                generator_offset += 1
-            end
-        end
-
-        # Any Any
-        selector .= any_any
-        instable_new_generators += count(selector)
-        if any(selector)
-            Debugger.@diffrelu_case_hook selector context="Any Any"
-            # Find cases where ∂upper and ∂lower are 0
-            α = ∂upper[selector]
-            α ./= (∂upper[selector] .- ∂lower[selector])
-            # TODO: what's this?
-            α .= clamp.(α,0.0,1.0)
-            @assert all(α .>= 0.0) && all(α .<= 1.0) "Alpha had wrong values: $(α)"
-            updateGeneratorsMul!(Zout.∂Z.Gs, ∂pre_indices, Zin.∂Z.Gs, α, selector)
-            # for (i, g) in zip(∂pre_indices, Zin.∂Z.Gs)
-            #     cols = size(g,2)
-            #     Zout.∂Z.Gs[i][selector,1:cols] .= α .* (@view g[selector,:])
-            # end
-            Zout.∂Z.c[selector] .= α .* (@view Zin.∂Z.c[selector])
-            α .*= -min.(0.0,∂lower[selector])
-            μ = 0.5 .* max.(∂upper[selector],-∂lower[selector])
-            for (i,row) in enumerate(findall(selector))
-                Zout.∂Z.Gs[Zout.∂Z.owned_generators][row, generator_offset] = abs(μ[i])
-                generator_offset += 1
-            end
-            Zout.∂Z.c[selector] .+= (α .- μ)
-        end
-
-        # if FIRST_ROUND
-        #     print("Instable Generators: ",instable_new_generators,"\n")
-        # end
-    end
-    Debugger.@post_diffzono_prop_hook diff_zono_new context="Post ReLU"
-end
-
 # One of :matmul, :row_wise, :compare
 RELU_PROP_MODE = :matmul
 
@@ -564,7 +481,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
         inputs_new = [deepcopy(inp) for inp in inputs]
         bounds_cache_new = deepcopy(bounds_cache)
         propagate_layer_matmul!(ZoutRef_new, Ls, inputs_new; bounds_cache=bounds_cache_new)
-        propagate_layer_row_wise!(ZoutRef, Ls, inputs; bounds_cache=bounds_cache)
+        propagate_layer_legacy!(ZoutRef, Ls, inputs; bounds_cache=bounds_cache)
         # Compare both implementations
         diff_zono_new = ZoutRef_new.zonotope
         diff_zono_old = ZoutRef.zonotope

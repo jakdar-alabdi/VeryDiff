@@ -8,7 +8,7 @@ using VeryDiff.Definitions: updateGenerators!, updateGeneratorsMul!, updateGener
 
 VeryDiff.NEW_HEURISTIC = false
 
-import VeryDiff.Transformers: propagate_layer_matmul!, propagate_layer_row_wise!, init_default_zono
+import VeryDiff.Transformers: propagate_layer_matmul!, propagate_layer_legacy!, init_default_zono
 const DiffLayer = VeryDiff.DiffLayer
 const Zonotope = VeryDiff.Zonotope
 const DiffZonotope = VeryDiff.DiffZonotope
@@ -85,8 +85,8 @@ function bench_relu()
 	@info ("\nmatmul implementation:")
 	@btime propagate_layer_matmul!(case.cache, $relu_layer, [case.zin]; bounds_cache=case.bounds) setup=(case = setup_case()) evals=1
 
-	@info ("\nrow-wise implementation:")
-	@btime propagate_layer_row_wise!(case.cache, $relu_layer, [case.zin]; bounds_cache=case.bounds) setup=(case = setup_case()) evals=1
+	@info ("\nlegacy implementation:")
+	@btime propagate_layer_legacy!(case.cache, $relu_layer, [case.zin]; bounds_cache=case.bounds) setup=(case = setup_case()) evals=1
 
 	nothing
 end
@@ -96,7 +96,7 @@ function exec_relus()
     case = setup_case()
     propagate_layer_matmul!(case.cache, relu_layer, [case.zin]; bounds_cache=case.bounds)
     case = setup_case()
-    propagate_layer_row_wise!(case.cache, relu_layer, [case.zin]; bounds_cache=case.bounds)
+    propagate_layer_legacy!(case.cache, relu_layer, [case.zin]; bounds_cache=case.bounds)
 end
 
 function compareUpdateGenerators()
@@ -134,7 +134,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	compareUpdateGenerators()
 end
 
-
+# Old Transformers:
 # [ Info: Benchmarking ReLU propagation (dim=784, gens=1000)
 # ┌ Info: 
 # └ matmul implementation:
@@ -142,6 +142,17 @@ end
 # ┌ Info: 
 # └ row-wise implementation:
 #   10.260 ms (6365 allocations: 504.87 KiB)
+
+# New Transformers:
+# [ Info: Benchmarking ReLU propagation (dim=784, gens=1000)
+# ┌ Info: 
+# └ matmul implementation:
+#   7.886 ms (6456 allocations: 437.84 KiB)
+# ┌ Info: 
+# └ legacy implementation:
+#   11.223 ms (6451 allocations: 451.73 KiB)
+
+# Generator Comparison:
 # ┌ Info: 
 # └ Comparing updateGenerators! implementations:
 # [ Info: Assign generators without multiplication:

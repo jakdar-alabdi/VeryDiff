@@ -18,21 +18,21 @@ macro generatorUpdateLoop(op, outGs, indices, inGs, rows, factor=:(nothing))
     end
 end
 
-function updateGenerators!(outGs :: Vector{AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{AbstractMatrix{Float64}}, rows :: BitVector)
+@inline function updateGenerators!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, rows :: BitVector)
     @generatorUpdateLoop(:(.=), outGs, indices, inGs, rows)
 end
-function updateGeneratorsMul!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, muls::Vector{Float64}, rows :: BitVector)
+@inline function updateGeneratorsMul!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, muls :: Union{Float64,Vector{Float64}}, rows :: Union{BitVector,Colon})
     @generatorUpdateLoop(:(.=), outGs, indices, inGs, rows, muls)
 end
-function updateGeneratorsAdd!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, rows :: BitVector)
+@inline function updateGeneratorsAdd!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, rows :: BitVector)
     @generatorUpdateLoop(:(.+=), outGs, indices, inGs, rows)
 end
-function updateGeneratorsAddMul!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, muls::Vector{Float64}, rows :: BitVector)
+@inline function updateGeneratorsAddMul!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, muls :: Union{Float64,Vector{Float64}}, rows :: BitVector)
     @generatorUpdateLoop(:(.+=), outGs, indices, inGs, rows, muls)
 end
-function updateGeneratorsSub!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, rows :: BitVector)
+@inline function updateGeneratorsSub!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, rows :: BitVector)
     @generatorUpdateLoop(:(.-=), outGs, indices, inGs, rows)
 end
-function updateGeneratorsSubMul!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, muls::Vector{Float64}, rows :: BitVector)
+@inline function updateGeneratorsSubMul!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, muls :: Union{Float64,Vector{Float64}}, rows :: BitVector)
     @generatorUpdateLoop(:(.-=), outGs, indices, inGs, rows, muls)
 end
