@@ -38,28 +38,31 @@ function get_selectors(bounds₁, bounds₂, ∂bounds)
     upper₂ = @view bounds₂[:,2]
     ∂lower = @view ∂bounds[:,1]
     ∂upper = @view ∂bounds[:,2]
-    zero_diff = ∂upper .== 0.0 .&& ∂lower .== 0.0
+
+    dim = length(lower₁)
+
+    zero_diff = @simd_bool_expr dim ((∂upper == 0.0) & (∂lower == 0.0))
 
     # Compute Phase Behaviour
     check = copy(zero_diff)
     
-    neg_neg = (upper₁ .<= 0.0) .&& (upper₂ .<= 0.0) .&& .!check
+    neg_neg = @simd_bool_expr dim ((upper₁ <= 0.0) .& (upper₂ <= 0.0) .& .!check)
     check .|= neg_neg
-    neg_pos = (upper₁ .<= 0.0) .&& (lower₂ .>= 0.0) .&& .!check
+    neg_pos = @simd_bool_expr dim ((upper₁ <= 0.0) .& (lower₂ >= 0.0) .& .!check)
     check .|= neg_pos
-    pos_neg = (lower₁ .>= 0.0) .&& (upper₂ .<= 0.0) .&& .!check
+    pos_neg = @simd_bool_expr dim ((lower₁ >= 0.0) .& (upper₂ <= 0.0) .& .!check)
     check .|= pos_neg
-    pos_pos = (lower₁ .>= 0.0) .&& (lower₂ .>= 0.0) .&& .!check
+    pos_pos = @simd_bool_expr dim ((lower₁ >= 0.0) .& (lower₂ >= 0.0) .& .!check)
     check .|= pos_pos
-    any_neg = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& (upper₂ .<= 0.0) .&& .!check
+    any_neg = @simd_bool_expr dim ((lower₁ < 0.0) .& (upper₁ > 0.0) .& (upper₂ <= 0.0) .& .!check)
     check .|= any_neg
-    neg_any = (upper₁ .<= 0.0) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& .!check
+    neg_any = @simd_bool_expr dim ((upper₁ <= 0.0) .& (lower₂ < 0.0) .& (upper₂ > 0.0) .& .!check)
     check .|= neg_any
-    any_pos = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& (lower₂ .>= 0.0) .&& .!check
+    any_pos = @simd_bool_expr dim ((lower₁ < 0.0) .& (upper₁ > 0.0) .& (lower₂ >= 0.0) .& .!check)
     check .|= any_pos
-    pos_any = (lower₁ .>= 0.0) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& .!check
+    pos_any = @simd_bool_expr dim ((lower₁ >= 0.0) .& (lower₂ < 0.0) .& (upper₂ > 0.0) .& .!check)
     check .|= pos_any
-    any_any = (lower₁ .< 0.0) .&& (upper₁ .> 0.0) .&& (lower₂ .< 0.0) .&& (upper₂ .> 0.0) .&& .!check
+    any_any = @simd_bool_expr dim ((lower₁ < 0.0) .& (upper₁ > 0.0) .& (lower₂ < 0.0) .& (upper₂ > 0.0) .& .!check)
     check .|= any_any
     @assert all(check) "Not all cases covered: [$(lower₁[.!check]), $(upper₁[.!check])], [$(lower₂[.!check]), $(upper₂[.!check])]"
     return (

@@ -93,8 +93,10 @@ function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, Zin :: Zonotope; lower
             ZoutRef.Gs[idx][:, 1:cols] .= λ .* g
         end
         ZoutRef.Gs[ZoutRef.owned_generators][:,(end-num_new_gens+1):end] .= 0.0
+        generator_offset = size(ZoutRef.Gs[ZoutRef.owned_generators],2) - num_new_gens
+        A = ZoutRef.Gs[ZoutRef.owned_generators]
         for (i, row) in enumerate(findall(crossing))
-            ZoutRef.Gs[ZoutRef.owned_generators][row, (end - num_new_gens + i)] = abs(γ[row])
+            A[row, (generator_offset + i)] = abs(γ[row])
         end
     end
 end

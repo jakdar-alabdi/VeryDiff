@@ -92,7 +92,6 @@ println("\n--- Broadcast vectorized indexing ---")
 println("\n--- Loop over generators (broadcast) ---")
 @btime method_loop_generators!($generator1_common, $generator2_common, $task_distance, $task_distance_indices)
 
-Running benchmarks…
 
 # --- Original loops ---
 #   178.543 μs (0 allocations: 0 bytes)

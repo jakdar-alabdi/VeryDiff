@@ -1,0 +1,42 @@
+num_layers = 4
+layer_dims = [1024 for _ in 1:(num_layers-1)]
+push!(layer_dims, 10)
+N1 = create_random_dense_network(input_dim, num_layers, layer_dims)
+N2 = create_random_dense_network(input_dim, num_layers, layer_dims)
+N_gemini = GeminiNetwork(N1, N2)
+
+# ...
+
+function get_prop_state(verification_task)
+    prop_state_1 = PropState(true)
+    prepare_prop_state!(prop_state_1, verification_task)
+    return prop_state_1
+end
+
+# New prop state every round => need to do all allocations
+
+@benchmark propagate!($N_gemini, prop_state_1) setup=(prop_state_1=get_prop_state($verification_task))
+BenchmarkTools.Trial: 13 samples with 1 evaluation.
+ Range (min … max):  388.899 ms … 422.421 ms  ┊ GC (min … max): 0.00% … 0.00%
+ Time  (median):     396.938 ms               ┊ GC (median):    0.00%
+ Time  (mean ± σ):   399.990 ms ±  10.718 ms  ┊ GC (mean ± σ):  0.06% ± 0.09%
+
+  ▁▁ ▁   █▁     ▁ ▁     ▁         ▁    ▁            ▁         ▁  
+  ██▁█▁▁▁██▁▁▁▁▁█▁█▁▁▁▁▁█▁▁▁▁▁▁▁▁▁█▁▁▁▁█▁▁▁▁▁▁▁▁▁▁▁▁█▁▁▁▁▁▁▁▁▁█ ▁
+  389 ms           Histogram: frequency by time          422 ms <
+
+ Memory estimate: 55.41 MiB, allocs estimate: 616.
+
+# Old prop state reused every round => less allocations
+
+@benchmark propagate!($N_gemini, $prop_state_1)
+BenchmarkTools.Trial: 13 samples with 1 evaluation.
+ Range (min … max):  380.288 ms … 461.619 ms  ┊ GC (min … max): 0.00% … 0.00%
+ Time  (median):     386.559 ms               ┊ GC (median):    0.00%
+ Time  (mean ± σ):   396.888 ms ±  27.001 ms  ┊ GC (mean ± σ):  0.00% ± 0.00%
+
+  █▃  ▃                                                          
+  ██▁▇█▁▇▁▁▁▁▇▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▇▁▁▁▁▁▁▇ ▁
+  380 ms           Histogram: frequency by time          462 ms <
+
+ Memory estimate: 18.56 KiB, allocs estimate: 377.

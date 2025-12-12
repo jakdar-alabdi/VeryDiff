@@ -40,6 +40,7 @@ using Gurobi
 
 const GRB_ENV = Ref{Any}(nothing)
 
+include("Util/simd_bool.jl")
 include("Debugger/Debugger.jl")
 include("Definitions/Definitions.jl")
 using .Definitions
