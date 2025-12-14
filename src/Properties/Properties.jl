@@ -10,6 +10,8 @@ const GRB_ENV = Ref{Any}(nothing)
 
 using ..Debugger
 
+using ..Definitions
+
 import ..VeryDiff: USE_GUROBI
 
 # We have our own multithreadding so we don't want to use BLAS multithreadding

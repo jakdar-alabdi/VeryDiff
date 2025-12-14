@@ -27,7 +27,6 @@ include("Debugger/Debugger.jl")
 include("Definitions/Definitions.jl")
 using .Definitions
 include("Util.jl")
-include("Zonotope.jl")
 
 include("Transformers/Transformers.jl")
 using .Transformers
