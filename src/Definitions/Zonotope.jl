@@ -40,8 +40,10 @@ end
 # direction: 1 (maximize) or -1 (minimize)
 function zono_optimize(direction::Float64, Z::Zonotope, d :: Int) :: Float64
     @assert isone(direction) || isone(-direction)
-    row = view(Z.G,d,:)
-    result = direction*sum(abs,row) + Z.c[d]
+    result = Z.c[d]
+    for gidx in eachindex(Z.Gs)
+        result += direction * sum(abs,@view Z.Gs[gidx][d, :])
+    end
     return result
 end
 
@@ -60,11 +62,19 @@ function zono_bounds(Z::Zonotope)
 end
 
 function zono_get_max_vector(Z::Zonotope, direction::Vector{Float64})
-    weights = direction' * Z.G
-    return -1.0*(weights .< 0.0) + 1.0*(weights .>= 0.0)
+    output_vector = Vector{Vector{Float64}}(undef, length(Z.Gs))
+    for i in eachindex(Z.Gs)
+        weights = direction' * Z.Gs[i]
+        output_vector[i] = -1.0*(weights .< 0.0) + 1.0*(weights .>= 0.0)
+    end
+    return output_vector
 end
 
 function zono_get_max_vector(Z::Zonotope, d)
-    weights = Z.G[d,:]
-    return -1.0*(weights .< 0.0) + 1.0*(weights .>= 0.0)
+    output_vector = Vector{Vector{Float64}}(undef, length(Z.Gs))
+    for i in eachindex(Z.Gs)
+        weights = Z.Gs[i][d,:]
+        output_vector[i] = -1.0*(weights .< 0.0) + 1.0*(weights .>= 0.0)
+    end
+    return output_vector
 end

@@ -20,6 +20,6 @@ export SortedVector, union, intersect_indices, find_index_position, attempt_find
 export parse_network, get_layers, get_inputs, get_layer1, get_diff_layer, get_layer2
 export configure_first_usage!, prepare_prop_state!, has_layer
 export updateGenerators!, updateGeneratorsMul!, updateGeneratorsAdd!, updateGeneratorsAddMul!, updateGeneratorsSub!, updateGeneratorsSubMul!
-export zono_optimize, zono_bounds, zono_get_max_vector, zono_get_max_vector
+export zono_optimize, zono_bounds, zono_get_max_vector
 
 end

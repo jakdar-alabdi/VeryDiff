@@ -11,6 +11,9 @@ include("unit/util/simd_bool.jl")
     @testset "Propagation Tests" begin
         include("unit/propagation/main.jl")
     end
+    @testset "Properties" begin
+        include("unit/properties/main.jl")
+    end
 end
 
 include("fuzz.jl")
