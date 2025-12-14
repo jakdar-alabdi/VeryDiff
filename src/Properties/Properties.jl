@@ -12,7 +12,7 @@ using ..Debugger
 
 using ..Definitions
 
-import ..VeryDiff: USE_GUROBI
+USE_GUROBI = true
 
 # We have our own multithreadding so we don't want to use BLAS multithreadding
 function __init__()

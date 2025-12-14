@@ -7,7 +7,6 @@ using VNNLib
 #using ThreadPinning
 
 NEW_HEURISTIC = true
-USE_GUROBI = true
 
 USE_DIFFZONO = true
 
