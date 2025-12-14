@@ -9,8 +9,8 @@ end
 function get_epsilon_property(epsilon;focus_dim=nothing)
     return (N1, N2, Zin, Zout, verification_status) -> begin
         #TODO: Use verification status to ignore proven epsilons
+        @assert length(Zin.Z₁.generator_ids) == 0 || length(Zout.∂Z.generator_ids) == 0 || Zout.∂Z.generator_ids[1] == Zin.Z₁.generator_ids[1] "Input generator block with ID $(Zin.Z₁.generator_ids[1]) not found in output differential Zonotope!"
         out_bounds = zono_bounds(Zout.∂Z)
-        input_dim = size(Zin.Z₁.Gs[1],2)
         distance_bound, max_dim = if !isnothing(focus_dim)
             maximum(abs.(out_bounds[focus_dim,:])),focus_dim
         else
@@ -20,19 +20,20 @@ function get_epsilon_property(epsilon;focus_dim=nothing)
         if distance_bound > epsilon
             cex_input = Zin.Z₁.c
             sample_distance = get_sample_distance(N1, N2, cex_input, focus_dim)
-            # for i in 1:size(Zout.Z₁.G,1)
-            max_vec = zono_get_max_vector(Zout.Z₁,max_dim)[1] # only need first component which should correspond to network inputs
-            for c in [-1.0,1.0]
-                cex_input = Zin.Z₁.Gs[1]*(max_vec*c)+Zin.Z₁.c
-                sample_distance = max(
-                    sample_distance,
-                    get_sample_distance(N1, N2, cex_input, focus_dim)
-                )
-                if sample_distance>epsilon
-                    break
+            if length(Zout.∂Z.generator_ids) > 0 && length(Zin.Z₁.generator_ids) > 0
+                # for i in 1:size(Zout.Z₁.G,1)
+                max_vec = zono_get_max_vector(Zout.Z₁,max_dim)[1] # only need first component which should correspond to network inputs
+                for c in [-1.0,1.0]
+                    cex_input = Zin.Z₁.Gs[1]*(max_vec*c)+Zin.Z₁.c
+                    sample_distance = max(
+                        sample_distance,
+                        get_sample_distance(N1, N2, cex_input, focus_dim)
+                    )
+                    if sample_distance>epsilon
+                        break
+                    end
                 end
             end
-            # end
             if sample_distance>epsilon
                 return false, (cex_input, (N1(cex_input),N2(cex_input),sample_distance)), nothing, nothing, distance_bound
             end

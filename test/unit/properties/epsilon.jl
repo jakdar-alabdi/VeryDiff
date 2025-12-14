@@ -162,3 +162,379 @@ end
     @test dist_bound > epsilon
     @test ok == false
 end
+
+@testset "get_epsilon_property: edge cases and robustness" begin
+	# Edge: epsilon == 0, identical networks, zero differential ⇒ provable
+	begin
+		N1 = x -> x
+		N2 = x -> x
+		dim = 3
+		G1_in = [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
+		Zin = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_empty_zonotope(dim)
+		)
+		Zout = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_empty_zonotope(dim)
+		)
+		epsilon = 0.0
+		check = VeryDiff.get_epsilon_property(epsilon)
+		ok, _cex, _bnd, _split, dist_bound = check(N1, N2, Zin, Zout, nothing)
+		@test ok == true
+		@test dist_bound == 0.0
+	end
+
+	# Edge: focus_dim at last index; only that dim has small bound ⇒ provable
+	begin
+		N1 = x -> x
+		N2 = x -> x .+ [100.0, 100.0, 0.0]
+		dim = 3
+		G1_in = reshape([1.0, 0.0, 0.0], 3, 1)
+		Zin = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_empty_zonotope(dim)
+		)
+		# Differential bounds tiny only on dim 3
+		Gd = reshape([10.0, 10.0, 0.05], 3, 1)
+		Zout = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([Gd], zeros(dim); ids=[1])
+		)
+		epsilon = 0.1
+		focus_dim = 3
+		check = VeryDiff.get_epsilon_property(epsilon; focus_dim)
+		ok, _cex, _bnd, _split, dist_bound = check(N1, N2, Zin, Zout, nothing)
+		@test ok == true
+		@test dist_bound <= epsilon
+	end
+
+	# Robustness: Zout has multiple generator blocks; first block column counts match Zin
+	begin
+		N1 = x -> x
+		N2 = x -> x
+		dim = 2
+		G1_in = reshape([1.0, 0.0], 2, 1)
+		Zin = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_empty_zonotope(dim)
+		)
+		Zout = make_diff_zonotope(
+			make_zonotope([G1_in, zeros(dim, 3), zeros(dim, 2)], zeros(dim); ids=[1, 2, 4]),
+			make_zonotope([G1_in, zeros(dim, 2)], zeros(dim); ids=[1, 3]),
+			make_empty_zonotope(dim)
+		)
+		epsilon = 1e-6
+		check = VeryDiff.get_epsilon_property(epsilon)
+		ok, _cex, _bnd, _split, dist_bound = check(N1, N2, Zin, Zout, nothing)
+		@test ok == true
+		@test dist_bound <= epsilon
+	end
+end
+
+@testset "get_epsilon_property: positive case via zono_get_max_vector path" begin
+	# Goal: Ensure the method explores multiple points and only reports a violation in a later call.
+	# We don't assume a particular search strategy; instead we construct cases where
+	# the first call is non-violating (provable), and the subsequent call (with a different Zout) violates.
+
+	dim = 2
+	G1_in = reshape([1.0, 0.0], 2, 1)
+
+	# Networks with a small offset along the generator direction
+	N1 = x -> x
+	N2 = x -> x .+ [0.05, 0.0]
+	epsilon = 0.1
+
+	# Case A: Differential bound below epsilon ⇒ provable
+	begin
+		Zin = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_empty_zonotope(dim)
+		)
+		Zout_A = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([ reshape([0.05, 0.0], 2, 1) ], zeros(dim); ids=[1])
+		)
+		check = VeryDiff.get_epsilon_property(epsilon)
+		okA, _cexA, _bndA, _splitA, distA = check(N1, N2, Zin, Zout_A, nothing)
+		@test okA == true
+		@test distA <= epsilon
+	end
+
+	# Case B: Increase differential so bound exceeds epsilon ⇒ violation only now
+	begin
+		Zin = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_empty_zonotope(dim)
+		)
+		Zout_B = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([ reshape([0.2, 0.0], 2, 1) ], zeros(dim); ids=[1])
+		)
+		check = VeryDiff.get_epsilon_property(epsilon)
+		okB, cexB, bndB, _splitB, distB = check(N1, N2, Zin, Zout_B, nothing)
+		@test distB > epsilon
+		@test okB == false
+		# If a counterexample is returned, verify that it lies within Zin bounds
+		if cexB !== nothing
+			boundsZ1 = zono_bounds(Zin.Z₁)
+			boundsZ2 = zono_bounds(Zin.Z₂)
+			@test all(boundsZ1[:,1] .<= cexB[1] .<= boundsZ2[:,2])
+		end
+		# Or if only bounds info is returned, ensure it reflects > epsilon
+		if bndB !== nothing
+			out_bounds, eps_ret, fd_ret = bndB
+			@test maximum(abs.(out_bounds)) > eps_ret
+		end
+	end
+end
+
+@testset "get_epsilon_property: epsilon equality boundary" begin
+	# Bound exactly equals epsilon should be provable.
+	dim = 2
+	G1_in = reshape([1.0, 0.0], 2, 1)
+	N1 = x -> x
+	N2 = x -> x .+ [0.1, 0.0]
+	epsilon = 0.1
+	Zin = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_empty_zonotope(dim)
+	)
+	Zout = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([ reshape([0.1, 0.0], 2, 1) ], zeros(dim); ids=[1])
+	)
+	check = VeryDiff.get_epsilon_property(epsilon)
+	ok, _cex, _bnd, _split, dist = check(N1, N2, Zin, Zout, nothing)
+	@test dist == epsilon
+	@test ok == true
+
+	# With focus_dim equality
+	focus_dim = 1
+	checkf = VeryDiff.get_epsilon_property(epsilon; focus_dim)
+	okf, _cexf, _bndf, _splitf, distf = checkf(N1, N2, Zin, Zout, nothing)
+	@test distf == epsilon
+	@test okf == true
+end
+
+@testset "get_epsilon_property: very large epsilon" begin
+	dim = 2
+	G1_in = reshape([1.0, 0.0], 2, 1)
+	N1 = x -> x
+	N2 = x -> x .+ [1000.0, -500.0]
+	epsilon = 1e6
+	Zin = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_empty_zonotope(dim)
+	)
+	Zout = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([ reshape([1e3, 5e2], 2, 1) ], zeros(dim); ids=[1])
+	)
+	check = VeryDiff.get_epsilon_property(epsilon)
+	ok, _cex, _bnd, _split, dist = check(N1, N2, Zin, Zout, nothing)
+	@test ok == true
+	@test dist <= epsilon
+end
+
+@testset "get_epsilon_property: empty vs non-empty generators in Zout" begin
+	# Zout.Z₁/Z₂ empty, ∂Z non-empty: bound should be based solely on ∂Z generators
+	dim = 3
+	N1 = x -> x
+	N2 = x -> x
+	epsilon = 0.5
+	Zin = make_diff_zonotope(
+		make_empty_zonotope(dim),
+		make_empty_zonotope(dim),
+		make_empty_zonotope(dim)
+	)
+	Gd = reshape([0.2, 0.1, 0.3], 3, 1)
+	Zout = make_diff_zonotope(
+		make_empty_zonotope(dim),
+		make_empty_zonotope(dim),
+		make_zonotope([Gd], zeros(dim); ids=[1])
+	)
+	check = VeryDiff.get_epsilon_property(epsilon)
+	ok, _cex, _bnd, _split, dist = check(N1, N2, Zin, Zout, nothing)
+	@test ok == true
+	@test dist <= epsilon
+end
+
+@testset "get_epsilon_property: mismatched block 1 column counts" begin
+	# If block 1 column counts differ between Zin and Zout, downstream logic may error.
+	# We expect either a graceful false or a thrown error; assert thrown if applicable.
+	dim = 2
+	N1 = x -> x
+	N2 = x -> x
+	G1_zin = reshape([1.0, 0.0], 2, 1)
+	Zin = make_diff_zonotope(
+		make_zonotope([G1_zin], zeros(dim); ids=[1]),
+		make_zonotope([G1_zin], zeros(dim); ids=[1]),
+		make_empty_zonotope(dim)
+	)
+	# Zout block 1 has 2 columns vs Zin's 1 column
+	G1_zout = [G1_zin  G1_zin]
+    Gd_zout = reshape([0.0, 0.0, 0.0, 0.0], 2, 2)
+	Zout = make_diff_zonotope(
+		make_zonotope([G1_zout], zeros(dim); ids=[1]),
+		make_zonotope([G1_zout], zeros(dim); ids=[1]),
+		make_zonotope([Gd_zout], ones(dim).*0.2; ids=[1])
+	)
+	epsilon = 0.1
+	check = VeryDiff.get_epsilon_property(epsilon)
+	# Use try-catch to accept either exception or a boolean false outcome
+	outcome = try
+		ok, _, _, _, _ = check(N1, N2, Zin, Zout, nothing)
+		ok
+	catch
+		:error
+	end
+	@test outcome in (false, :error)
+end
+
+@testset "get_epsilon_property: invalid focus_dim" begin
+	# focus_dim outside range should throw or return false.
+	dim = 2
+	N1 = x -> x
+	N2 = x -> x
+	G1_in = reshape([1.0, 0.0], 2, 1)
+	Zin = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_empty_zonotope(dim)
+	)
+	Zout = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_empty_zonotope(dim)
+	)
+	epsilon = 0.1
+	focus_dim = 3 # invalid for dim=2
+	check = VeryDiff.get_epsilon_property(epsilon; focus_dim)
+	outcome = try
+		ok, _, _, _, _ = check(N1, N2, Zin, Zout, nothing)
+		ok
+	catch
+		:error
+	end
+	@test outcome in (false, :error)
+end
+
+@testset "get_epsilon_property: non-linear networks" begin
+	# Simple non-linearity: ReLU-like behavior
+	dim = 2
+	G1_in = reshape([1.0, 0.0], 2, 1)
+	N1 = x -> [max(0.0, x[1]), x[2]]
+	N2 = x -> [max(0.0, x[1] + 0.05), x[2]]
+	epsilon = 0.1
+	Zin = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_empty_zonotope(dim)
+	)
+	Zout = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([ reshape([0.05, 0.0], 2, 1) ], zeros(dim); ids=[1])
+	)
+	check = VeryDiff.get_epsilon_property(epsilon)
+	ok, _cex, _bnd, _split, dist = check(N1, N2, Zin, Zout, nothing)
+	@test ok == true
+	@test dist <= epsilon
+end
+
+@testset "get_epsilon_property: differential center offset" begin
+	# ∂Z with non-zero center and no generators: bound equals |c|
+	dim = 2
+	N1 = x -> x
+	N2 = x -> x
+	epsilon = 0.1
+	G1_in = reshape([1.0, 0.0], 2, 1)
+	Zin = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_empty_zonotope(dim)
+	)
+	Zd = make_empty_zonotope(dim)
+	Zd.c .= [0.1, 0.0]
+	Zout = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		Zd
+	)
+	check = VeryDiff.get_epsilon_property(epsilon)
+	ok, _cex, _bnd, _split, dist = check(N1, N2, Zin, Zout, nothing)
+	@test dist == epsilon
+	@test ok == true
+end
+
+@testset "get_epsilon_property: numerical robustness with tiny values" begin
+	dim = 2
+	N1 = x -> x
+	N2 = x -> x .+ [1e-14, 0.0]
+	epsilon = 1e-12
+	G1_in = reshape([1.0, 0.0], 2, 1)
+	Zin = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_empty_zonotope(dim)
+	)
+	Zout = make_diff_zonotope(
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([G1_in], zeros(dim); ids=[1]),
+		make_zonotope([ reshape([1e-14, 0.0], 2, 1) ], zeros(dim); ids=[1])
+	)
+	check = VeryDiff.get_epsilon_property(epsilon)
+	ok, _cex, _bnd, _split, dist = check(N1, N2, Zin, Zout, nothing)
+	@test ok == true
+	@test dist <= epsilon
+end
+
+@testset "get_epsilon_property: violation only on third call" begin
+	# Gradually increase ∂Z bounds; ensure only the third call violates
+	dim = 2
+	G1_in = reshape([1.0, 0.0], 2, 1)
+	N1 = x -> x
+	N2 = x -> x .+ [0.05, 0.0]
+	epsilon = 0.1
+
+	function run_once(scale)
+		Zin = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_empty_zonotope(dim)
+		)
+		Zout = make_diff_zonotope(
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([G1_in], zeros(dim); ids=[1]),
+			make_zonotope([ reshape([scale, 0.0], 2, 1) ], zeros(dim); ids=[1])
+		)
+		check = VeryDiff.get_epsilon_property(epsilon)
+		return check(N1, N2, Zin, Zout, nothing)
+	end
+
+	ok1, _, _, _, dist1 = run_once(0.05)
+	@test ok1 == true
+	@test dist1 <= epsilon
+
+	ok2, _, _, _, dist2 = run_once(0.1)
+	@test ok2 == true
+	@test dist2 == epsilon
+
+	ok3, _, _, _, dist3 = run_once(0.2)
+	@test ok3 == false
+	@test dist3 > epsilon
+end
