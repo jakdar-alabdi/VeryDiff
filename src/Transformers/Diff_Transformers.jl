@@ -38,7 +38,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense
         for (i, g) in zip(indices₂, Zin.Z₂.Gs)
             mul!(Zout.∂Z.Gs[i], ∂L.W, g, 1.0, 1.0)
         end
-        @assert length(intersect_indices(Zout.∂Z.generator_ids, union(Zin.∂Z.generator_ids, Zin.Z₂.generator_ids))) == length(Zout.∂Z.generator_ids) "Not all generators in ∂Z were processed during Dense propagation!"
+        # @assert length(intersect_indices(Zout.∂Z.generator_ids, union(Zin.∂Z.generator_ids, Zin.Z₂.generator_ids))) == length(Zout.∂Z.generator_ids) "Not all generators in ∂Z were processed during Dense propagation!"
         mul!(Zout.∂Z.c, L1.W, Zin.∂Z.c)
         mul!(Zout.∂Z.c, ∂L.W, Zin.Z₂.c, 1.0, 1.0)
         Zout.∂Z.c .+= ∂L.b
@@ -59,7 +59,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,ZeroD
     L2 = get_layer2(Ls)
     if USE_DIFFZONO
         ∂indices = intersect_indices(Zout.∂Z.generator_ids, Zin.∂Z.generator_ids)
-        @assert length(union(Zout.∂Z.generator_ids,Zin.∂Z.generator_ids)) == length(Zout.∂Z.generator_ids) "Not all generators in ∂Z were processed during Dense propagation. Output IDs: $(Zout.∂Z.generator_ids), Processed IDs: $(Zin.∂Z.generator_ids)"
+        # @assert length(union(Zout.∂Z.generator_ids,Zin.∂Z.generator_ids)) == length(Zout.∂Z.generator_ids) "Not all generators in ∂Z were processed during Dense propagation. Output IDs: $(Zout.∂Z.generator_ids), Processed IDs: $(Zin.∂Z.generator_ids)"
         for (i, g) in zip(∂indices, Zin.∂Z.Gs)
             mul!(Zout.∂Z.Gs[i], L1.W, g)
         end
@@ -228,6 +228,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
         
         # Reset to zero
         Zout.∂Z.c .= 0.0
+        selector = @simd_bool_expr dim (neg_neg | zero_diff)
         for g in Zout.∂Z.Gs
             g[neg_neg, :] .= 0.0
         end

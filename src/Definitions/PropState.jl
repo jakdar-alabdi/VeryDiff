@@ -40,9 +40,9 @@ end
 
 
 function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
-    z1_generators = Vector{AbstractMatrix{Float64}}()
+    z1_generators = Vector{Matrix{Float64}}()
     z1_generator_ids = SortedVector{Int64}()
-    z2_generators = Vector{AbstractMatrix{Float64}}()
+    z2_generators = Vector{Matrix{Float64}}()
     z2_generator_ids = SortedVector{Int64}()
     free_generator_id = 2
     push!(z1_generators, zeros(Float64, size(task.middle,1), length(task.distance_indices)))
@@ -51,7 +51,7 @@ function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
     push!(z2_generators, zeros(Float64, size(task.middle,1), length(task.distance_indices)))
     push!(z2_generator_ids, 1)
     z2_center = zeros(Float64, size(task.middle,1))
-    diff_generators = Vector{AbstractMatrix{Float64}}()
+    diff_generators = Vector{Matrix{Float64}}()
     diff_generator_ids = SortedVector{Int64}()
     zd_center = zeros(Float64, size(task.middle,1))
     if !isnothing(task.distance1_secondary)
@@ -71,8 +71,8 @@ function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
     influence1 = nothing
     influence2 = nothing
     if NEW_HEURISTIC
-        influence1 = Vector{AbstractMatrix{Float64}}()
-        influence2 = Vector{AbstractMatrix{Float64}}()
+        influence1 = Vector{Matrix{Float64}}()
+        influence2 = Vector{Matrix{Float64}}()
         for g in z1_generators
             push!(influence1, Matrix(1.0I, size(g,2), size(g,2)))
         end

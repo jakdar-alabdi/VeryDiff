@@ -1,6 +1,6 @@
-function init_zonotope(layer :: Dense, input :: Zonotope, influence::Union{Vector{<:AbstractMatrix{Float64}},Nothing}, owned_generators :: Union{Int64, Nothing})
+function init_zonotope(layer :: Dense, input :: Zonotope, influence::Union{Vector{Matrix{Float64}},Nothing}, owned_generators :: Union{Int64, Nothing})
     # Compute new generators
-    generators = Vector{AbstractMatrix{Float64}}()
+    generators = Vector{Matrix{Float64}}()
     generator_ids = deepcopy(input.generator_ids)
     for g in input.Gs
         new_g = zeros(Float64, size(layer.W,1), size(g,2))
@@ -45,24 +45,29 @@ function get_selectors(bounds₁, bounds₂, ∂bounds)
 
     # Compute Phase Behaviour
     check = copy(zero_diff)
+
+    upper₁_leq0 = @simd_bool_expr dim (upper₁ <= 0.0)
+    lower₁_geq0 = @simd_bool_expr dim (lower₁ >= 0.0)
+    upper₂_leq0 = @simd_bool_expr dim (upper₂ <= 0.0)
+    lower₂_geq0 = @simd_bool_expr dim (lower₂ >= 0.0)
     
-    neg_neg = @simd_bool_expr dim ((upper₁ <= 0.0) .& (upper₂ <= 0.0) .& .!check)
+    neg_neg = @simd_bool_expr dim ((upper₁_leq0) .& (upper₂_leq0) .& .!check)
     check .|= neg_neg
-    neg_pos = @simd_bool_expr dim ((upper₁ <= 0.0) .& (lower₂ >= 0.0) .& .!check)
+    neg_pos = @simd_bool_expr dim ((upper₁_leq0) .& (lower₂_geq0) .& .!check)
     check .|= neg_pos
-    pos_neg = @simd_bool_expr dim ((lower₁ >= 0.0) .& (upper₂ <= 0.0) .& .!check)
+    pos_neg = @simd_bool_expr dim ((lower₁_geq0) .& (upper₂_leq0) .& .!check)
     check .|= pos_neg
-    pos_pos = @simd_bool_expr dim ((lower₁ >= 0.0) .& (lower₂ >= 0.0) .& .!check)
+    pos_pos = @simd_bool_expr dim ((lower₁_geq0) .& (lower₂_geq0) .& .!check)
     check .|= pos_pos
-    any_neg = @simd_bool_expr dim ((lower₁ < 0.0) .& (upper₁ > 0.0) .& (upper₂ <= 0.0) .& .!check)
+    any_neg = @simd_bool_expr dim ((.!lower₁_geq0) .& (.!upper₁_leq0) .& (upper₂_leq0) .& .!check)
     check .|= any_neg
-    neg_any = @simd_bool_expr dim ((upper₁ <= 0.0) .& (lower₂ < 0.0) .& (upper₂ > 0.0) .& .!check)
+    neg_any = @simd_bool_expr dim ((upper₁_leq0) .& (.!lower₂_geq0) .& (.!upper₂_leq0) .& .!check)
     check .|= neg_any
-    any_pos = @simd_bool_expr dim ((lower₁ < 0.0) .& (upper₁ > 0.0) .& (lower₂ >= 0.0) .& .!check)
+    any_pos = @simd_bool_expr dim ((.!lower₁_geq0) .& (.!upper₁_leq0) .& (lower₂_geq0) .& .!check)
     check .|= any_pos
-    pos_any = @simd_bool_expr dim ((lower₁ >= 0.0) .& (lower₂ < 0.0) .& (upper₂ > 0.0) .& .!check)
+    pos_any = @simd_bool_expr dim ((lower₁_geq0) .& (.!lower₂_geq0) .& (.!upper₂_leq0) .& .!check)
     check .|= pos_any
-    any_any = @simd_bool_expr dim ((lower₁ < 0.0) .& (upper₁ > 0.0) .& (lower₂ < 0.0) .& (upper₂ > 0.0) .& .!check)
+    any_any = @simd_bool_expr dim ((.!lower₁_geq0) .& (.!upper₁_leq0) .& (.!lower₂_geq0) .& (.!upper₂_leq0) .& .!check)
     check .|= any_any
     @assert all(check) "Not all cases covered: [$(lower₁[.!check]), $(upper₁[.!check])], [$(lower₂[.!check]), $(upper₂[.!check])]"
     return (

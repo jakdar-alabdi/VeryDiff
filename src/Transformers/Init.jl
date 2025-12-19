@@ -1,23 +1,23 @@
 function init_default_zono(Z :: CachedZonotope)
     Z.zonotope = DiffZonotope(
         Zonotope(
-            Vector{AbstractMatrix{Float64}}([(@view g[:, :] ) for g in Z.zonotope_proto.Z₁.Gs]),
+            Vector{Matrix{Float64}}([(@view g[:, :] ) for g in Z.zonotope_proto.Z₁.Gs]),
             Z.zonotope_proto.Z₁.c,
-            (isnothing(Z.zonotope_proto.Z₁.influence) ? nothing : Vector{AbstractMatrix{Float64}}([(@view inf[:, :] ) for inf in Z.zonotope_proto.Z₁.influence])),
+            (isnothing(Z.zonotope_proto.Z₁.influence) ? nothing : Vector{Matrix{Float64}}([(@view inf[:, :] ) for inf in Z.zonotope_proto.Z₁.influence])),
             Z.zonotope_proto.Z₁.generator_ids,
             Z.zonotope_proto.Z₁.owned_generators
         ),
         Zonotope(
-            Vector{AbstractMatrix{Float64}}([(@view g[:, :] ) for g in Z.zonotope_proto.Z₂.Gs]),
+            Vector{Matrix{Float64}}([(@view g[:, :] ) for g in Z.zonotope_proto.Z₂.Gs]),
             Z.zonotope_proto.Z₂.c,
-            (isnothing(Z.zonotope_proto.Z₂.influence) ? nothing : Vector{AbstractMatrix{Float64}}([(@view inf[:, :] ) for inf in Z.zonotope_proto.Z₂.influence])),
+            (isnothing(Z.zonotope_proto.Z₂.influence) ? nothing : Vector{Matrix{Float64}}([(@view inf[:, :] ) for inf in Z.zonotope_proto.Z₂.influence])),
             Z.zonotope_proto.Z₂.generator_ids,
             Z.zonotope_proto.Z₂.owned_generators
         ),
         Zonotope(
-            Vector{AbstractMatrix{Float64}}([(@view g[:, :] ) for g in Z.zonotope_proto.∂Z.Gs]),
+            Vector{Matrix{Float64}}([(@view g[:, :] ) for g in Z.zonotope_proto.∂Z.Gs]),
             Z.zonotope_proto.∂Z.c,
-            (isnothing(Z.zonotope_proto.∂Z.influence) ? nothing : Vector{<:AbstractMatrix{Float64}}([(@view inf[:, :] ) for inf in Z.zonotope_proto.∂Z.influence])),
+            (isnothing(Z.zonotope_proto.∂Z.influence) ? nothing : Vector{Matrix{Float64}}([(@view inf[:, :] ) for inf in Z.zonotope_proto.∂Z.influence])),
             Z.zonotope_proto.∂Z.generator_ids,
             Z.zonotope_proto.∂Z.owned_generators
         )
@@ -142,7 +142,7 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{Dense,Dense,Dense}
     else
         owned_generator_id = nothing
     end
-    generators = Vector{AbstractMatrix{Float64}}()
+    generators = Vector{Matrix{Float64}}()
     generator_ids = SortedVector{Int64}()
     i_d = 1
     i_2 = 1

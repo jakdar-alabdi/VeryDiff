@@ -1,11 +1,11 @@
 struct Zonotope
     # Vector of Generator Matrices
-    Gs::Vector{<:AbstractMatrix{Float64}}
+    Gs::Vector{Matrix{Float64}}
     # Center of Zonotope
     c::Vector{Float64}
     # Influence Matrix (necessary for input splitting heuristic)
     # TODO: Move this to PropState at some point?
-    influence::Union{Vector{<:AbstractMatrix{Float64}},Nothing}
+    influence::Union{Vector{Matrix{Float64}},Nothing}
     # ID of generator matrices
     # must be same length as G
     generator_ids :: SortedVector{Int64}
@@ -15,9 +15,9 @@ struct Zonotope
     # If no owned generator matrix has been allocated, this field is nothing
     owned_generators :: Union{Int64, Nothing}
     function Zonotope(
-        Gs::Vector{<:AbstractMatrix{Float64}},
+        Gs::Vector{Matrix{Float64}},
         c::Vector{Float64},
-        influence::Union{Vector{<:AbstractMatrix{Float64}},Nothing},
+        influence::Union{Vector{Matrix{Float64}},Nothing},
         generator_ids :: SortedVector{Int64},
         owned_generators :: Union{Int64, Nothing}
     )
@@ -61,6 +61,9 @@ struct ZonotopeStorage
     zonotopes :: Vector{CachedZonotope}
 end
 
+# WARNING: This method is dangerous! We are generating Matrix pointers to sub-matrices of existing matrices.
+# Make sure that the original matrices are not deallocated while these views are in use!
+# Also make sure that we do not assume more columns than actually allocated in the original matrices!
 function get_zonotope!(
     zono :: CachedZonotope,
     needed_columns₁ :: Vector{Int64},
@@ -74,10 +77,12 @@ function get_zonotope!(
     for (i, needed_columns) in enumerate(needed_columns₁)
         A = zono.zonotope_proto.Z₁.Gs[i]
         @assert needed_columns <= size(A,2) "Requested $needed_columns columns, but only $(size(A,2)) available in generator matrix $i of Z₁!"
-        zono.zonotope.Z₁.Gs[i] = @view A[:, 1:needed_columns]
+        #zono.zonotope.Z₁.Gs[i] = @view A[:, 1:needed_columns]
+        zono.zonotope.Z₁.Gs[i] = unsafe_wrap(Matrix{Float64}, pointer(A), (size(A,1), needed_columns); own=false)
         if !isnothing(zono.zonotope_proto.Z₁.influence)
             B = zono.zonotope_proto.Z₁.influence[i]
-            zono.zonotope.Z₁.influence[i] = @view B[:, 1:needed_columns]
+            #zono.zonotope.Z₁.influence[i] = @view B[:, 1:needed_columns]
+            zono.zonotope.Z₁.influence[i] = unsafe_wrap(Matrix{Float64}, pointer(B), (size(B,1), needed_columns); own=false)
         else
             @assert isnothing(zono.zonotope_proto.Z₁.influence) "Zonotope influence should be nothing if not present in prototype!"
         end
@@ -85,10 +90,12 @@ function get_zonotope!(
     for (i, needed_columns) in enumerate(needed_columns₂)
         A = zono.zonotope_proto.Z₂.Gs[i]
         @assert needed_columns <= size(A,2) "Requested $needed_columns columns, but only $(size(A,2)) available in generator matrix $i of Z₂!"
-        zono.zonotope.Z₂.Gs[i] = @view A[:, 1:needed_columns]
+        #zono.zonotope.Z₂.Gs[i] = @view A[:, 1:needed_columns]
+        zono.zonotope.Z₂.Gs[i] = unsafe_wrap(Matrix{Float64}, pointer(A), (size(A,1), needed_columns); own=false)
         if !isnothing(zono.zonotope_proto.Z₂.influence)
             B = zono.zonotope_proto.Z₂.influence[i]
-            zono.zonotope.Z₂.influence[i] = @view B[:, 1:needed_columns]
+            #zono.zonotope.Z₂.influence[i] = @view B[:, 1:needed_columns]
+            zono.zonotope.Z₂.influence[i] = unsafe_wrap(Matrix{Float64}, pointer(B), (size(B,1), needed_columns); own=false)
         else
             @assert isnothing(zono.zonotope.Z₂.influence) "Zonotope influence should be nothing if not present in prototype!"
         end
@@ -96,10 +103,12 @@ function get_zonotope!(
     for (i, needed_columns) in enumerate(needed_columns_∂)
         A = zono.zonotope_proto.∂Z.Gs[i]
         @assert needed_columns <= size(A,2) "Requested $needed_columns columns, but only $(size(A,2)) available in generator matrix $i of ∂Z!"
-        zono.zonotope.∂Z.Gs[i] = @view A[:, 1:needed_columns]
+        #zono.zonotope.∂Z.Gs[i] = @view A[:, 1:needed_columns]
+        zono.zonotope.∂Z.Gs[i] = unsafe_wrap(Matrix{Float64}, pointer(A), (size(A,1), needed_columns); own=false)
         if !isnothing(zono.zonotope_proto.∂Z.influence)
             B = zono.zonotope_proto.∂Z.influence[i]
-            zono.zonotope.∂Z.influence[i] = @view B[:, 1:needed_columns]
+            #zono.zonotope.∂Z.influence[i] = @view B[:, 1:needed_columns]
+            zono.zonotope.∂Z.influence[i] = unsafe_wrap(Matrix{Float64}, pointer(B), (size(B,1), needed_columns); own=false)
         else
             @assert isnothing(zono.zonotope.∂Z.influence) "Zonotope influence should be nothing if not present in prototype!"
         end

@@ -48,17 +48,21 @@ function zono_optimize(direction::Float64, Z::Zonotope, d :: Int) :: Float64
 end
 
 function zono_bounds(Z::Zonotope)
-    #return @timeit to "Zonotope_Bounds" begin
-    if length(Z.Gs) > 0
-        b = sum(abs,Z.Gs[1];dims=2)
-        for i in 2:length(Z.Gs)
-            b .+= sum(abs,Z.Gs[i];dims=2)
-        end
-        return [Z.c.-b b.+Z.c]
-    else
+    if isempty(Z.Gs)
         return [Z.c Z.c]
     end
-    #end
+    
+    n = size(Z.Gs[1], 1)
+    b = zeros(n)
+    
+    @inbounds for G in Z.Gs
+        m = size(G, 2)
+        for i in 1:n
+            b[i] += BLAS.asum(m, pointer(G,i), n)
+        end
+    end
+    
+    return [Z.c .- b Z.c .+ b]
 end
 
 function zono_get_max_vector(Z::Zonotope, direction::Vector{Float64})
