@@ -148,10 +148,10 @@ function prepare_prop_state!(PS :: PropState, task :: VerificationTask)
     if !isnothing(task.distance2_secondary)
         Zin.∂Z.c .-= task.middle2_secondary
     end
-    @debug "Initialized Zonotopes:"
-    @debug "Z₁: $(Zin.Z₁)"
-    @debug "Z₂: $(Zin.Z₂)"
-    @debug "∂Z: $(Zin.∂Z)"
+    # @debug "Initialized Zonotopes:"
+    # @debug "Z₁: $(Zin.Z₁)"
+    # @debug "Z₂: $(Zin.Z₂)"
+    # @debug "∂Z: $(Zin.∂Z)"
     PS.task_bounds = task.task_bounds
 end
 

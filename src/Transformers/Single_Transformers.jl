@@ -77,8 +77,9 @@ function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, Zin :: Zonotope; lower
             end
             # @info "Size of owned influence matrix after copy: $(size(influence_new[ZoutRef.owned_generators]))"
             #influence_new[ZoutRef.owned_generators][:,column_pos:end] .= 0.0
+            bounds_range = upper[crossing] .- lower[crossing]
             @inbounds for (idx, g) in enumerate(Zin.Gs)
-                influence_new[ZoutRef.owned_generators][:,column_pos:end] .= abs.(Zin.influence[idx]) * abs.(@view g[crossing,:])'
+                influence_new[ZoutRef.owned_generators][:,column_pos:end] .= abs.(Zin.influence[idx]) * abs.((@view g[crossing,:]) ./ bounds_range)'
             end
             #influence_new[:,(size(Zin.influence,2)+1):end] .=  abs.(Zin.influence) * abs.(@view Zin.G[crossing,:])'
         else

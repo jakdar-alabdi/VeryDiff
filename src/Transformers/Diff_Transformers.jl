@@ -6,7 +6,7 @@ import VNNLib.NNLoader.ReLU
 
 function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense,Dense}, inputs :: Vector{DiffZonotope}; bounds_cache :: Union{Nothing,BoundsCache}=nothing)
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
-    @debug "Propagating DiffDense Layer"
+    # @debug "Propagating DiffDense Layer"
     Zin = inputs[1]
     #@timeit to "DiffZonotope_GetZonotope" begin
     # Compute differential zonotope dimensions
@@ -29,7 +29,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense
     ∂L = get_diff_layer(Ls)
     L2 = get_layer2(Ls)
     if USE_DIFFZONO
-        @debug "IDs of Output Zonotope Generators: $(Zout.∂Z.generator_ids)"
+        # @debug "IDs of Output Zonotope Generators: $(Zout.∂Z.generator_ids)"
         ∂indices = intersect_indices(Zout.∂Z.generator_ids, Zin.∂Z.generator_ids)
         for (i, g) in zip(∂indices, Zin.∂Z.Gs)
             mul!(Zout.∂Z.Gs[i], L1.W, g)
@@ -161,6 +161,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
     new_gen₁ = count(lower₁ .< 0.0 .&& upper₁ .> 0.0)
     new_gen₂ = count(lower₂ .< 0.0 .&& upper₂ .> 0.0)
     ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
+    # @debug "Instable Neurons: Network 1: $new_gen₁, Network 2: $new_gen₂, Differential: $∂new_gen"
     Zout_proto = ZoutRef.zonotope_proto # Need this to be able to access the generator ids
     gen_sizes₁ = zeros(Int64,length(Zout_proto.Z₁.generator_ids))
     gen_sizes₂ = zeros(Int64,length(Zout_proto.Z₂.generator_ids))

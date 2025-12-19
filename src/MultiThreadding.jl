@@ -4,19 +4,19 @@ import Base.Order.Ordering
 using DataStructures
 
 struct VerificationTaskOrdering <: Ordering end
-lt(o::VerificationTaskOrdering, a, b) = b[1] < a[1] # By Workshare (largest first)
+lt(o::VerificationTaskOrdering, a, b) = b.distance_bound < a.distance_bound # By distance to bound (probable violation first)
 #b[1] < a[1] # By Workshare (largest first)
 # b[2].distance_bound < a[2].distance_bound # By distance to bound (probable violation first)
 
 mutable struct Queue
-    queue::BinaryHeap{Tuple{Float64,VerificationTask},VerificationTaskOrdering}
+    queue::BinaryHeap{VerificationTask,VerificationTaskOrdering}
     function Queue()
-        return new(BinaryHeap{Tuple{Float64,VerificationTask}}(VerificationTaskOrdering()))
+        return new(BinaryHeap{VerificationTask}(VerificationTaskOrdering()))
     end
 end
 
 function empty!(q::Queue)
-    q.queue = BinaryHeap{Tuple{Float64,VerificationTask}}(VerificationTaskOrdering())
+    q.queue = BinaryHeap{VerificationTask}(VerificationTaskOrdering())
 end
 
 function push!(q::Queue, x)
@@ -27,6 +27,10 @@ function pop!(q::Queue)
 end
 function length(q::Queue)
     return length(q.queue)
+end
+
+function peek_queue(q::Queue)
+    return first(q.queue)
 end
 
 # mutable struct MultiThreaddedQueue{T}

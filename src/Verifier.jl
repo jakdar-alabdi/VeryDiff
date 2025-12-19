@@ -80,7 +80,7 @@ function verify_network(
             mid, distance, non_zero_indices,
             distance1_secondary, mid1_secondary,
             distance2_secondary, mid2_secondary,
-            nothing, 1.0, work_share )
+            nothing, Inf, 1.0 )
     )
     @timeit to "Verify" begin
         @Debugger.propagation_init_hook(N)
@@ -139,13 +139,25 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
             println("[Thread $(threadid)] Time to first task: $(round((time_ns()-starttime)/1e9;digits=2))s")
         end
         total_zonos+=1
-        @timeit to "Zonotope Propagate" begin
-        prop_state = propagate(N,prop_state)
-        end
         Zin = prop_state.zono_storage.zonotopes[1].zonotope
+        # @debug "Problem Bounds: $(zono_bounds(Zin.Z₁))"
+        # @debug "Input Zono Z₁: $(Zin.Z₁)"
+        # @debug "Input Zono Z₂: $(Zin.Z₂)"
+        # @debug "Input Zono ∂Z: $(Zin.∂Z)"
+        @timeit to "Zonotope Propagate" begin
+        prop_state = propagate!(N,prop_state)
+        end
         Zout = prop_state.zono_storage.zonotopes[end].zonotope
+        if first
+            println("Zono Bounds:")
+            bounds = zono_bounds(Zout.∂Z)
+            println(bounds[:,1])
+            println(bounds[:,2])
+            first=false
+        end
         @timeit to "Property Check" begin
         prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout, verification_task.verification_status)
+        # @debug "Distance bound: $distance_bound"
         end
         global FIRST_ROUND = false
         if !prop_satisfied
@@ -177,7 +189,21 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         should_terminate |= length(work_queue) == 0
         k+=1
         if k%100 == 0
-            println("[Thread $(threadid)] Processed $(total_zonos) zonotopes (Work Done: $(round(100*total_work;digits=5))%; Expected Zonos: $(total_zonos/total_work))")
+            top_task = peek_queue(work_queue)
+            println("[Thread $(threadid)] Processed $(total_zonos) (Work Done: $(round(100*total_work;digits=5))%; Expected: $(total_zonos/total_work); Bound: $(top_task.distance_bound))")
+            # If debugging: Compute sum of all interval sizes in bounds cache of current task:
+            # Debug
+            # if false
+            #     total_interval_size = 0.0
+            #     for (layer_idx, bounds_cache) in prop_state.task_bounds.bounds_cache
+            #         if bounds_cache.initialized
+            #             total_interval_size += sum(bounds_cache.upper₁ .- bounds_cache.lower₁)
+            #             total_interval_size += sum(bounds_cache.upper₂ .- bounds_cache.lower₂)
+            #             total_interval_size += sum(bounds_cache.∂upper .- bounds_cache.∂lower)
+            #         end
+            #     end
+            #     println("[Thread $(threadid)] Total interval size in bounds cache: $(total_interval_size)")
+            # end
         end
         reset_ps!(prop_state)
         #end
@@ -222,7 +248,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             deepcopy(verification_task.middle2_secondary),
             deepcopy(verification_status),
             distance_bound,
-            work_share_new)
+            work_share_new,
+            verification_task.task_bounds)
         Z2 = VerificationTask(
             middle2_vec, distance2_vec,
             verification_task.distance_indices,
@@ -232,7 +259,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             verification_task.middle2_secondary,
             verification_status,
             distance_bound,
-            work_share_new)
+            work_share_new,
+            deepcopy(verification_task.task_bounds))
         return Z1, Z2
     elseif distance_d <= size(verification_task.distance_indices,1) + size(verification_task.distance1_secondary,1)
         input_pos = distance_d - size(verification_task.distance_indices,1)
@@ -258,7 +286,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             deepcopy(verification_task.middle2_secondary),
             deepcopy(verification_status),
             distance_bound,
-            work_share_new)
+            work_share_new,
+            verification_task.task_bounds)
         Z2 = VerificationTask(
             verification_task.middle, verification_task.distance,
             verification_task.distance_indices,
@@ -268,7 +297,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             verification_task.middle2_secondary,
             verification_status,
             distance_bound,
-            work_share_new)
+            work_share_new,
+            deepcopy(verification_task.task_bounds))
         return Z1, Z2
     else
         input_pos = distance_d - size(verification_task.distance_indices,1) - size(verification_task.distance1_secondary,1)
@@ -294,7 +324,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             middle1_secondary,
             deepcopy(verification_status),
             distance_bound,
-            work_share_new)
+            work_share_new,
+            verification_task.task_bounds)
         Z2 = VerificationTask(
             verification_task.middle, verification_task.distance,
             verification_task.distance_indices,
@@ -304,7 +335,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             middle2_secondary,
             verification_status,
             distance_bound,
-            work_share_new)
+            work_share_new,
+            deepcopy(verification_task.task_bounds))
         return Z1, Z2
     end
 end

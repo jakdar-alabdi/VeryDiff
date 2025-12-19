@@ -72,25 +72,50 @@ function get_zonotope!(
     #@assert all(needed_columns_∂ .<= size.(zono.zonotope_proto.∂Z.Gs,2)) "Requested more generator columns than available in Differential Zonotope!"
     # Create view based new Zonotope
     for (i, needed_columns) in enumerate(needed_columns₁)
-        @assert needed_columns <= size(zono.zonotope.Z₁.Gs[i],2) "Requested $needed_columns columns, but only $(size(zono.zonotope.Z₁.Gs[i],2)) available in generator matrix $i of Z₁!"
-        zono.zonotope.Z₁.Gs[i] = @view zono.zonotope_proto.Z₁.Gs[i][:, 1:needed_columns]
-        if !isnothing(zono.zonotope.Z₁.influence)
-            zono.zonotope.Z₁.influence[i] = @view zono.zonotope_proto.Z₁.influence[i][:, 1:needed_columns]
+        A = zono.zonotope_proto.Z₁.Gs[i]
+        @assert needed_columns <= size(A,2) "Requested $needed_columns columns, but only $(size(A,2)) available in generator matrix $i of Z₁!"
+        zono.zonotope.Z₁.Gs[i] = @view A[:, 1:needed_columns]
+        if !isnothing(zono.zonotope_proto.Z₁.influence)
+            B = zono.zonotope_proto.Z₁.influence[i]
+            zono.zonotope.Z₁.influence[i] = @view B[:, 1:needed_columns]
+        else
+            @assert isnothing(zono.zonotope_proto.Z₁.influence) "Zonotope influence should be nothing if not present in prototype!"
         end
     end
-    for (i, needed_columns) in enumerate(needed_columns₂) "Requested $needed_columns columns, but only $(size(zono.zonotope.Z₂.Gs[i],2)) available in generator matrix $i of Z₂!"
-        @assert needed_columns <= size(zono.zonotope.Z₂.Gs[i],2)
-        zono.zonotope.Z₂.Gs[i] = @view zono.zonotope_proto.Z₂.Gs[i][:, 1:needed_columns]
-        if !isnothing(zono.zonotope.Z₂.influence)
-            zono.zonotope.Z₂.influence[i] = @view zono.zonotope_proto.Z₂.influence[i][:, 1:needed_columns]
+    for (i, needed_columns) in enumerate(needed_columns₂)
+        A = zono.zonotope_proto.Z₂.Gs[i]
+        @assert needed_columns <= size(A,2) "Requested $needed_columns columns, but only $(size(A,2)) available in generator matrix $i of Z₂!"
+        zono.zonotope.Z₂.Gs[i] = @view A[:, 1:needed_columns]
+        if !isnothing(zono.zonotope_proto.Z₂.influence)
+            B = zono.zonotope_proto.Z₂.influence[i]
+            zono.zonotope.Z₂.influence[i] = @view B[:, 1:needed_columns]
+        else
+            @assert isnothing(zono.zonotope.Z₂.influence) "Zonotope influence should be nothing if not present in prototype!"
         end
     end
     for (i, needed_columns) in enumerate(needed_columns_∂)
-        @assert needed_columns <= size(zono.zonotope.∂Z.Gs[i],2) "Requested $needed_columns columns, but only $(size(zono.zonotope.∂Z.Gs[i],2)) available in generator matrix $i of ∂Z!"
-        zono.zonotope.∂Z.Gs[i] = @view zono.zonotope_proto.∂Z.Gs[i][:, 1:needed_columns]
-        if !isnothing(zono.zonotope.∂Z.influence)
-            zono.zonotope.∂Z.influence[i] = @view zono.zonotope_proto.∂Z.influence[i][:, 1:needed_columns]
+        A = zono.zonotope_proto.∂Z.Gs[i]
+        @assert needed_columns <= size(A,2) "Requested $needed_columns columns, but only $(size(A,2)) available in generator matrix $i of ∂Z!"
+        zono.zonotope.∂Z.Gs[i] = @view A[:, 1:needed_columns]
+        if !isnothing(zono.zonotope_proto.∂Z.influence)
+            B = zono.zonotope_proto.∂Z.influence[i]
+            zono.zonotope.∂Z.influence[i] = @view B[:, 1:needed_columns]
+        else
+            @assert isnothing(zono.zonotope.∂Z.influence) "Zonotope influence should be nothing if not present in prototype!"
         end
     end
+    # Set all generators and centers to zero initially
+    for g in zono.zonotope.Z₁.Gs
+        fill!(g, 0.0)
+    end
+    for g in zono.zonotope.Z₂.Gs
+        fill!(g, 0.0)
+    end
+    for g in zono.zonotope.∂Z.Gs
+        fill!(g, 0.0)
+    end
+    fill!(zono.zonotope.Z₁.c, 0.0)
+    fill!(zono.zonotope.Z₂.c, 0.0)
+    fill!(zono.zonotope.∂Z.c, 0.0)
     return zono.zonotope
 end

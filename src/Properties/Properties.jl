@@ -14,6 +14,8 @@ using ..Definitions
 
 USE_GUROBI = true
 
+import ..VeryDiff: NEW_HEURISTIC
+
 # We have our own multithreadding so we don't want to use BLAS multithreadding
 function __init__()
     BLAS.set_num_threads(1)

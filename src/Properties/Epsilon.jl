@@ -7,6 +7,7 @@ function get_sample_distance(N1, N2, vector, focus_dim=nothing)
 end
 
 function get_epsilon_property(epsilon;focus_dim=nothing)
+    @info "Creating epsilon property with ε = $epsilon, focus_dim = $focus_dim"
     return (N1, N2, Zin, Zout, verification_status) -> begin
         #TODO: Use verification status to ignore proven epsilons
         @assert length(Zin.Z₁.generator_ids) == 0 || length(Zout.∂Z.generator_ids) == 0 || Zout.∂Z.generator_ids[1] == Zin.Z₁.generator_ids[1] "Input generator block with ID $(Zin.Z₁.generator_ids[1]) not found in output differential Zonotope!"
@@ -16,7 +17,7 @@ function get_epsilon_property(epsilon;focus_dim=nothing)
         else
             maximum(abs.(out_bounds)),argmax(abs.(out_bounds))[1]
         end
-        #println("Distance Bound: $distance_bound")
+        # @debug "Distance Bound: $distance_bound"
         if distance_bound > epsilon
             cex_input = Zin.Z₁.c
             sample_distance = get_sample_distance(N1, N2, cex_input, focus_dim)
@@ -47,6 +48,7 @@ function get_epsilon_property(epsilon;focus_dim=nothing)
 end
 
 function get_epsilon_property_naive(epsilon;focus_dim=nothing)
+    @info "Creating naive epsilon property with ε = $epsilon, focus_dim = $focus_dim"
     normal_eps = get_epsilon_property(epsilon;focus_dim=focus_dim)
     return (N1, N2, Zin, Zout, verification_status) -> begin
         # Build new output Zonotope with differential Zonotope constructed from Zout.Z₁ - Zout.Z₂
@@ -79,40 +81,31 @@ end
 
 function epsilon_split_heuristic(Zin,Zout,heuristics_info,verification_task)
     # distance_indices = verification_task.distance_indices
-    out_bounds = heuristics_info[1]
-    epsilon = heuristics_info[2]
-    focus_dim = heuristics_info[3]
-    input_dim = size(Zin.Z₁.G,2)
 
-    # ∂weights = sum(abs,(Zout.∂Z.G[:,1:input_dim] ),dims=1)[1,:]
-    # ∂weights ./= norm(∂weights,2)
-    #diff_weights = sum(abs,(Zout.Z₁.G[:,1:input_dim] .- Zout.Z₂.G[:,1:input_dim] ),dims=1)[1,:]
-    #diff_weights ./= norm(diff_weights,2)
-
-    #
-    #print(size(Zout.Z₁.influence))
-    #print(size(Zout.Z₂.influence))
-    #println(size(((Zout.Z₁.G[:,:])*Zout.Z₁.influence'.-(Zout.Z₂.G[:,:])*Zout.Z₂.influence')))
-    #if isnothing(focus_dim)
-    #    relevant_dimensions=any(abs.(out_bounds).>epsilon,dims=2)[:,1]
-    #else
-    #    relevant_dimensions=focus_dim:(focus_dim)
-    #end
-    #print(size(relevant_dimensions))
     if NEW_HEURISTIC
-        diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:].*sum(abs,(abs.(Zout.Z₁.G)*abs.(Zout.Z₁.influence').+abs.(Zout.Z₂.G)*abs.(Zout.Z₂.influence')),dims=1)[1,:]
-        # influence1 = sum(abs,(abs.(Zout.∂Z.G[:,1:input_dim])*(abs.(Zout.Z₁.influence'[1:input_dim,:].+Zout.Z₂.influence'[1:input_dim,:]))),dims=1)[1,:]
-        # influence2 = sum(abs,(abs.(Zout.∂Z.G[:,(input_dim+1):(input_dim+Zout.num_approx₁)])*(abs.(Zout.Z₁.influence'[(input_dim+1):end,:]))),dims=1)[1,:]
-        # influence3 = sum(abs,(abs.(Zout.∂Z.G[:,(input_dim+Zout.num_approx₁+1):(input_dim+Zout.num_approx₁+Zout.num_approx₂)])*(abs.(Zout.Z₂.influence'[(input_dim+1):end,:]))),dims=1)[1,:]
-        # diff_weights = sum(abs, Zin.Z₁.G,dims=1)[1,:].*(
-        #     influence1 .+
-        #     influence2 .+
-        #     influence3
-        # )
+        # diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:].*sum(abs,(abs.(Zout.Z₁.G)*abs.(Zout.Z₁.influence').+abs.(Zout.Z₂.G)*abs.(Zout.Z₂.influence')),dims=1)[1,:]
+        diff_weights = zeros(size(Zin.Z₁.Gs[1],2))
+        for (g1,inf1) in zip(Zout.Z₁.Gs,Zout.Z₁.influence)
+            diff_weights .+= sum(abs, abs.(g1) * abs.(inf1'),dims=1)[1,:]
+        end
+        for (g2,inf2) in zip(Zout.Z₂.Gs,Zout.Z₂.influence)
+            diff_weights .+= sum(abs,abs.(g2) * abs.(inf2'),dims=1)[1,:]
+        end
+        # Scale by input generator magnitudes across ALL input generator blocks
+        input_weights = zeros(size(Zin.Z₁.Gs[1],2))
+        for g_in in Zin.Z₁.Gs
+            input_weights .+= sum(abs, g_in, dims=1)[1,:]
+        end
+        diff_weights .*= input_weights
     else
-        diff_weights = sum(abs, (Zout.Z₁.G[:,1:input_dim] .- Zout.Z₂.G[:,1:input_dim] ),dims=1)[1,:]
-        diff_weights ./= norm(diff_weights,2)
+        throw("Old heuristic no longer implemented")
     end
+    #@debug diff_weights
+    # @debug length(Zout.Z₁.influence)
+    # @debug Zout.Z₁.influence[1][1,:]
+    # @debug Zout.Z₁.influence[2][1,:]
+    # Output Zout.Z₁.influence[2][1,:] with two digits after decimal point
+    #@debug round.(Zout.Z₁.influence[2][1,1:20],digits=3)
 
     d = argmax(
         # sum(abs,Zin.Z₁.G,dims=1)[1,:].*
@@ -120,7 +113,7 @@ function epsilon_split_heuristic(Zin,Zout,heuristics_info,verification_task)
         diff_weights
     )[1]
 
-    #print("Selected: $d (vs. $d_alternative)")
+    #@debug "Selected: $d"
     
     #return distance_indices[d]
     return d
