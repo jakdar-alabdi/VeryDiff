@@ -91,12 +91,12 @@ function epsilon_split_heuristic(Zin,Zout,heuristics_info,verification_task)
         for (g2,inf2) in zip(Zout.Z₂.Gs,Zout.Z₂.influence)
             diff_weights .+= sum(abs,abs.(g2) * abs.(inf2'),dims=1)[1,:]
         end
-        # Scale by input generator magnitudes across ALL input generator blocks
-        input_weights = zeros(size(Zin.Z₁.Gs[1],2))
-        for g_in in Zin.Z₁.Gs
-            input_weights .+= sum(abs, g_in, dims=1)[1,:]
-        end
-        diff_weights .*= input_weights
+        # # Scale by input generator magnitudes across ALL input generator blocks
+        # input_weights = zeros(size(Zin.Z₁.Gs[1],2))
+        # for g_in in Zin.Z₁.Gs
+        #     input_weights .+= sum(abs, g_in, dims=1)[1,:]
+        # end
+        # diff_weights .*= input_weights
     else
         throw("Old heuristic no longer implemented")
     end

@@ -68,18 +68,22 @@ function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, Zin :: Zonotope; lower
             column_pos = size(influence_new[ZoutRef.owned_generators],2) - new_gens + 1
             # @info "Adding $new_gens new columns at position $column_pos to influence matrix of owned generator ID $(ZoutRef.generator_ids[ZoutRef.owned_generators])"
             # @info "Sizes of influence matrices: $([size(inf) for inf in Zin.influence])"
-            @inbounds for (idx, inf) in zip(indices, Zin.influence)
-                if idx != ZoutRef.owned_generators
-                    influence_new[idx] = inf
-                else
-                    influence_new[ZoutRef.owned_generators][:, 1:column_pos-1] .= inf
-                end
+            # @inbounds for (idx, inf) in zip(indices, Zin.influence)
+            #     if idx != ZoutRef.owned_generators
+            #         influence_new[idx] = inf
+            #     else
+            #         influence_new[ZoutRef.owned_generators][:, 1:column_pos-1] .= inf
+            #     end
+            # end
+            # Other influence matrices remain the same
+            if !isnothing(Zin.owned_generators) && Zin.owned_generators == attempt_find_index_position(Zin.generator_ids, ZoutRef.generator_ids[ZoutRef.owned_generators])
+                influence_new[ZoutRef.owned_generators][:, 1:column_pos-1] .= Zin.influence[Zin.owned_generators]
             end
             # @info "Size of owned influence matrix after copy: $(size(influence_new[ZoutRef.owned_generators]))"
             #influence_new[ZoutRef.owned_generators][:,column_pos:end] .= 0.0
             bounds_range = upper[crossing] .- lower[crossing]
             @inbounds for (idx, g) in enumerate(Zin.Gs)
-                influence_new[ZoutRef.owned_generators][:,column_pos:end] .= abs.(Zin.influence[idx]) * abs.((@view g[crossing,:]) ./ bounds_range)'
+                influence_new[ZoutRef.owned_generators][:,column_pos:end] .= Zin.influence[idx] * abs.((@view g[crossing,:]) ./ bounds_range)'
             end
             #influence_new[:,(size(Zin.influence,2)+1):end] .=  abs.(Zin.influence) * abs.(@view Zin.G[crossing,:])'
         else
