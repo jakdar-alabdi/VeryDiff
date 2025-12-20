@@ -10,8 +10,6 @@ function verify_network(
     split_heuristic;
     timeout=Inf)
     global FIRST_ROUND = true
-    global DEEPSPLITT_NEURON_SPLITTING
-    DEEPSPLITT_NEURON_SPLITTING = false
     verification_result = nothing
     # Timing
     reset_timer!(to)
@@ -68,7 +66,9 @@ function verify_network(
     @timeit to "Verify" begin
     @Debugger.propagation_init_hook(N, prop_state)
     #if single_threaded
-    verification_result = worker_function(work_queue, 1, prop_state,N,N1,N2, property_check, split_heuristic,num_threads;timeout=timeout)
+    verification_result, δ_bounds = worker_function(work_queue, 1, prop_state,N,N1,N2, property_check, split_heuristic,num_threads;timeout=timeout)
+    println("\nInitial δ-bound: $(δ_bounds[1])")
+    println("Final δ-bound: $(δ_bounds[2])")
     if verification_result == SAFE
         println("SAFE")
     elseif verification_result == UNSAFE
@@ -99,7 +99,7 @@ function verify_network(
     show(to)
     #common_state=nothing
     work_queue=nothing
-    return verification_result
+    return verification_result, δ_bounds
 end
 
 function worker_function(work_queue, threadid, prop_state,N,N1,N2,property_check, split_heuristic, num_threads;timeout=Inf)
@@ -110,7 +110,7 @@ function worker_function(work_queue, threadid, prop_state,N,N1,N2,property_check
         println("[Thread $(threadid)] Caught exception: $(e)")
         showerror(stdout, e, catch_backtrace())
         thread_result = UNKNOWN
-        return thread_result
+        return thread_result, (Inf64, Inf64)
     end
 end
 function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_threads, property_check, split_heuristic ;timeout=Inf)
@@ -132,6 +132,10 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
     #wait_time = sync_res.time
     total_work = 0.0
     first=true
+
+    initial_δ_bound = Inf64
+    final_δ_bound = Inf64
+    
     # @debug "[Thread $(threadid)] Initiating loop"
     @timeit to "Zonotope Loop" begin
     loop_time = @elapsed begin
@@ -139,6 +143,7 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
         input_dim=1
         try
             work_share, verification_task = pop!(work_queue)
+            final_δ_bound = verification_task.distance_bound
             Zin = to_diff_zono(verification_task)
             input_dim = size(Zin.Z₁.G,2)
             if k == 0
@@ -157,6 +162,9 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
                 bounds = zono_bounds(Zout.∂Z)
                 println(bounds[:,1])
                 println(bounds[:,2])
+                distance_bound = maximum(abs, bounds)
+                initial_δ_bound = distance_bound
+                final_δ_bound = distance_bound
                 first=false
             end
 
@@ -190,6 +198,8 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
             # nothing right now
         end
         if (time_ns()-starttime)/1e9 > timeout
+            _, next_task = VeryDiff.first(work_queue)
+            final_δ_bound = next_task.distance_bound
             println("\n\nTIMEOUT REACHED")
             println("UNKNOWN")
             should_terminate = true
@@ -220,7 +230,7 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
     end
     println("[Thread $(threadid)] Total splits: $(splits)")
     print("Processed $(total_zonos) zonotopes (Work Done: $(round(100*total_work;digits=1))%); Generated $(generated_zonos) ($(loop_time/k)s/loop)\n")
-    return is_verified
+    return is_verified, (initial_δ_bound, final_δ_bound)
 end
 
 function split_zono(d, verification_task :: VerificationTask, work_share, verification_status, distance_bound)

@@ -99,8 +99,11 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     lower₂ = @view bounds₂[:,1]
     upper₂ = @view bounds₂[:,2]
 
-    global DEEPSPLITT_NEURON_SPLITTING
-    if DEEPSPLITT_NEURON_SPLITTING
+    # global DEEPSPLITT_NEURON_SPLITTING
+    # global DEEPPSPLIT_HUERISTIC_ALTERNATIVE
+    # global DEEPPSPLIT_INPUT_SPLITTING
+
+    if DEEPSPLITT_NEURON_SPLITTING[]
         
         lowers = [lower₁, lower₂]
         uppers = [upper₁, upper₂]
@@ -108,7 +111,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
 
         for net in 1:2
             Z̃ = zonos[net]
-            if DEEPPSPLIT_HUERISTIC_ALTERNATIVE
+            if DEEPPSPLIT_HUERISTIC_ALTERNATIVE[]
                 lower = lowers[net]
                 upper = uppers[net]
                 crossings = P.instable_nodes[net]
@@ -116,11 +119,11 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     
                 push!(relative_impactes, Matrix{Float64}[])
                 
-                input_relative_impactes = P.input_relative_impactes[net]
-                bounds_width = upper - lower
-                c = 2 .* abs.(Z̃.G[:, 1:input_dim])
-                push!(input_relative_impactes, ifelse.(bounds_width .== 0.0, 0.0, c ./ bounds_width))
-    
+                if DEEPPSPLIT_INPUT_SPLITTING[]
+                    bounds_width = upper - lower
+                    push!(P.input_relative_impactes[net], ifelse.(bounds_width .== 0.0, 0.0, abs.(Z̃.G[:, 1:input_dim]) ./ bounds_width))
+                end
+
                 offset = 0
                 for l in (layer - 1):-1:1
                     num_instable = count(crossings[l])

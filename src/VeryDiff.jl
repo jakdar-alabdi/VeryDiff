@@ -14,6 +14,28 @@ USE_GUROBI = true
 
 USE_DIFFZONO = true
 
+"""if true, then computation corresponding to deepsplit neuron splitting are conducted during propagation"""
+DEEPSPLITT_NEURON_SPLITTING = Ref{Bool}(false)
+
+"""use the alternative deepsplit heuristic for neuron splitting"""
+DEEPPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(false)
+
+"""use the generators of the difference zonotope for the heuristic instead of the corresponding network's zonotope"""
+DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(false)
+
+"""incorporate deepsplit input splitting into deepsplit neuron splitting"""
+DEEPPSPLIT_INPUT_SPLITTING = Ref{Bool}(true)
+
+""""""
+INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
+
+function set_deepsplit_config(config::Tuple{Bool, Bool, Bool, Bool})
+    global DEEPSPLITT_NEURON_SPLITTING = Ref{Bool}(config[1])
+    global DEEPPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(config[2])
+    global DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(config[3])
+    global DEEPPSPLIT_INPUT_SPLITTING = Ref{Bool}(config[4])
+end
+
 # We have our own multithreadding so we don't want to use BLAS multithreadding
 function __init__()
     BLAS.set_num_threads(1)
@@ -58,9 +80,13 @@ include("../dev/NeuronSplitting.jl")
 include("../dev/DeepSplitHeuristic.jl")
 # include("../util.jl")
 
+include("../dev/experiments/acas.jl")
+include("../dev/experiments/mnist.jl")
+include("../dev/experiments/run.jl")
+
 export Network,GeminiNetwork,Layer,Dense,ReLU,WrappedReLU
 export parse_network
-export Zonotope, DiffZonotope, PropState, SplitNode, Branch
+export Zonotope, DiffZonotope, PropState, SplitNode, Branch, SpecificationEpsilon
 export zono_optimize, zono_bounds
 export verify_network
 export get_epsilon_property, epsilon_split_heuristic, get_epsilon_property_naive
@@ -69,5 +95,8 @@ export propagate_diff_layer
 export run_cmd
 export deepsplit_lp_search_epsilon
 export deepsplit_heuristic
+# export run_mnist_all
+# export run_acas_all
+export run_experiments
 
 end # module AlphaZono

@@ -62,6 +62,14 @@ mutable struct PropState
     end
 end
 
+struct SpecificationEpsilon
+    nn_file₁ :: String
+    nn_file₂ :: String
+    spec_file :: String
+    epsilon :: Float64
+    timeout :: Int64
+end
+
 struct PropConfig
 
 end
