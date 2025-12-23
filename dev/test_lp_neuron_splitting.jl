@@ -16,11 +16,11 @@ function run(nn_file₁, nn_file₂, spec_file, epsilon)
 
     for (bounds, _, _, _) in f
         println("\nExecuting DeepSplit LP-based Search")
-        runtime_deepsplit = @elapsed deepsplit_lp_search_epsilon(N₁, N₂, bounds, ϵ; timeout=20)
+        runtime_deepsplit = @elapsed deepsplit_lp_search_epsilon(N₁, N₂, bounds, ϵ; timeout=10)
         
         println("\nExecuting VeryDiff")
         VeryDiff.set_deepsplit_config((false, false, false, false))
-        runtime_verydif = @elapsed verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=5)
+        runtime_verydif = @elapsed verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=10)
 
         println("\nDeepSplit Time: $runtime_deepsplit")
         println("VeryDiff Time: $runtime_verydif")
@@ -33,7 +33,7 @@ acas_path = "$benchmarks_dir\\benchmarks\\acas-prune"
 # lhc_path = "$benchmarks_dir\\new_benchmarks\\lhc"
 # examples_path = "$sysimage_dir\\..\\test\\examples"
 
-benchmark_name = "mnist"
+# benchmark_name = "mnist"
 benchmark_name = "acas"
 
 VeryDiff.set_deepsplit_config((true, false, false, true))
@@ -47,18 +47,18 @@ end
 # ϵ = 1.0
 
 # nn_file₁ = "$mnist_path\\nets\\mnist_relu_3_100.onnx"
-nn_file₁ = "$acas_path\\nets\\ACASXU_run2a_3_9_batch_2000.onnx"
+nn_file₁ = "$acas_path\\nets\\ACASXU_run2a_5_9_batch_2000.onnx"
 # nn_file₁ = "$examples_path\\nets\\ACASXU_run2a_1_1_batch_2000.onnx"
 # nn_file₁ = "$lhc_path\\nets\\2_40-0.1.onnx"
 nn_file₁_name = basename(replace(nn_file₁, ".onnx" => ""))
 # nn_file₂ = "$mnist_path\\nets_pruned\\mnist_relu_3_100_pruned5.onnx"
-nn_file₂ = "$acas_path\\nets_pruned\\ACASXU_run2a_3_9_batch_2000_pruned5.onnx"
+nn_file₂ = "$acas_path\\nets_pruned\\ACASXU_run2a_5_9_batch_2000_pruned5.onnx"
 # nn_file₂ = replace(nn_file₁, "nets" => "nets_pruned", ".onnx" => "-0.1.onnx")
 # nn_file₂ = "$examples_path\\nets\\ACASXU_run2a_1_1_batch_2000_pruned5.onnx"
 nn_file₂_name = basename(replace(nn_file₂, ".onnx" => ""))
 
 # spec_file = "$mnist_path\\specs\\mnist_0_global_3.vnnlib"
-spec_file = "$acas_path\\specs\\prop_1.vnnlib"
+spec_file = "$acas_path\\specs\\prop_4.vnnlib"
 # spec_file = "$lhc_path\\specs\\sigma_1.0.vnnlib"
 # spec_file = "$examples_path\\specs\\prop_1.vnnlib"
 spec_name = replace(basename(spec_file), ".vnnlib" => "")
