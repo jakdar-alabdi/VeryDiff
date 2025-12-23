@@ -4,7 +4,7 @@ using LinearAlgebra
 
 using VNNLib.NNLoader: Network,Dense,ReLU,Layer
 
-import ..VeryDiff: NEW_HEURISTIC, to
+using VeryDiff
 
 include("Network.jl")
 include("SortedVector.jl")

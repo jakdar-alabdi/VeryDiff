@@ -8,9 +8,8 @@ function get_top1_property(;delta=zero(Float64),naive=false)
         dist=0.0
     end
     return (N1, N2, Zin, Zout, verification_status) -> begin
-        global FIRST_ROUND
         global TOP1_FOUND_CONCRETE_DELTA
-        if FIRST_ROUND
+        if VeryDiff.FIRST_ROUND[]
             TOP1_FOUND_CONCRETE_DELTA = false
         end
         if isnothing(verification_status)
@@ -71,7 +70,7 @@ function get_top1_property(;delta=zero(Float64),naive=false)
             # set_attribute(GRB_ENV[], "LogToConsole", 0)
             # set_attribute(GRB_ENV[], "OutputFlag", 0)
             # set_attribute(GRB_ENV[], "Method", 1)
-            if USE_GUROBI
+            if USE_GUROBI[]
                 model = Model(() -> Gurobi.Optimizer(GRB_ENV[]))
             else
                 model = Model(GLPK.Optimizer)
@@ -196,7 +195,7 @@ function get_top1_property(;delta=zero(Float64),naive=false)
                         threshold = Zout.Z₂.c[top_index]-Zout.Z₂.c[other_index]
                         # If the optimal value is < threshold, then the property is satisfied
                         # otherwise (optimal >= threshold) we may have found a counterexample
-                        if USE_GUROBI # we are using GUROBI -> set objective/bound thresholds
+                        if USE_GUROBI[] # we are using GUROBI -> set objective/bound thresholds
                             set_optimizer_attribute(model, "Cutoff", threshold-1e-6)
                         end
                         optimize!(model)
@@ -297,7 +296,7 @@ function top1_configure_split_heuristic(mode)
         #diff_weights ./= norm(diff_weights,2)
 
         #diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:].*sum(abs,((Zout.Z₁.G)*Zout.Z₁.influence'.-(Zout.Z₂.G)*Zout.Z₂.influence'),dims=1)[1,:]
-        if NEW_HEURISTIC
+        if VeryDiff.NEW_HEURISTIC[]
             diff_weights = (sum(abs,Zin.Z₁.G,dims=1)[1,:] .+ sum(abs,Zin.Z₂.G,dims=1)[1,:] ).*sum(abs,(abs.(Zout.Z₁.G)*abs.(Zout.Z₁.influence').+abs.(Zout.Z₂.G)*abs.(Zout.Z₂.influence')),dims=1)[1,:]
             #diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:] .* sum(abs, Zout.Z₁.G * Zout.Z₁.influence' .- Zout.Z₂.G * Zout.Z₂.influence', dims=1)[1,:]
             #diff_weights = sum(abs,(abs.(Zout.Z₁.G) .+ abs.(Zout.Z₂.G)) * (abs.(Zout.Z₁.influence') .+ abs.(Zout.Z₂.influence')),dims=1)[1,:]

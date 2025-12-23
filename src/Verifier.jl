@@ -10,54 +10,43 @@ function verify_network(
     split_heuristic;
     timeout=Inf,
     init_eps=0.0)
-    global FIRST_ROUND = true
+    global FIRST_ROUND[] = true
     verification_result = nothing
-    # Timing
-    reset_timer!(to)
-    @timeit to "Initialize" begin
-        # Prepare Zonotope Initialization
-        #@timeit to "Prep_Zono_Init" begin
-        input_dim = size(bounds,1)
-        low = @view bounds[:,1]
-        high = @view bounds[:,2]
-        mid = (high.+low) ./ 2
-        distance = mid .- low
-        input_dim = length(low)
-        #end
+    # Prepare Zonotope Initialization
+    input_dim = size(bounds,1)
+    low = @view bounds[:,1]
+    high = @view bounds[:,2]
+    mid = (high.+low) ./ 2
+    distance = mid .- low
+    input_dim = length(low)
 
-        # Initialize Zonotope
-        #@timeit to "Zono_Init" begin
-        non_zero_indices = findall((!).(iszero.(distance)))
-        distance = distance[non_zero_indices]
-        if init_eps > 0.0
-            if !all(init_eps .<= (2.0 .* distance))
-                println("ERROR: Initial epsilon too large for given bounds!")
-                println("Inital Epsilon: $(init_eps); Max Epsilon: $(2.0*minimum(distance))")
-                raise(ErrorException("Initial epsilon too large for given bounds!"))
-            end
-            distance .-= (init_eps/2)
-            distance1_secondary = fill(init_eps/2, input_dim)
-            distance2_secondary = fill(init_eps/2, input_dim)
-            mid1_secondary = zeros(Float64, input_dim)
-            mid2_secondary = zeros(Float64, input_dim)
-        else
-            println("Differential Zonotope initialized with zero perturbation.")
-            distance1_secondary = nothing
-            distance2_secondary = nothing
-            mid1_secondary = nothing
-            mid2_secondary = nothing
+    # Initialize Zonotope
+    non_zero_indices = findall((!).(iszero.(distance)))
+    distance = distance[non_zero_indices]
+    if init_eps > 0.0
+        if !all(init_eps .<= (2.0 .* distance))
+            println("ERROR: Initial epsilon too large for given bounds!")
+            println("Inital Epsilon: $(init_eps); Max Epsilon: $(2.0*minimum(distance))")
+            raise(ErrorException("Initial epsilon too large for given bounds!"))
         end
+        distance .-= (init_eps/2)
+        distance1_secondary = fill(init_eps/2, input_dim)
+        distance2_secondary = fill(init_eps/2, input_dim)
+        mid1_secondary = zeros(Float64, input_dim)
+        mid2_secondary = zeros(Float64, input_dim)
+    else
+        println("Differential Zonotope initialized with zero perturbation.")
+        distance1_secondary = nothing
+        distance2_secondary = nothing
+        mid1_secondary = nothing
+        mid2_secondary = nothing
     end
 
-    #@timeit to "Network_Init" begin
     N = GeminiNetwork(N1,N2)
     println("Network initialized.")
-    #end
 
     # Statistics
-    #@timeit to "Statistics_Init" begin
     total_zonos = 1
-    #end
 
     # Property
     # property_check = get_epsilon_property(epsilon;focus_dim=focus_dim)
@@ -82,26 +71,23 @@ function verify_network(
             distance2_secondary, mid2_secondary,
             nothing, Inf, 1.0 )
     )
-    @timeit to "Verify" begin
-        @Debugger.propagation_init_hook(N)
-        #if single_threaded
-        verification_result = worker_function(
-            work_queue,
-            1,
-            N, N1, N2,
-            property_check,
-            split_heuristic,
-            num_threads;
-            timeout=timeout)
-        if verification_result == SAFE
-            println("SAFE")
-        elseif verification_result == UNSAFE
-            println("UNSAFE")
-        else
-            println("UNKNOWN")
-        end
+    @Debugger.propagation_init_hook(N)
+    #if single_threaded
+    verification_result = worker_function(
+        work_queue,
+        1,
+        N, N1, N2,
+        property_check,
+        split_heuristic,
+        num_threads;
+        timeout=timeout)
+    if verification_result == SAFE
+        println("SAFE")
+    elseif verification_result == UNSAFE
+        println("UNSAFE")
+    else
+        println("UNKNOWN")
     end
-    show(to)
     #common_state=nothing
     work_queue=nothing
     return verification_result
@@ -130,7 +116,6 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
     do_not_split = false
     total_work = 0.0
     first=true
-    @timeit to "Zonotope Loop" begin
     loop_time = @elapsed begin
     while !should_terminate
         verification_task = pop!(work_queue)
@@ -144,9 +129,7 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         # @debug "Input Zono Z₁: $(Zin.Z₁)"
         # @debug "Input Zono Z₂: $(Zin.Z₂)"
         # @debug "Input Zono ∂Z: $(Zin.∂Z)"
-        @timeit to "Zonotope Propagate" begin
         prop_state = propagate!(N,prop_state)
-        end
         Zout = prop_state.zono_storage.zonotopes[end].zonotope
         if first
             println("Zono Bounds:")
@@ -155,11 +138,9 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
             println(bounds[:,2])
             first=false
         end
-        @timeit to "Property Check" begin
         prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout, verification_task.verification_status)
         # @debug "Distance bound: $distance_bound"
-        end
-        global FIRST_ROUND = false
+        global FIRST_ROUND[] = false
         if !prop_satisfied
             if !isnothing(cex)
                 @assert all(zono_bounds(Zin.Z₁)[:,1] .<= cex[1] .&& cex[1] .<= zono_bounds(Zin.Z₂)[:,2])
@@ -167,7 +148,6 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
                 should_terminate = true
                 is_verified = UNSAFE
             elseif !do_not_split
-                @timeit to "Compute Split" begin
                 splits += 1
                 split_d = split_heuristic(Zin,Zout,heuristics_info, verification_task)
                 Z1, Z2 = split_zono(split_d, verification_task,verification_status, distance_bound)
@@ -175,7 +155,6 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
                 push!(work_queue, Z1)
                 push!(work_queue, Z2)
                 generated_zonos+=2
-                end
             end
         else
             total_work += verification_task.work_share
@@ -207,7 +186,6 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         end
         reset_ps!(prop_state)
         #end
-    end
     end
     end
     empty!(work_queue)

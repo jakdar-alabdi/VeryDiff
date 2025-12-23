@@ -82,7 +82,7 @@ end
 function epsilon_split_heuristic(Zin,Zout,heuristics_info,verification_task)
     # distance_indices = verification_task.distance_indices
 
-    if NEW_HEURISTIC
+    if VeryDiff.NEW_HEURISTIC[]
         # diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:].*sum(abs,(abs.(Zout.Z₁.G)*abs.(Zout.Z₁.influence').+abs.(Zout.Z₂.G)*abs.(Zout.Z₂.influence')),dims=1)[1,:]
         diff_weights = zeros(size(Zin.Z₁.Gs[1],2))
         for (g1,inf1) in zip(Zout.Z₁.Gs,Zout.Z₁.influence)

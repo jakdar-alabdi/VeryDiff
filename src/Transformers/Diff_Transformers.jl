@@ -8,7 +8,6 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     # @debug "Propagating DiffDense Layer"
     Zin = inputs[1]
-    #@timeit to "DiffZonotope_GetZonotope" begin
     # Compute differential zonotope dimensions
     # TODO(steuber): Is there a more elegant way?
     # At the very least we could probably extract this into a function
@@ -28,7 +27,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense
     L1 = get_layer1(Ls)
     ∂L = get_diff_layer(Ls)
     L2 = get_layer2(Ls)
-    if USE_DIFFZONO
+    if VeryDiff.USE_DIFFZONO[]
         # @debug "IDs of Output Zonotope Generators: $(Zout.∂Z.generator_ids)"
         ∂indices = intersect_indices(Zout.∂Z.generator_ids, Zin.∂Z.generator_ids)
         for (i, g) in zip(∂indices, Zin.∂Z.Gs)
@@ -57,7 +56,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,ZeroD
     Zout = get_zonotope!(ZoutRef, size.(Zin.Z₁.Gs,2), size.(Zin.Z₂.Gs,2), convert(Vector{Int64},size.(Zin.∂Z.Gs,2)))
     L1 = get_layer1(Ls)
     L2 = get_layer2(Ls)
-    if USE_DIFFZONO
+    if VeryDiff.USE_DIFFZONO[]
         ∂indices = intersect_indices(Zout.∂Z.generator_ids, Zin.∂Z.generator_ids)
         # @assert length(union(Zout.∂Z.generator_ids,Zin.∂Z.generator_ids)) == length(Zout.∂Z.generator_ids) "Not all generators in ∂Z were processed during Dense propagation. Output IDs: $(Zout.∂Z.generator_ids), Processed IDs: $(Zin.∂Z.generator_ids)"
         for (i, g) in zip(∂indices, Zin.∂Z.Gs)
@@ -215,7 +214,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
     propagate_layer!(Zout.Z₁, L1, Zin.Z₁;lower=lower₁, upper=upper₁)
     propagate_layer!(Zout.Z₂, L2, Zin.Z₂;lower=lower₂, upper=upper₂)
 
-    if USE_DIFFZONO
+    if VeryDiff.USE_DIFFZONO[]
         dim = length(any_neg)
         â₁_pos = @simd_bool_expr dim (any_neg | pos_neg)
         a₁_pos = any_pos
@@ -230,7 +229,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{ReLU,ReLU,R
         Zout.∂Z.c .= 0.0
         selector = @simd_bool_expr dim (neg_neg | zero_diff)
         for g in Zout.∂Z.Gs
-            g[neg_neg, :] .= 0.0
+            g[selector, :] .= 0.0
         end
         
         # Assign Zin.Z₁ with a₁
@@ -293,8 +292,3 @@ function (N::GeminiNetwork)(Z :: DiffZonotope, P :: PropState)
     #println("Prop network")
     return foldl((Z,Ls) -> propagate_diff_layer(Ls,Z,P),zip(N.network1.layers,N.diff_network.layers,N.network2.layers),init=Z)
 end
-
-
-
-    
-

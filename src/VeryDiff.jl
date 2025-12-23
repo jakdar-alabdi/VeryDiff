@@ -6,9 +6,9 @@ using LinearAlgebra
 using VNNLib
 #using ThreadPinning
 
-NEW_HEURISTIC = true
+const NEW_HEURISTIC = Ref{Bool}(true)
 
-USE_DIFFZONO = true
+const USE_DIFFZONO = Ref{Bool}(true)
 
 function __init__()
     BLAS.set_num_threads(1)
@@ -16,10 +16,7 @@ end
 
 #pinthreads(:cores)
 
-FIRST_ROUND = true
-
-using TimerOutputs
-const to = TimerOutput()
+const FIRST_ROUND = Ref{Bool}(true)
 
 include("Util/simd_bool.jl")
 include("Debugger/Debugger.jl")

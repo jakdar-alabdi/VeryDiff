@@ -143,10 +143,10 @@ function run_cmd(args)
 
     if parsed_args["naive"]
         println("Using naive verification")
-        VeryDiff.USE_DIFFZONO = false
+        VeryDiff.USE_DIFFZONO[] = false
     else
         println("Using differential verification")
-        VeryDiff.USE_DIFFZONO = true
+        VeryDiff.USE_DIFFZONO[] = true
     end
 
     result = SAFE

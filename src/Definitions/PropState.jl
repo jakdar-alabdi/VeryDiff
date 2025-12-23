@@ -70,7 +70,7 @@ function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
     end
     influence1 = nothing
     influence2 = nothing
-    if NEW_HEURISTIC
+    if VeryDiff.NEW_HEURISTIC[]
         influence1 = Vector{Matrix{Float64}}()
         influence2 = Vector{Matrix{Float64}}()
         for g in z1_generators

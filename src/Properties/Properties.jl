@@ -12,17 +12,17 @@ using ..Debugger
 
 using ..Definitions
 
-USE_GUROBI = true
+const USE_GUROBI = Ref{Bool}(true)
 
-import ..VeryDiff: NEW_HEURISTIC
+using ..VeryDiff
 
 # We have our own multithreadding so we don't want to use BLAS multithreadding
 function __init__()
     BLAS.set_num_threads(1)
     if "VERYDIFF_NO_GUROBI" in keys(ENV)
-        global USE_GUROBI = false
+        global USE_GUROBI[] = false
     end
-    if USE_GUROBI
+    if USE_GUROBI[]
         GRB_ENV[] = Gurobi.Env()
         GRBsetintparam(GRB_ENV[], "OutputFlag", 0)
         GRBsetintparam(GRB_ENV[], "LogToConsole", 0)
