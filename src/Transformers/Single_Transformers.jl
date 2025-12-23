@@ -14,7 +14,7 @@ end
 
 function propagate_layer!(ZoutRef :: Zonotope, L :: Dense, Zin :: Zonotope)
     # Zout must have exactly the same ids as Zin
-    #@assert all(ZoutRef.generator_ids .== Zin.generator_ids) "Zonotope generator IDs do not match during Dense propagation!"
+    # @assert all(ZoutRef.generator_ids .== Zin.generator_ids) "Zonotope generator IDs do not match during Dense propagation!"
     for i in 1:length(Zin.Gs)
         mul!(ZoutRef.Gs[i], L.W, Zin.Gs[i])
     end
@@ -61,26 +61,19 @@ function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, Zin :: Zonotope; lower
     if VeryDiff.NEW_HEURISTIC[]
         influence_new = ZoutRef.influence
         column_pos = size(influence_new[ZoutRef.owned_generators],2) - new_gens + 1
-        # @info "Adding $new_gens new columns at position $column_pos to influence matrix of owned generator ID $(ZoutRef.generator_ids[ZoutRef.owned_generators])"
-        # @info "Sizes of influence matrices: $([size(inf) for inf in Zin.influence])"
-        # @inbounds for (idx, inf) in zip(indices, Zin.influence)
-        #     if idx != ZoutRef.owned_generators
-        #         influence_new[idx] = inf
-        #     else
-        #         influence_new[ZoutRef.owned_generators][:, 1:column_pos-1] .= inf
-        #     end
-        # end
+        # @debug "Adding $new_gens new columns at position $column_pos to influence matrix of owned generator ID $(ZoutRef.generator_ids[ZoutRef.owned_generators])"
+        # @debug "Sizes of influence matrices: $([size(inf) for inf in Zin.influence])"
         # Other influence matrices remain the same
+        # Only need to update the owned generator influence matrix
         if !isnothing(Zin.owned_generators) && Zin.owned_generators == attempt_find_index_position(Zin.generator_ids, ZoutRef.generator_ids[ZoutRef.owned_generators])
             influence_new[ZoutRef.owned_generators][:, 1:column_pos-1] .= Zin.influence[Zin.owned_generators]
         end
-        # @info "Size of owned influence matrix after copy: $(size(influence_new[ZoutRef.owned_generators]))"
+        # @debug "Size of owned influence matrix after copy: $(size(influence_new[ZoutRef.owned_generators]))"
         influence_new[ZoutRef.owned_generators][:,column_pos:end] .= 0.0
         bounds_range = upper[crossing] .- lower[crossing]
         @inbounds for (idx, g) in enumerate(Zin.Gs)
             influence_new[ZoutRef.owned_generators][:,column_pos:end] .+= Zin.influence[idx] * abs.((@view g[crossing,:]) ./ bounds_range)'
         end
-        #influence_new[:,(size(Zin.influence,2)+1):end] .=  abs.(Zin.influence) * abs.(@view Zin.G[crossing,:])'
     else
         influence_new = Zin.influence
     end
@@ -88,10 +81,6 @@ function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, Zin :: Zonotope; lower
     num_new_gens = count(crossing)
 
     updateGeneratorsMul!(ZoutRef.Gs, indices, Zin.Gs, λ, :)
-    # for (idx, g) in zip(indices, Zin.Gs)
-    #     cols = size(g,2)
-    #     ZoutRef.Gs[idx][:, 1:cols] .= λ .* g
-    # end
     ZoutRef.Gs[ZoutRef.owned_generators][:,(end-num_new_gens+1):end] .= 0.0
     generator_offset = size(ZoutRef.Gs[ZoutRef.owned_generators],2) - num_new_gens
     A = ZoutRef.Gs[ZoutRef.owned_generators]

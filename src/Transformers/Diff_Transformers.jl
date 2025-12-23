@@ -44,10 +44,6 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense
     end
     propagate_layer!(Zout.Z₁, L1, Zin.Z₁)
     propagate_layer!(Zout.Z₂, L2, Zin.Z₂)
-    # Print Bounds:
-    # @info "Z₁ Bounds: $(zono_bounds(Zout.Z₁))"
-    # @info "Z₂ Bounds: $(zono_bounds(Zout.Z₂))"
-    # @info "∂Z Bounds: $(zono_bounds(Zout.∂Z))"
 end
 
 function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,ZeroDense,Dense}, inputs :: Vector{DiffZonotope}; bounds_cache :: Union{Nothing,BoundsCache}=nothing)
@@ -66,18 +62,7 @@ function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,ZeroD
     end
     propagate_layer!(Zout.Z₁, L1, Zin.Z₁)
     propagate_layer!(Zout.Z₂, L2, Zin.Z₂)
-    # Print Bounds:
-    # @info "Z₁ Bounds: $(zono_bounds(Zout.Z₁))"
-    # @info "Z₂ Bounds: $(zono_bounds(Zout.Z₂))"
-    # @info "∂Z Bounds: $(zono_bounds(Zout.∂Z))"
 end
-
-# TODO(steuber): Remove unnecessary stuff from loops, e.g.:
-# A = Zout.∂Z.Gs[Zout.∂Z.owned_generators]
-# @inbounds for (i,row) in enumerate(findall(selector))
-#     A[row, generator_offset] = abs(μ[i])
-#     generator_offset += 1
-# end
 
 function range(lower, upper)
     return (upper .- lower)

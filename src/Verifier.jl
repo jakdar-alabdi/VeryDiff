@@ -48,21 +48,9 @@ function verify_network(
     # Statistics
     total_zonos = 1
 
-    # Property
-    # property_check = get_epsilon_property(epsilon;focus_dim=focus_dim)
-    # split_heuristic = epsilon_split_heuristic
-    # property_check = get_top1_property(1.0)
-    # split_heuristic = top1_configure_split_heuristic(3) #epsilon_split_heuristic
-
     #Config
     num_threads = Threads.nthreads()
     println("Running with $(num_threads) threads")
-    #single_threaded = num_threads == 1
-    #if single_threaded
-    #    common_state = MultiThreaddedQueue(1)
-    #else
-    #    common_state = MultiThreaddedQueue(num_threads)
-    #end
     work_queue = Queue()
     push!(work_queue,
         VerificationTask(
@@ -72,7 +60,6 @@ function verify_network(
             nothing, Inf, 1.0 )
     )
     @Debugger.propagation_init_hook(N)
-    #if single_threaded
     verification_result = worker_function(
         work_queue,
         1,
@@ -88,7 +75,6 @@ function verify_network(
     else
         println("UNKNOWN")
     end
-    #common_state=nothing
     work_queue=nothing
     return verification_result
 end
@@ -125,10 +111,6 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         end
         total_zonos+=1
         Zin = prop_state.zono_storage.zonotopes[1].zonotope
-        # @debug "Problem Bounds: $(zono_bounds(Zin.Z₁))"
-        # @debug "Input Zono Z₁: $(Zin.Z₁)"
-        # @debug "Input Zono Z₂: $(Zin.Z₂)"
-        # @debug "Input Zono ∂Z: $(Zin.∂Z)"
         prop_state = propagate!(N,prop_state)
         Zout = prop_state.zono_storage.zonotopes[end].zonotope
         if first
@@ -139,7 +121,6 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
             first=false
         end
         prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout, verification_task.verification_status)
-        # @debug "Distance bound: $distance_bound"
         global FIRST_ROUND[] = false
         if !prop_satisfied
             if !isnothing(cex)
@@ -170,22 +151,8 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         if k%100 == 0
             top_task = peek_queue(work_queue)
             println("[Thread $(threadid)] Processed $(total_zonos) (Work Done: $(round(100*total_work;digits=5))%; Expected: $(total_zonos/total_work); Bound: $(top_task.distance_bound))")
-            # If debugging: Compute sum of all interval sizes in bounds cache of current task:
-            # Debug
-            # if false
-            #     total_interval_size = 0.0
-            #     for (layer_idx, bounds_cache) in prop_state.task_bounds.bounds_cache
-            #         if bounds_cache.initialized
-            #             total_interval_size += sum(bounds_cache.upper₁ .- bounds_cache.lower₁)
-            #             total_interval_size += sum(bounds_cache.upper₂ .- bounds_cache.lower₂)
-            #             total_interval_size += sum(bounds_cache.∂upper .- bounds_cache.∂lower)
-            #         end
-            #     end
-            #     println("[Thread $(threadid)] Total interval size in bounds cache: $(total_interval_size)")
-            # end
         end
         reset_ps!(prop_state)
-        #end
     end
     end
     empty!(work_queue)

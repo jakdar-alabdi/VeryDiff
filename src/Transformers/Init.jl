@@ -45,9 +45,7 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ReLU, ReLU, ReLU},
     new_gen₁ = count(bounds₁[:,1] .< 0.0 .&& bounds₁[:,2] .> 0.0)
     new_gen₂ = count(bounds₂[:,1] .< 0.0 .&& bounds₂[:,2] .> 0.0)
     ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
-    # @info "Initiating Z₁ ($new_gen₁ new generators)"
     Z₁ = init_relu_zonotope(PS, input_zono_cache, input_zono.Z₁, new_gen₁, diff_layer.layer_idx)
-    # @info "Initiating Z₂ ($new_gen₂ new generators)"
     Z₂ = init_relu_zonotope(PS, input_zono_cache, input_zono.Z₂, new_gen₂, diff_layer.layer_idx)
     generators_d = Matrix{Float64}[]
     # Three way merge of generators: All generators from ∂Z + all from new Z₁ + all from new Z₂
@@ -57,19 +55,16 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ReLU, ReLU, ReLU},
     if diff_layer.layer_idx == input_zono_cache.first_usage && !isnothing(input_zono.∂Z.owned_generators)
         owned_generator_id = input_zono.∂Z.generator_ids[input_zono.∂Z.owned_generators]
     end
-    # @info "Initiating ∂Z ($∂new_gen new generators)"
     # Now iterate over generator ids and figure out where the generators come from
     # Prefer Z₁ and Z₂ over ∂Z when there are overlaps because those might have new generators
     for gid in generator_ids
         if gid in Z₂.generator_ids
             idx = find_index_position(Z₂.generator_ids, gid)
             new_g = zeros(size(Z₂.Gs[idx],1), size(Z₂.Gs[idx],2))
-            # @info "Generator ID $gid: $(size(new_g,2)) columns (from Z₂)"
             push!(generators_d, new_g)
         elseif gid in Z₁.generator_ids
             idx = find_index_position(Z₁.generator_ids, gid)
             new_g = zeros(size(Z₁.Gs[idx],1), size(Z₁.Gs[idx],2))
-            # @info "Generator ID $gid: $(size(new_g,2)) columns (from Z₁)"
             push!(generators_d, new_g)
         else
             idx = find_index_position(input_zono.∂Z.generator_ids, gid)
@@ -78,7 +73,6 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ReLU, ReLU, ReLU},
                 columns += ∂new_gen
             end
             new_g = zeros(size(input_zono.∂Z.Gs[idx],1), columns)
-            # @info "Generator ID $gid: $(size(new_g,2)) columns (from ∂Z)"
             push!(generators_d, new_g)
         end
     end

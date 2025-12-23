@@ -79,11 +79,8 @@ end
 
 
 
-function epsilon_split_heuristic(Zin,Zout,heuristics_info,verification_task)
-    # distance_indices = verification_task.distance_indices
-
+function epsilon_split_heuristic(Zin,Zout,_heuristics_info,_verification_task)
     if VeryDiff.NEW_HEURISTIC[]
-        # diff_weights = sum(abs,Zin.Z₁.G,dims=1)[1,:].*sum(abs,(abs.(Zout.Z₁.G)*abs.(Zout.Z₁.influence').+abs.(Zout.Z₂.G)*abs.(Zout.Z₂.influence')),dims=1)[1,:]
         diff_weights = zeros(size(Zin.Z₁.Gs[1],2))
         for (g1,inf1) in zip(Zout.Z₁.Gs,Zout.Z₁.influence)
             diff_weights .+= sum(abs, abs.(g1) * abs.(inf1'),dims=1)[1,:]
@@ -91,21 +88,15 @@ function epsilon_split_heuristic(Zin,Zout,heuristics_info,verification_task)
         for (g2,inf2) in zip(Zout.Z₂.Gs,Zout.Z₂.influence)
             diff_weights .+= sum(abs,abs.(g2) * abs.(inf2'),dims=1)[1,:]
         end
-        # # Scale by input generator magnitudes across ALL input generator blocks
-        # input_weights = zeros(size(Zin.Z₁.Gs[1],2))
-        # for g_in in Zin.Z₁.Gs
-        #     input_weights .+= sum(abs, g_in, dims=1)[1,:]
-        # end
-        # diff_weights .*= input_weights
     else
         throw("Old heuristic no longer implemented")
     end
-    #@debug diff_weights
+    # @debug diff_weights
     # @debug length(Zout.Z₁.influence)
     # @debug Zout.Z₁.influence[1][1,:]
     # @debug Zout.Z₁.influence[2][1,:]
     # Output Zout.Z₁.influence[2][1,:] with two digits after decimal point
-    #@debug round.(Zout.Z₁.influence[2][1,1:20],digits=3)
+    # @debug round.(Zout.Z₁.influence[2][1,1:20],digits=3)
 
     d = argmax(
         # sum(abs,Zin.Z₁.G,dims=1)[1,:].*
@@ -114,7 +105,5 @@ function epsilon_split_heuristic(Zin,Zout,heuristics_info,verification_task)
     )[1]
 
     #@debug "Selected: $d"
-    
-    #return distance_indices[d]
     return d
 end
