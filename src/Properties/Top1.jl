@@ -1,4 +1,4 @@
-TOP1_FOUND_CONCRETE_DELTA = false
+const TOP1_FOUND_CONCRETE_DELTA = Ref{Bool}(false)
 
 function get_top1_property(;delta=zero(Float64),naive=false)
     if !iszero(delta)
@@ -10,7 +10,7 @@ function get_top1_property(;delta=zero(Float64),naive=false)
     return (N1, N2, Zin, Zout, verification_status) -> begin
         global TOP1_FOUND_CONCRETE_DELTA
         if VeryDiff.FIRST_ROUND[]
-            TOP1_FOUND_CONCRETE_DELTA = false
+            TOP1_FOUND_CONCRETE_DELTA[] = false
         end
         if isnothing(verification_status)
             verification_status = Dict{Tuple{Int,Int},Bool}()
@@ -156,14 +156,14 @@ function get_top1_property(;delta=zero(Float64),naive=false)
                 end
             else
                 
-                if !iszero(delta) && !TOP1_FOUND_CONCRETE_DELTA
+                if !iszero(delta) && !TOP1_FOUND_CONCRETE_DELTA[]
                     input = Zin.Z₁.G*value.(x[1:input_dim])+Zin.Z₁.c
                     res1 = N1(input)
                     argmax_N1 = argmax(res1)
                     softmax_N1 = exp.(res1)/sum(exp.(res1))
                     if softmax_N1[argmax_N1] >= delta
                         println("[TOP-1] required confidence ($(softmax_N1[argmax_N1])≥$delta) is feasible for index $argmax_N1")
-                        TOP1_FOUND_CONCRETE_DELTA=true
+                        TOP1_FOUND_CONCRETE_DELTA[]=true
                     else
                         #println("[TOP-1] did not find required confidence yet.")
                     end

@@ -7,7 +7,7 @@ using JuMP
 using Gurobi
 
 Random.seed!(1234);
-VeryDiff.NEW_HEURISTIC = false
+VeryDiff.NEW_HEURISTIC[] = false
 
 GRB_ENV = Gurobi.Env()
 GRBsetintparam(GRB_ENV, "OutputFlag", 0)
