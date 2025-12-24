@@ -32,12 +32,19 @@ function save_results(out_dir::String, spec::SpecificationEpsilon, status::VeryD
             end
         end
     end
+
+    original_stdout = stdout
+    original_stderr = stderr
     open(out_dir, "a") do c
-        redirect_stdout(c) do
-            redirect_stderr(c) do
-                println("$net_name, $spec_name, $status, $runtime, $num_propagations, $num_input_splits, $num_neuron_splits, $(δ_bounds[1]), $(δ_bounds[2])")
-            end
-        end
+        redirect_stdout(c)
+        redirect_stderr(c)
+        flush(stdout)
+        flush(stderr)
+        println("$net_name, $spec_name, $status, $runtime, $num_propagations, $num_input_splits, $num_neuron_splits, $(δ_bounds[1]), $(δ_bounds[2])")
+        flush(stdout)
+        flush(stderr)
+        redirect_stdout(original_stdout)
+        redirect_stderr(original_stderr)
     end
 end
 
@@ -91,8 +98,8 @@ function run_experiments()
     # run_acas_all(deepsplit((true, false, true, true)), "DeepSplit-Alt-Input-DiffZono")
 
     println("Running mnist all...")
-    println("\nRunning on VeryDiff")
-    run_mnist_all(verydiff, "VeryDiff")
+    # println("\nRunning on VeryDiff")
+    # run_mnist_all(verydiff, "VeryDiff")
     println("\nRunning on DeepSplit-Base")
     run_mnist_all(deepsplit((true, false, false, false)), "DeepSplit-Base")
     println("\nRunning on DeepSplit-Alt")

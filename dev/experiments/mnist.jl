@@ -32,12 +32,20 @@ function _run_mnist_all(specs::Vector{SpecificationEpsilon}, log_dir::String, ru
         spec_file_name = replace(basename(spec_file), ".vnnlib" => "")
         log_file_name = joinpath(out_dir, "$spec_file_name.log")
         csv_file_name = joinpath(log_dir, run_name, "mnist-$epsilon", "results.csv")
+        
+        original_stdout = stdout
+        original_stderr = stderr
         open(log_file_name, "w") do f
-            redirect_stdout(f) do
-                redirect_stderr(f) do
-                    eval_func(spec, csv_file_name)
-                end
-            end
+            redirect_stdout(f)
+            redirect_stderr(f)
+            flush(stdout)
+            flush(stderr)
+            eval_func(spec, csv_file_name)
+            flush(stdout)
+            flush(stderr)
+            GC.gc()
+            redirect_stdout(original_stdout)
+            redirect_stderr(original_stderr)
         end
     end
 end
