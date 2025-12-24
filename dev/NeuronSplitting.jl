@@ -148,7 +148,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
 
                     if any(task.branch.undetermined)
                         @timeit to "Compute Split" begin
-                            split_candidate = split_heuristic(Zout, prop_state)
+                            split_candidate = split_heuristic(Zout, prop_state, task.distance_indices)
                             distance_bound = min(distance_bound, task.distance_bound)
                             task₁, task₂ = split_node(split_candidate, task, work_share, distance_bound)
                             push!(queue, task₁)

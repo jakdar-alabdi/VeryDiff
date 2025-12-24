@@ -31,12 +31,12 @@ benchmarks_dir = "$sysimage_dir\\..\\..\\verydiff-experiments"
 # mnist_path = "$benchmarks_dir\\benchmarks\\mnist-prune"
 acas_path = "$benchmarks_dir\\benchmarks\\acas-prune"
 # lhc_path = "$benchmarks_dir\\new_benchmarks\\lhc"
-# examples_path = "$sysimage_dir\\..\\test\\examples"
+examples_path = "$sysimage_dir\\..\\test\\examples"
 
 # benchmark_name = "mnist"
 benchmark_name = "acas"
 
-VeryDiff.set_deepsplit_config((true, false, false, true))
+VeryDiff.set_deepsplit_config((true, true, false, true))
 if VeryDiff.DEEPPSPLIT_HUERISTIC_ALTERNATIVE[]
     log_dir = "$sysimage_dir\\testing\\DeepSplit-Alt"
 else
@@ -47,20 +47,20 @@ end
 # ϵ = 1.0
 
 # nn_file₁ = "$mnist_path\\nets\\mnist_relu_3_100.onnx"
-nn_file₁ = "$acas_path\\nets\\ACASXU_run2a_5_9_batch_2000.onnx"
-# nn_file₁ = "$examples_path\\nets\\ACASXU_run2a_1_1_batch_2000.onnx"
+# nn_file₁ = "$acas_path\\nets\\ACASXU_run2a_5_9_batch_2000.onnx"
+nn_file₁ = "$examples_path\\nets\\ACASXU_run2a_1_1_batch_2000.onnx"
 # nn_file₁ = "$lhc_path\\nets\\2_40-0.1.onnx"
 nn_file₁_name = basename(replace(nn_file₁, ".onnx" => ""))
 # nn_file₂ = "$mnist_path\\nets_pruned\\mnist_relu_3_100_pruned5.onnx"
-nn_file₂ = "$acas_path\\nets_pruned\\ACASXU_run2a_5_9_batch_2000_pruned5.onnx"
+# nn_file₂ = "$acas_path\\nets_pruned\\ACASXU_run2a_5_9_batch_2000_pruned5.onnx"
 # nn_file₂ = replace(nn_file₁, "nets" => "nets_pruned", ".onnx" => "-0.1.onnx")
-# nn_file₂ = "$examples_path\\nets\\ACASXU_run2a_1_1_batch_2000_pruned5.onnx"
+nn_file₂ = "$examples_path\\nets\\ACASXU_run2a_1_1_batch_2000_pruned5.onnx"
 nn_file₂_name = basename(replace(nn_file₂, ".onnx" => ""))
 
 # spec_file = "$mnist_path\\specs\\mnist_0_global_3.vnnlib"
-spec_file = "$acas_path\\specs\\prop_4.vnnlib"
+# spec_file = "$acas_path\\specs\\prop_4.vnnlib"
 # spec_file = "$lhc_path\\specs\\sigma_1.0.vnnlib"
-# spec_file = "$examples_path\\specs\\prop_1.vnnlib"
+spec_file = "$examples_path\\specs\\prop_1.vnnlib"
 spec_name = replace(basename(spec_file), ".vnnlib" => "")
 
 log_dir = joinpath(log_dir, "$benchmark_name-$ϵ", nn_file₂_name)

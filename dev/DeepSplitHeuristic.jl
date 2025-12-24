@@ -1,5 +1,5 @@
-function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState)
-    input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
+function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int})
+    input_dim = size(distance_indices, 1)
     
     max_node = SplitNode(-1, -1, -1, -Inf64)
     for net in 1:2
@@ -54,10 +54,10 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState)
         end
 
         if DEEPPSPLIT_INPUT_SPLITTING[]
-            n = argmax(s_input)
-            # if max_node.layer != 0 || s_input[n] > max_node.score
-            if s_input[n] > max_node.score
-                max_node = SplitNode(0, 0, n, s_input[n])
+            d = argmax(s_input)
+            # if max_node.layer != 0 || s_input[d] > max_node.score
+            if s_input[d] > max_node.score
+                max_node = SplitNode(0, 0, distance_indices[d], s_input[d])
             end
         end
     end
@@ -65,8 +65,8 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState)
     return max_node
 end
 
-function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState)
-    input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
+function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int})
+    input_dim = size(distance_indices, 1)
 
     max_node = SplitNode(0, 0, 0, -Inf64)
     for net in 1:2
@@ -107,10 +107,10 @@ function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropSta
         end
 
         if DEEPPSPLIT_INPUT_SPLITTING[]
-            n = argmax(s_input)
+            d = argmax(s_input)
             # if max_node.layer != 0 || s_input[n] > max_node.score
-            if s_input[n] > max_node.score
-                max_node = SplitNode(net, 0, n, s_input[n])
+            if s_input[d] > max_node.score
+                max_node = SplitNode(net, 0, distance_indices[d], s_input[d])
             end
         end
     end
