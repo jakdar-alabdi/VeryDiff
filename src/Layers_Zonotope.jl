@@ -31,7 +31,7 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
     if isnothing(bounds)
         bounds = zono_bounds(Z)
 
-        if DEEPSPLITT_NEURON_SPLITTING[]
+        if DEEPSPLIT_NEURON_SPLITTING[]
             # Get split nodes corresponding to this network and this layer
             # layer_split_nodes = filter(node -> node.network == network && node.layer == layer, P.split_nodes)
             indices_mask = map(node -> node.network == network && node.layer == layer, P.split_nodes)
@@ -59,7 +59,7 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
     ĉ = λ .* Z.c .+ crossing .* γ
     end
 
-    if DEEPSPLITT_NEURON_SPLITTING[]
+    if DEEPSPLIT_NEURON_SPLITTING[]
         push!(P.instable_nodes[network], crossing)
     end
     
