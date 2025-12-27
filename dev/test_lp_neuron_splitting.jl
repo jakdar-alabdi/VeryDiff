@@ -18,12 +18,12 @@ function run(nn_file₁, nn_file₂, spec_file, epsilon)
         println("\nExecuting DeepSplit LP-based Search")
         runtime_deepsplit = @elapsed deepsplit_lp_search_epsilon(N₁, N₂, bounds, ϵ; timeout=10)
         
-        println("\nExecuting VeryDiff")
-        VeryDiff.set_deepsplit_config((false, false, false, false))
-        runtime_verydif = @elapsed verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=10)
+        # println("\nExecuting VeryDiff")
+        # VeryDiff.set_deepsplit_config((false, false, false, false))
+        # runtime_verydif = @elapsed verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=10)
 
         println("\nDeepSplit Time: $runtime_deepsplit")
-        println("VeryDiff Time: $runtime_verydif")
+        # println("VeryDiff Time: $runtime_verydif")
     end
 end
 
@@ -36,8 +36,8 @@ examples_path = "$sysimage_dir\\..\\test\\examples"
 # benchmark_name = "mnist"
 benchmark_name = "acas"
 
-VeryDiff.set_deepsplit_config((true, true, false, true))
-if VeryDiff.DEEPPSPLIT_HUERISTIC_ALTERNATIVE[]
+VeryDiff.set_deepsplit_config((true, false, false, true); mode=VeryDiff.SignedBiased)
+if VeryDiff.DEEPSPLIT_HUERISTIC_ALTERNATIVE[]
     log_dir = "$sysimage_dir\\testing\\DeepSplit-Alt"
 else
     log_dir = "$sysimage_dir\\testing\\DeepSplit-Base"

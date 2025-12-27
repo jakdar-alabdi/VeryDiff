@@ -31,13 +31,35 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
                 num_instable₂ = count(crossing₂)
 
                 ϵ = @view Z₂.G[:, end - offset₂ - num_instable₁ + 1 : end - offset₂]
-                α = ifelse.(crossing₂, ifelse.(ϵ .>= 0, ϵ ./ upper₂, ϵ ./ lower₂), 0.0)
+
+                α = ifelse.(crossing₂, begin
+                    if DEEPSPLIT_HEURISTIC_MODE[] == UnsignedBiased
+                        ifelse.(ϵ .>= 0, ϵ ./ upper₂, ϵ ./ lower₂)
+                    elseif DEEPSPLIT_HEURISTIC_MODE[] == UnsignedUnbiased
+                        # abs.(ϵ) ./ sum(abs, Z₂.G, dims=2)
+                        abs.(ϵ) ./ (upper₂ - Z₂.c)
+                    else
+                        # Transform Z(x) for x ∈ [-1, 1] to obtain Ẑ(y) for y ∈ [0, 1] such that <Z> = <Ẑ>
+                        # Find a one-to-one map between [0, 1] and [-1, 1]
+                        # For example f: [0, 1] → [-1, 1], x ↦ 2x - 1
+                        # For hihger dims f: [0, 1]ⁿ → [-1, 1]ⁿ, x ↦ 2x - e where e = (1,...,1)ᵀ
+                        # z(x) = gᵀx + c ⇒ z(f(x)) = gᵀf(x) + c = gᵀ(2x - e) + c = 2gᵀx - ∑ gᵢ + c
+                        d_lower = sum(x -> ifelse(x < 0.0, x, 0.0), Z₂.G, dims=2)
+                        d_upper = sum(x -> ifelse(x > 0.0, x, 0.0), Z₂.G, dims=2)
+                        if DEEPSPLIT_HEURISTIC_MODE[] == SignedBiased
+                            d_lower += Z₂.c
+                            d_upper += Z₂.c
+                        end
+                        2 * ifelse.(ϵ .>= 0, ϵ ./ d_upper, ϵ ./ d_lower)
+                    end
+                end, 0.0)
+
                 s[l₁][crossing₁] .+= sum(α .* s[l₂], dims=1)[:]
 
                 offset₂ += num_instable₂
             end
 
-            if DEEPPSPLIT_INPUT_SPLITTING[]
+            if DEEPSPLIT_INPUT_SPLITTING[]
                 bounds_width = (upper₁ - lower₁)[crossing₁]
                 # c = 2 .* abs.(Z₁.G[crossing₁, 1:input_dim])
                 # α =  (bounds_width_input ./ 2) .* (c ./ bounds_width)
@@ -53,7 +75,7 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
             offset₁ += num_instable₁
         end
 
-        if DEEPPSPLIT_INPUT_SPLITTING[]
+        if DEEPSPLIT_INPUT_SPLITTING[]
             d = argmax(s_input)
             # if max_node.layer != 0 || s_input[d] > max_node.score
             if s_input[d] > max_node.score
@@ -92,7 +114,7 @@ function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropSta
                 s[l₁][crossing₁] .+= sum(α .* s[l₂], dims=1)[:]
             end
 
-            if DEEPPSPLIT_INPUT_SPLITTING[]
+            if DEEPSPLIT_INPUT_SPLITTING[]
                 # α = (bounds_width_input ./ 2) .* input_relative_impactes[l₁][crossing₁, :]
                 α = @view input_relative_impactes[l₁][crossing₁, :]
                 s_input .+= sum(α .* s[l₁][crossing₁] .* INDIRECT_INPUT_MULTIPLIER[], dims=1)[:]
@@ -106,7 +128,7 @@ function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropSta
             offset += num_instable
         end
 
-        if DEEPPSPLIT_INPUT_SPLITTING[]
+        if DEEPSPLIT_INPUT_SPLITTING[]
             d = argmax(s_input)
             # if max_node.layer != 0 || s_input[n] > max_node.score
             if s_input[d] > max_node.score

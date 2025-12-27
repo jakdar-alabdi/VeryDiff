@@ -21,7 +21,7 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
             initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, Inf64, Branch(trues(1, 2)))
 
             split_heuristic = deepsplit_heuristic
-            if DEEPPSPLIT_HUERISTIC_ALTERNATIVE[]
+            if DEEPSPLIT_HUERISTIC_ALTERNATIVE[]
                 split_heuristic = deepsplit_heuristic_alternative
             end
             

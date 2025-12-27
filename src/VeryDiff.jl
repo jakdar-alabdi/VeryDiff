@@ -15,25 +15,29 @@ USE_GUROBI = true
 USE_DIFFZONO = true
 
 """if true, then computation corresponding to deepsplit neuron splitting are conducted during propagation"""
-DEEPSPLITT_NEURON_SPLITTING = Ref{Bool}(false)
+DEEPSPLIT_NEURON_SPLITTING = Ref{Bool}(false)
 
 """use the alternative deepsplit heuristic for neuron splitting"""
-DEEPPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(false)
+DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(false)
 
 """use the generators of the difference zonotope for the heuristic instead of the corresponding network's zonotope"""
 DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(false)
 
 """incorporate deepsplit input splitting into deepsplit neuron splitting"""
-DEEPPSPLIT_INPUT_SPLITTING = Ref{Bool}(true)
+DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(true)
 
 """"""
 INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
 
-function set_deepsplit_config(config::Tuple{Bool, Bool, Bool, Bool})
-    global DEEPSPLITT_NEURON_SPLITTING = Ref{Bool}(config[1])
-    global DEEPPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(config[2])
+@enum DeepSplitHeuristicMode UnsignedBiased UnsignedUnbiased SignedBiased SignedUnbiased
+DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(UnsignedBiased)
+
+function set_deepsplit_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=UnsignedBiased)
+    global DEEPSPLIT_NEURON_SPLITTING = Ref{Bool}(config[1])
+    global DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(config[2])
     global DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(config[3])
-    global DEEPPSPLIT_INPUT_SPLITTING = Ref{Bool}(config[4])
+    global DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(config[4])
+    global DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(mode)
 end
 
 # We have our own multithreadding so we don't want to use BLAS multithreadding
