@@ -5,7 +5,8 @@ benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 mnist_specs = SpecificationEpsilon[]
 
 # bench_name = "mnist"
-csv_dir = "$cur_dir/mnist-prune.csv"
+csv_dir = "$cur_dir/mnist-prune-verydiff.csv"
+# csv_dir = "$cur_dir/mnist-prune.csv"
 # csv_dir = "$cur_dir\\mnist-prune.csv"
 
 open(csv_dir, "r") do f
