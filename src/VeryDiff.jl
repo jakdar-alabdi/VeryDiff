@@ -14,21 +14,22 @@ USE_GUROBI = true
 
 USE_DIFFZONO = true
 
-"""if true, then computation corresponding to deepsplit neuron splitting are conducted during propagation"""
+"""If true, then computation corresponding to deepsplit neuron splitting are conducted during propagation"""
 DEEPSPLIT_NEURON_SPLITTING = Ref{Bool}(false)
 
-"""use the alternative deepsplit heuristic for neuron splitting"""
+"""Use the alternative deepsplit heuristic for neuron splitting"""
 DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(false)
 
-"""use the generators of the difference zonotope for the heuristic instead of the corresponding network's zonotope"""
+"""Use the generators of the difference zonotope for the heuristic instead of the corresponding network's zonotope"""
 DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(false)
 
-"""incorporate deepsplit input splitting into deepsplit neuron splitting"""
+"""Incorporate deepsplit input splitting into deepsplit neuron splitting"""
 DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(true)
 
-""""""
+"""Constant multiplier used to weight the effect of input nodes in the DeepSplit heuristic"""
 INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
 
+"""Different modes for the computation of the relative impactes in the DeepSplit heuristic"""
 @enum DeepSplitHeuristicMode UnsignedBiased UnsignedUnbiased SignedBiased SignedUnbiased
 DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(UnsignedBiased)
 

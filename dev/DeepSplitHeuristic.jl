@@ -44,6 +44,8 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
                         # For example f: [0, 1] → [-1, 1], x ↦ 2x - 1
                         # For hihger dims f: [0, 1]ⁿ → [-1, 1]ⁿ, x ↦ 2x - e where e = (1,...,1)ᵀ
                         # z(x) = gᵀx + c ⇒ z(f(x)) = gᵀf(x) + c = gᵀ(2x - e) + c = 2gᵀx - ∑ gᵢ + c
+                        # ̲z := min z(x) = z(̲x) = 2gᵀ̲x - ∑gᵢ + c where ̲xᵢ = 1 if gᵢ <= 0 else 0
+                        # ̅z := max z(x) = z(̅x) = 2gᵀ̅x - ∑gᵢ + c where ̅xᵢ = 1 if gᵢ >= 0 else 0
                         d_lower = sum(x -> ifelse(x < 0.0, x, 0.0), Z₂.G, dims=2)
                         d_upper = sum(x -> ifelse(x > 0.0, x, 0.0), Z₂.G, dims=2)
                         if DEEPSPLIT_HEURISTIC_MODE[] == SignedBiased

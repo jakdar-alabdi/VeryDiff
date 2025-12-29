@@ -123,7 +123,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                 offset = 0
                 for l in (layer - 1):-1:1
                     num_instable = count(crossings[l])
-                    ϵ = Z̃.G[:, end - offset - num_instable + 1 : end - offset]
+                    ϵ = @view Z̃.G[:, end - offset - num_instable + 1 : end - offset]
                     α = ifelse.(lower .>= 0 .|| upper .<= 0, 0.0, ifelse.(ϵ .>= 0.0, ϵ ./ upper, ϵ ./ lower))
                     push!(relative_impactes[l], α)
                     offset += num_instable

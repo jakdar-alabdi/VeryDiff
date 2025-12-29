@@ -1,28 +1,25 @@
 cur_dir = @__DIR__
 benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
-# benchmarks_dir = "$cur_dir\\..\\..\\..\\verydiff-experiments"
 
-mnist_specs = SpecificationEpsilon[]
-
-# bench_name = "mnist"
-csv_dir = "$cur_dir/mnist-prune-verydiff.csv"
 # csv_dir = "$cur_dir/mnist-prune.csv"
-# csv_dir = "$cur_dir\\mnist-prune.csv"
 
-open(csv_dir, "r") do f
-    while !eof(f)
-        spec = split(readline(f), ",")
-        nn_file₁ = "$benchmarks_dir/$(spec[1])"
-        nn_file₂ = "$benchmarks_dir/$(spec[2])"
-        spec_file = "$benchmarks_dir/$(spec[3])"
-        # nn_file₁ = "$benchmarks_dir\\$(replace(spec[1], "/" => "\\"))"
-        # nn_file₂ = "$benchmarks_dir\\$(replace(spec[2], "/" => "\\"))"
-        # spec_file = "$benchmarks_dir\\$(replace(spec[3], "/" => "\\"))"
-        epsilon = parse(Float64, string(spec[4]))
-        timeout = parse(Int64, string(spec[5]))
-        push!(mnist_specs, SpecificationEpsilon(nn_file₁, nn_file₂, spec_file, epsilon, timeout))
+function load_specs(num::Int)
+    mnist_specs = SpecificationEpsilon[]
+    csv_dir = "$cur_dir/mnist-prune-verydiff-$num.csv"
+    open(csv_dir, "r") do f
+        while !eof(f)
+            spec = split(readline(f), ",")
+            nn_file₁ = "$benchmarks_dir/$(spec[1])"
+            nn_file₂ = "$benchmarks_dir/$(spec[2])"
+            spec_file = "$benchmarks_dir/$(spec[3])"
+            epsilon = parse(Float64, string(spec[4]))
+            timeout = parse(Int64, string(spec[5]))
+            push!(mnist_specs, SpecificationEpsilon(nn_file₁, nn_file₂, spec_file, epsilon, timeout))
+        end
     end
+    return mnist_specs
 end
+
 
 function _run_mnist_all(specs::Vector{SpecificationEpsilon}, log_dir::String, run_name::String, eval_func)
     for spec in specs
@@ -51,7 +48,7 @@ function _run_mnist_all(specs::Vector{SpecificationEpsilon}, log_dir::String, ru
     end
 end
 
-function run_mnist_all(eval_func, run_name::String)
+function run_mnist_all(eval_func, run_name::String, num::Int)
     # _run_mnist_all(mnist_specs, "$cur_dir\\experiments_final", run_name, eval_func)
-    _run_mnist_all(mnist_specs, "$cur_dir/experiments_final", run_name, eval_func)
+    _run_mnist_all(load_specs(num), "$cur_dir/experiments_final", run_name, eval_func)
 end

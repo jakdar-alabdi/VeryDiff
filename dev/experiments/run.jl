@@ -75,7 +75,7 @@ function deepsplit(config::Tuple{Bool, Bool, Bool, Bool})
     end
 end
 
-function run_experiments()
+function run_experiments(num::Int)
     # println("Running acas all...")
     
     # println("\nRunning on VeryDiff")
@@ -99,7 +99,7 @@ function run_experiments()
 
     println("Running mnist all...")
     println("\nRunning on VeryDiff")
-    run_mnist_all(verydiff, "VeryDiff")
+    run_mnist_all(verydiff, "VeryDiff-$num", num)
     # println("\nRunning on DeepSplit-Base")
     # run_mnist_all(deepsplit((true, false, false, false)), "DeepSplit-Base")
     # println("\nRunning on DeepSplit-Alt")
