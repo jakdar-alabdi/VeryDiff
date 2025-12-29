@@ -1,6 +1,7 @@
 module Definitions
 
 using LinearAlgebra
+using Statistics
 
 using VNNLib.NNLoader: Network,Dense,ReLU,Layer
 

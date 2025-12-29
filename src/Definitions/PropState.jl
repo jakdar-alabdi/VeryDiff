@@ -40,6 +40,7 @@ end
 
 
 function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
+    var_count = length(task.distance_indices)
     z1_generators = Vector{Matrix{Float64}}()
     z1_generator_ids = SortedVector{Int64}()
     z2_generators = Vector{Matrix{Float64}}()
@@ -60,6 +61,7 @@ function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
         push!(diff_generators, zeros(Float64, size(task.middle,1), size(task.distance1_secondary,1)))
         push!(diff_generator_ids, 2)
         free_generator_id += 1
+        var_count += size(task.distance1_secondary,1)
     end
     if !isnothing(task.distance2_secondary)
         push!(z2_generators, zeros(Float64, size(task.middle,1), size(task.distance2_secondary,1)))
@@ -67,17 +69,39 @@ function init_zonotope_storage!(PS :: PropState, task :: VerificationTask)
         push!(diff_generators, zeros(Float64, size(task.middle,1), size(task.distance2_secondary,1)))
         push!(diff_generator_ids, 3)
         free_generator_id += 1
+        var_count += size(task.distance2_secondary,1)
     end
     influence1 = nothing
     influence2 = nothing
     if VeryDiff.NEW_HEURISTIC[]
         influence1 = Vector{Matrix{Float64}}()
         influence2 = Vector{Matrix{Float64}}()
-        for g in z1_generators
-            push!(influence1, Matrix(1.0I, size(g,2), size(g,2)))
+        push!(influence1, Matrix(1.0I, var_count, size(z1_generators[1],2)))
+        push!(influence2, Matrix(1.0I, var_count, size(z2_generators[1],2)))
+        offset = size(z1_generators[1],2)
+        avg_gen1_1 = mean(abs.(task.distance))
+        if !isnothing(task.distance1_secondary)
+            avg_gen1_2 = mean(abs.(task.distance1_secondary))
+            push!(influence1, zeros(var_count, size(z1_generators[2],2)))
+            for i in 1:size(z1_generators[2],2)
+                # TODO(steuber):
+                # This used to be (avg_gen1_1/avg_gen1_2)^2
+                # It seems to me when (avg_gen1_1/avg_gen1_2)^2 is necessary
+                # then --only-split-diff also works
+                # On the other hand this might be harmful in other cases?
+                # There is also no good reason for the square anymore
+                # (this used to be an artifact of duplicated scaling)
+                influence1[2][i+offset,i] = (avg_gen1_1/avg_gen1_2)
+            end
         end
-        for g in z2_generators
-            push!(influence2, Matrix(1.0I, size(g,2), size(g,2)))
+        if !isnothing(task.distance2_secondary)
+            avg_gen2_2 = mean(abs.(task.distance2_secondary))
+            offset += size(z1_generators[2],2)
+            push!(influence2, zeros(var_count, size(z2_generators[2],2)))
+            for i in 1:size(z2_generators[2],2)
+                # TODO(steuber): Same as above: Used to be (avg_gen1_1/avg_gen2_2)^2
+                influence2[2][i+offset,i] = (avg_gen1_1/avg_gen2_2)
+            end
         end
     end
     push!(PS.zono_storage.zonotopes,

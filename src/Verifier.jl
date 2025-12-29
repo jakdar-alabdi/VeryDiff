@@ -149,8 +149,12 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         should_terminate |= length(work_queue) == 0
         k+=1
         if k%100 == 0
-            top_task = peek_queue(work_queue)
-            println("[Thread $(threadid)] Processed $(total_zonos) (Work Done: $(round(100*total_work;digits=5))%; Expected: $(total_zonos/total_work); Bound: $(top_task.distance_bound))")
+            if length(work_queue) > 0
+                top_task = peek_queue(work_queue)
+                println("[Thread $(threadid)] Processed $(total_zonos) (Work Done: $(round(100*total_work;digits=5))%; Expected: $(total_zonos/total_work); Bound: $(top_task.distance_bound))")
+            else
+                println("[Thread $(threadid)] Processed $(total_zonos) (Work Done: $(round(100*total_work;digits=5))%; Expected: $(total_zonos/total_work); Queue empty!")
+            end
         end
         reset_ps!(prop_state)
     end
