@@ -37,5 +37,5 @@ function _run_mnist_all(specs_csv_file::String, log_dir::String, run_name::Strin
 end
 
 function run_mnist_all(eval_func, run_name::String)
-    _run_mnist_all("$cur_dir\\mnist-prune.csv", "$cur_dir\\experiments_final", run_name, eval_func)
+    _run_mnist_all("$cur_dir/mnist-prune.csv", "$cur_dir/experiments_final", run_name, eval_func)
 end
