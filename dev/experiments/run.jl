@@ -65,7 +65,7 @@ function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=UnsignedBiased)
         N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
         f, n_inputs, _ = get_ast(spec_file)
         println("Using DeepSplit...")
-        set_deepsplit_config(config)
+        set_deepsplit_config(config; mode=mode)
         for (bounds, _, _, _) in f
             status, δ_bounds = deepsplit_lp_search_epsilon(N₁, N₂, bounds, epsilon; timeout=timeout)
             net_name = replace(basename(nn_file₂), ".onnx" => "")
