@@ -37,5 +37,5 @@ function _run_acas_all(specs_csv_file::String, log_dir::String, run_name::String
 end
 
 function run_acas_all(eval_func, run_name::String)
-    _run_acas_all("$cur_dir\\acas-prune.csv", "$cur_dir/experiments_final", run_name, eval_func)
+    _run_acas_all("$cur_dir/acas-prune.csv", "$cur_dir/experiments_final", run_name, eval_func)
 end
