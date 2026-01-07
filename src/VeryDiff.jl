@@ -30,10 +30,10 @@ DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(true)
 INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
 
 """Different modes for the computation of the relative impactes in the DeepSplit heuristic"""
-@enum DeepSplitHeuristicMode UnsignedBiased UnsignedUnbiased SignedBiased SignedUnbiased
-DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(UnsignedBiased)
+@enum DeepSplitHeuristicMode ZonoBiased ZonoUnbiased DeepSplitBiased DeepSplitUnbiased
+DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(ZonoBiased)
 
-function set_deepsplit_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=UnsignedBiased)
+function set_deepsplit_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased)
     global DEEPSPLIT_NEURON_SPLITTING = Ref{Bool}(config[1])
     global DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(config[2])
     global DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(config[3])

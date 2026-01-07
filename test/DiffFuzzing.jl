@@ -101,7 +101,7 @@ while true
         Z_original2 = deepcopy(Z_original1)
         ∂Z_original = Zonotope(Matrix(0.0I,input_dim,input_dim),zeros(Float64,input_dim),nothing)
         Z = DiffZonotope(Z_original1,Z_original2,∂Z_original,0,0,0)
-        prop_state = PropState(true)
+        prop_state = PropState()
         @timeit VeryDiff.to "NetworkProp" Z = N(Z, prop_state)
         bounds1 = Tuple{Float64,Float64}[]
         bounds2 = Tuple{Float64,Float64}[]

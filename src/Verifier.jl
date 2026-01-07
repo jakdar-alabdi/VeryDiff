@@ -49,7 +49,7 @@ function verify_network(
     # split_heuristic = top1_configure_split_heuristic(3) #epsilon_split_heuristic
 
     #Config
-    prop_state = PropState(true)
+    prop_state = PropState()
     num_threads = Threads.nthreads()
     println("Running with $(num_threads) threads")
     #single_threaded = num_threads == 1

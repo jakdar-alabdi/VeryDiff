@@ -113,35 +113,34 @@ function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropSta
 end
 
 function compute_relative_impact(Z::Zonotope, offset::Int64, num::Int64, crossing::BitVector)
-    bounds = zono_bounds(Z)
-    lower = @view bounds[:, 1]
-    upper = @view bounds[:, 2]
-    unbiased_bounds = upper - Z.c
     ϵ = @view Z.G[:, end - offset - num + 1 : end - offset]
 
-    return ifelse.(crossing, begin
-        if DEEPSPLIT_HEURISTIC_MODE[] == UnsignedBiased
-            ifelse.(ϵ .>= 0, ϵ ./ upper, ϵ ./ lower)
-        elseif DEEPSPLIT_HEURISTIC_MODE[] == UnsignedUnbiased
-            abs.(ϵ) ./ unbiased_bounds
+    return begin
+        if DEEPSPLIT_HEURISTIC_MODE[] == ZonoBiased
+            bounds = zono_bounds(Z)
+            lower = @view bounds[:, 1]
+            upper = @view bounds[:, 2]
+            ifelse.(crossing, ifelse.(ϵ .>= 0.0, ϵ ./ upper, ϵ ./ lower), 0.0)
+        elseif DEEPSPLIT_HEURISTIC_MODE[] == ZonoUnbiased
+            ifelse.(crossing, abs.(ϵ) ./ sum(abs, Z.G, dims=2), 0.0)
         else
             d_lower = sum(x -> ifelse(x < 0.0, x, 0.0), Z.G, dims=2)
             d_upper = sum(x -> ifelse(x > 0.0, x, 0.0), Z.G, dims=2)
-            if DEEPSPLIT_HEURISTIC_MODE[] == SignedBiased
+            if DEEPSPLIT_HEURISTIC_MODE[] == DeepSplitBiased
                 d_lower += Z.c
                 d_upper += Z.c
             end
-            2 * ifelse.(ϵ .>= 0, ϵ ./ d_upper, ϵ ./ d_lower)
+            ifelse.(crossing, 2.0 * ifelse.(ϵ .>= 0, ϵ ./ d_upper, ϵ ./ d_lower), 0.0)
         end
-    end, 0.0)
+    end
 end
 
 function get_generators(Z::DiffZonotope, network::Int64)
     if DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS[]
         Z̃ = Z.∂Z
-        net_offset = Z.∂num_approx + (network == 1 ? Z.num_approx₂ : 0)
+        net_offset = Z.∂num_approx + ifelse(network == 1, Z.num_approx₂, 0)
     else
-        Z̃ = network == 1 ? Z.Z₁ : Z.Z₂
+        Z̃ = ifelse(network == 1, Z.Z₁, Z.Z₂)
         net_offset = 0
     end
 
@@ -149,29 +148,3 @@ function get_generators(Z::DiffZonotope, network::Int64)
         return @view Z̃.G[:, end - offset - net_offset - num + 1 : end - net_offset - offset]
     end
 end
-
-# In case of DeepSplit Error-based Symbolic Interval Propagation we have that
-# - the coefficients are in [0, 1]
-# - at each layer l we have (qˡ(.), Eˡ)
-#   - where qˡ(x) is the (exact) layer's l equation with x ∈ [0, 1]
-#   - and Eˡ is the error matrix that accounts for the error done in previous layers
-# - relu layers are treated as follows:
-#    - both q and E are propagated through the lower bounding equation l(x) = Ax + b of ReLU
-#    - by this we obtain qˡ_out = Aqˡ(x) + b and Eˡ_out' = AEˡ
-#    - to account for the error a new error term ϵˡᵢ := max (u(x) - l(x)) is introduced for each node i
-#    - the output error matrix is then Eˡ_out = (Eˡ_out', diag(ϵˡ))
-# - affine layers are treated exactly, that is, for an affine transformation Wˡ⁺¹x + bˡ⁺¹ we obtain (Wˡ⁺¹qˡ + b, Wˡ⁺¹Eˡ)
-# Transform Z(x) for x ∈ [-1, 1] to obtain Ẑ(y) for y ∈ [0, 1] such that <Z> = <Ẑ>
-# Find a one-to-one map between [0, 1] and [-1, 1]
-# For example f: [0, 1] → [-1, 1], x ↦ 2x - 1
-# For hihger dims f: [0, 1]ⁿ → [-1, 1]ⁿ, x ↦ 2x - e where e = (1,...,1)ᵀ
-# z(x) = gᵀx + c ⇒ z(f(x)) = gᵀf(x) + c = gᵀ(2x - e) + c = 2gᵀx - ∑ gᵢ + c
-# ̲z := min z(x) = z(̲x) = 2gᵀ̲x - ∑gᵢ + c where ̲xᵢ = 1 if gᵢ <= 0 else 0
-# ̅z := max z(x) = z(̅x) = 2gᵀ̅x - ∑gᵢ + c where ̅xᵢ = 1 if gᵢ >= 0 else 0
-# d_lower = sum(x -> ifelse(x < 0.0, x, 0.0), Z.G, dims=2)
-# d_upper = sum(x -> ifelse(x > 0.0, x, 0.0), Z.G, dims=2)
-# if DEEPSPLIT_HEURISTIC_MODE[] == SignedBiased
-#     d_lower += Z.c
-#     d_upper += Z.c
-# end
-# 2 * ifelse.(ϵ .>= 0, ϵ ./ d_upper, ϵ ./ d_lower)

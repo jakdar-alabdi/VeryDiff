@@ -2,7 +2,7 @@ import VNNLib.NNLoader.Network
 import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
-function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, layer :: Int64)
+function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, layer::Int64)
     #println("Prop dense")
     return @timeit to "DiffZonotope_DenseProp" begin
     #println("Dense")
@@ -48,7 +48,7 @@ function two_generator_bound(G::Matrix{Float64}, b, H::Matrix{Float64})
     return [sum(j->abs(G[i,j]+b*H[i,j]),1:size(G,2)) for i in 1:size(G,1)]
 end
 
-function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, layer :: Int64)
+function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, layer::Int64)
     #println("Prop relu")
     return @timeit to "DiffZonotope_ReLUProp" begin
     #println("ReLU")
@@ -111,6 +111,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                 lower = lowers[net]
                 upper = uppers[net]
                 crossings = P.instable_nodes[net]
+                crossing = lower .< 0.0 .< upper
                 relative_impactes = P.relative_impactes[net]
     
                 push!(relative_impactes, Matrix{Float64}[])
@@ -123,8 +124,9 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                 offset = 0
                 for l in (layer - 1):-1:1
                     num_instable = count(crossings[l])
-                    ϵ = @view Z̃.G[:, end - offset - num_instable + 1 : end - offset]
-                    α = ifelse.(lower .>= 0 .|| upper .<= 0, 0.0, ifelse.(ϵ .>= 0.0, ϵ ./ upper, ϵ ./ lower))
+                    # ϵ = @view Z̃.G[:, end - offset - num_instable + 1 : end - offset]
+                    # α = ifelse.(lower .>= 0 .|| upper .<= 0, 0.0, ifelse.(ϵ .>= 0.0, ϵ ./ upper, ϵ ./ lower))
+                    α = compute_relative_impact(Z̃, offset, num_instable, crossing)
                     push!(relative_impactes[l], α)
                     offset += num_instable
                 end

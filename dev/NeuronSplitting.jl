@@ -66,7 +66,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 # println(task.distance_bound)
                 
                 @timeit to "Zonotope Propagate" begin
-                    prop_state = PropState(true)
+                    prop_state = PropState()
                     prop_state.split_nodes = task.branch.split_nodes
                     Zin = to_diff_zono(task)
                     input_dim = size(Zin.Z₁.G, 2)
@@ -103,8 +103,11 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             @variable(model, -1.0 <= x[1:var_num] <= 1.0)
     
                             # Add split constraints
-                            for (;g, c, direction) in prop_state.split_nodes
-                                @constraint(model, direction * (g' * x[1:size(g, 1)] + c) >= 0.0)
+                            for (;network, g, c, direction) in prop_state.split_nodes
+                                offset = network == 2 ? Zout.num_approx₁ : 0
+                                g₁, g₂ = g[1 : input_dim], g[input_dim + 1 : end]
+                                x₁, x₂ = x[1 : input_dim], x[input_dim + offset + 1 : offset + size(g, 1)]
+                                @constraint(model, direction * (g₁' * x₁ + g₂' * x₂ + c) >= 0.0)
                             end
                         end
     
@@ -112,11 +115,9 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             distance_bound = 0.0
                             bounds = zono_bounds(Zout.∂Z)
                             # Compute all output dimensions that still need to be proven
-                            # mask = hcat(bounds[:, 1] .< -ϵ, bounds[:, 2] .> ϵ) .&& (isempty(task.branch.mask) ? true : task.branch.mask)
-                            # mask = abs.(bounds) .> ϵ .&& (isempty(task.branch.undetermined) || task.branch.undetermined)
                             mask = abs.(bounds) .> ϵ .&& task.branch.undetermined
-    
-                            # For each unproven output dimension we solve a LP for corresponding lower and upper bound
+
+                            # For each unproven output dimension we solve an LP for corresponding lower and upper bound
                             for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
                                 for (j, σ) in [(1, -1), (2, 1)][mask[i, :]]
     

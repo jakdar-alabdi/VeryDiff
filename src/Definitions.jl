@@ -47,18 +47,14 @@ mutable struct DiffZonotope
 end
 
 mutable struct PropState
-    first :: Bool
-    # i :: Int64
-    # num_relus :: Int64
-    # relu_config :: Vector{Int64}
     split_nodes :: Vector{SplitNode}
     split_candidate :: SplitNode
     instable_nodes :: Tuple{Vector{BitVector}, Vector{BitVector}}
     intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
     relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
     input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
-    function PropState(first :: Bool, split_nodes=SplitNode[], split_candidate=SplitNode())
-        return new(first, split_nodes, split_candidate, (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix[], Matrix[]))
+    function PropState(split_nodes=SplitNode[], split_candidate=SplitNode())
+        return new(split_nodes, split_candidate, (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix[], Matrix[]))
     end
 end
 
