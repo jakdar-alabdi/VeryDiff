@@ -36,7 +36,7 @@ examples_path = "$sysimage_dir\\..\\test\\examples"
 # benchmark_name = "mnist"
 benchmark_name = "acas"
 
-VeryDiff.set_deepsplit_config((true, false, false, true); mode=VeryDiff.SignedBiased)
+VeryDiff.set_deepsplit_config((true, false, false, true); mode=VeryDiff.UnsignedUnbiased)
 if VeryDiff.DEEPSPLIT_HUERISTIC_ALTERNATIVE[]
     log_dir = "$sysimage_dir\\testing\\DeepSplit-Alt"
 else

@@ -60,7 +60,7 @@ function verydiff(nn_file₁::String, nn_file₂::String, spec_file::String, eps
     end
 end
 
-function deepsplit(config::Tuple{Bool, Bool, Bool, Bool})
+function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=UnsignedBiased)
     return (nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String) -> begin
         N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
         f, n_inputs, _ = get_ast(spec_file)
@@ -97,9 +97,9 @@ function run_experiments()
     # println("\nRunning on DeepSplit-Alt-Input-DiffZono")
     # run_acas_all(deepsplit((true, false, true, true)), "DeepSplit-Alt-Input-DiffZono")
 
-    println("Running mnist all...")
-    println("\nRunning on VeryDiff")
-    run_mnist_all(verydiff, "VeryDiff")
+    # println("Running mnist all...")
+    # println("\nRunning on VeryDiff")
+    # run_mnist_all(verydiff, "VeryDiff")
     # println("\nRunning on DeepSplit-Base")
     # run_mnist_all(deepsplit((true, false, false, false)), "DeepSplit-Base")
     # println("\nRunning on DeepSplit-Alt")
@@ -116,4 +116,24 @@ function run_experiments()
     # run_mnist_all(deepsplit((true, false, true, false)), "DeepSplit-Alt-DiffZono")
     # println("\nRunning on DeepSplit-Alt-Input-DiffZono")
     # run_mnist_all(deepsplit((true, false, true, true)), "DeepSplit-Alt-Input-DiffZono")
+
+    println("Running acas all...")
+    println("\nRunning on DeepSplit-Unbiased-Base")
+    run_acas_all(deepsplit((true, false, false, false); mode=UnsignedUnbiased), "DeepSplit-Unbiased-Base")
+    println("\nRunning on DeepSplit-Unbiased-Base-Input")
+    run_acas_all(deepsplit((true, false, false, true); mode=UnsignedUnbiased), "DeepSplit-Unbiased-Base-Input")
+    println("\nRunning on DeepSplit-Unbiased-Base-DiffZono")
+    run_acas_all(deepsplit((true, false, true, false); mode=UnsignedUnbiased), "DeepSplit-Unbiased-Base-DiffZono")
+    println("\nRunning on DeepSplit-Unbiased-Base-Input-DiffZono")
+    run_acas_all(deepsplit((true, false, true, true); mode=UnsignedUnbiased), "DeepSplit-Unbiased-Base-Input-DiffZono")
+
+    println("Running mnist all...")
+    println("\nRunning on DeepSplit-Unbiased-Base")
+    run_mnist_all(deepsplit((true, false, false, false); mode=UnsignedUnbiased), "DeepSplit-Unbiased-Base")
+    println("\nRunning on DeepSplit-Unbiased-Base-Input")
+    run_mnist_all(deepsplit((true, false, false, true); mode=UnsignedUnbiased), "DeepSplit-Unbiased-Base-Input")
+    println("\nRunning on DeepSplit-Unbiased-Base-DiffZono")
+    run_mnist_all(deepsplit((true, false, true, false); mode=UnsignedUnbiased), "DeepSplit-Unbiased-Base-DiffZono")
+    println("\nRunning on DeepSplit-Unbiased-Base-Input-DiffZono")
+    run_mnist_all(deepsplit((true, false, true, true); mode=UnsignedUnbiased), "DeepSplit-Unbiased-Base-Input-DiffZono")
 end
