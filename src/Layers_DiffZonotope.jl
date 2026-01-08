@@ -143,6 +143,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
             uppers[node.network][node.neuron] *= node.direction == 1
             node.g = zonos[node.network].G[node.neuron, :]
             node.c = zonos[node.network].c[node.neuron]
+            P.input_bounds = contract_zono(P.input_bounds, node.g[1:input_dim], node.c, node.direction)
         end
     end
 

@@ -67,9 +67,10 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 
                 @timeit to "Zonotope Propagate" begin
                     prop_state = PropState()
-                    prop_state.split_nodes = task.branch.split_nodes
                     Zin = to_diff_zono(task)
                     input_dim = size(Zin.Z₁.G, 2)
+                    prop_state.split_nodes = task.branch.split_nodes
+                    prop_state.input_bounds = hcat(-ones(input_dim), ones(input_dim))
                     Zout = N(Zin, prop_state)
                 end
 
@@ -100,7 +101,10 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             
                             # Add input variables
                             var_num = size(Zout.∂Z.G, 2)
-                            @variable(model, -1.0 <= x[1:var_num] <= 1.0)
+                            input_bounds = hcat(-ones(var_num), ones(var_num))
+                            input_bounds[1:input_dim, :] .= prop_state.input_bounds
+                            # @variable(model, -1.0 <= x[1:var_num] <= 1.0)
+                            @variable(model, input_bounds[i, 1] <= x[i=1:var_num] <= input_bounds[i, 2])
     
                             # Add split constraints
                             for (;network, g, c, direction) in prop_state.split_nodes
@@ -125,11 +129,11 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                     optimize!(model)
     
                                     if is_solved_and_feasible(model)
-                                        cex = Zin.Z₁.G * value.(x)[1:input_dim] + Zin.Z₁.c
-                                        sample_distance = get_sample_distance(N₁, N₂, cex)
+                                        cex_input = Zin.Z₁.G * value.(x)[1:input_dim] + Zin.Z₁.c
+                                        sample_distance = get_sample_distance(N₁, N₂, cex_input)
                                         if sample_distance > ϵ
                                             @timeit to "LP Solution" begin
-                                                return UNSAFE, (cex, (N₁(cex), N₂(cex), sample_distance)), (initial_δ_bound, final_δ_bound)
+                                                return UNSAFE, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), (initial_δ_bound, final_δ_bound)
                                             end
                                         end
                                     end
@@ -192,4 +196,37 @@ function split_neuron(node::SplitNode, task::VerificationTask, work_share::Float
     task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, nothing, distance_bound, branch₂)
 
     return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
+end
+
+function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64)
+    n, m = size(bounds)
+    @assert m == 2 "Two endpoints are necessary to define interval bounds"
+    @assert n == size(g, 1) "Dimension mismatch"
+    @assert direction == 1 || direction == -1 "Unspecified direction"
+
+    l = @view bounds[:, 1]
+    u = @view bounds[:, 2]
+
+    if direction == 1
+        g, c = -g, -c
+    end
+
+    v = ifelse.(g .>= 0, l, u)
+
+    if g' * v > -c
+        return zeros(n, m)
+    end
+
+    for i in 1:n
+        if g[i] != 0.0
+            x = 1 / g[i] * (-c - v[1:i-1]'g[1:i-1] - v[i+1:end]'g[i+1:end])
+            if g[i] > 0
+                u[i] = min(u[i], x)
+            else
+                l[i] = max(l[i], x)
+            end
+        end
+    end
+
+    return bounds
 end

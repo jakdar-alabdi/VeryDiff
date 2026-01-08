@@ -53,8 +53,9 @@ mutable struct PropState
     intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
     relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
     input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
+    input_bounds :: Matrix{Float64}
     function PropState(split_nodes=SplitNode[], split_candidate=SplitNode())
-        return new(split_nodes, split_candidate, (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix[], Matrix[]))
+        return new(split_nodes, split_candidate, (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix[], Matrix[]), zeros(Float64, 0, 0))
     end
 end
 
