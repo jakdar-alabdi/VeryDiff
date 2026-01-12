@@ -27,7 +27,7 @@ function verify_network(
         if !all(init_eps .<= (2.0 .* distance))
             println("ERROR: Initial epsilon too large for given bounds!")
             println("Inital Epsilon: $(init_eps); Max Epsilon: $(2.0*minimum(distance))")
-            raise(ErrorException("Initial epsilon too large for given bounds!"))
+            throw(ErrorException("Initial epsilon too large for given bounds!"))
         end
         distance .-= (init_eps/2)
         distance1_secondary = fill(init_eps/2, input_dim)
