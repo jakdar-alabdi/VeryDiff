@@ -1,11 +1,3 @@
-import VNNLib.NNLoader.Network
-import VNNLib.NNLoader.Dense
-import VNNLib.NNLoader.ReLU
-
-function (N::Network)(Z :: Zonotope, P :: PropState)
-    return foldl((Z,L) -> L(Z,P),N.layers,init=Z)
-end
-
 function propagate_layer!(ZoutRef :: Zonotope, L :: Dense, inputs :: Vector{Zonotope})
     @assert length(inputs) == 1 "Dense layer should have exactly one input"
     Zin = inputs[1]

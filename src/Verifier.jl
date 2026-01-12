@@ -3,13 +3,13 @@
 @enum VerificationStatus UNKNOWN SAFE UNSAFE
 
 function verify_network(
-    N1 :: Network,
-    N2 :: Network,
+    N1 :: OnnxNet{LayerIdT,NShapeIn, NShapeOut},
+    N2 :: OnnxNet{LayerIdT,NShapeIn, NShapeOut},
     bounds,
     property_check,
     split_heuristic;
     timeout=Inf,
-    init_eps=0.0)
+    init_eps=0.0) where {LayerIdT,NShapeIn,NShapeOut}
     global FIRST_ROUND[] = true
     verification_result = nothing
     # Prepare Zonotope Initialization

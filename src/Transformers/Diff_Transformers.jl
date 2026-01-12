@@ -1,9 +1,3 @@
-import VNNLib.NNLoader.Network
-import VNNLib.NNLoader.Dense
-import VNNLib.NNLoader.ReLU
-
-# TODO: ReLU, ZeroDense layers
-
 function propagate_layer!(ZoutRef :: CachedZonotope, Ls :: DiffLayer{Dense,Dense,Dense}, inputs :: Vector{DiffZonotope}; bounds_cache :: Union{Nothing,BoundsCache}=nothing)
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     # @debug "Propagating DiffDense Layer"

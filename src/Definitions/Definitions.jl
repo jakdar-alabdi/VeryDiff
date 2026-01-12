@@ -3,7 +3,8 @@ module Definitions
 using LinearAlgebra
 using Statistics
 
-using VNNLib.NNLoader: Network,Dense,ReLU,Layer
+using VNNLib
+using VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu
 
 using VeryDiff
 
@@ -14,7 +15,10 @@ include("DataStructures.jl")
 include("PropState.jl")
 include("Zonotope.jl")
 
-export Network,GeminiNetwork,Layer,Dense,ReLU,ZeroDense, DiffLayer, get_input_indices, get_layer_inputs
+Dense = ONNXLinear
+ReLU = ONNXRelu
+
+export Network,GeminiNetwork,Layer,ZeroDense,Dense,ReLU,DiffLayer, get_input_indices, get_layer_inputs
 export Zonotope,DiffZonotope,BoundsCache,CachedZonotope,ZonotopeStorage
 export VerificationTask, PropState, reset_ps!, first_pass, get_zonotope, get_layer, get_zonotope!, get_free_generator_id!
 export SortedVector, union, intersect_indices, find_index_position, attempt_find_index_position
