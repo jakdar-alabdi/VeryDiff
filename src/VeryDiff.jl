@@ -14,16 +14,16 @@ USE_GUROBI = true
 
 USE_DIFFZONO = true
 
-"""If true, then computation corresponding to deepsplit neuron splitting are conducted during propagation"""
+"""If true, then computation corresponding to DeepSplit neuron splitting are conducted during propagations"""
 DEEPSPLIT_NEURON_SPLITTING = Ref{Bool}(false)
 
-"""Use the alternative deepsplit heuristic for neuron splitting"""
+"""Use the alternative DeepSplit heuristic for neuron splitting"""
 DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(false)
 
 """Use the generators of the difference zonotope for the heuristic instead of the corresponding network's zonotope"""
 DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(false)
 
-"""Incorporate deepsplit input splitting into deepsplit neuron splitting"""
+"""Incorporate DeepSplit input splitting into DeepSplit neuron splitting"""
 DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(true)
 
 """Constant multiplier used to weight the effect of input nodes in the DeepSplit heuristic"""
@@ -91,14 +91,14 @@ include("../dev/experiments/run.jl")
 
 export Network,GeminiNetwork,Layer,Dense,ReLU,WrappedReLU
 export parse_network
-export Zonotope, DiffZonotope, PropState, SplitNode, Branch, SpecificationEpsilon
+export Zonotope, DiffZonotope, PropState, SplitNode, Branch
 export zono_optimize, zono_bounds
 export verify_network
 export get_epsilon_property, epsilon_split_heuristic, get_epsilon_property_naive
 export get_top1_property, top1_configure_split_heuristic
 export propagate_diff_layer
 export run_cmd
-export deepsplit_lp_search_epsilon
+export deepsplit_lp_search_epsilon, contract_zono
 export deepsplit_heuristic
 # export run_mnist_all
 # export run_acas_all

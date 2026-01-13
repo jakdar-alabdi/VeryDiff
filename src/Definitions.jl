@@ -19,9 +19,10 @@ end
 
 mutable struct Branch
     undetermined :: BitMatrix
+    input_bounds :: Matrix{Float64}
     split_nodes :: Vector{SplitNode}
-    function Branch(undetermined=falses(0, 0), split_nodes=SplitNode[])
-        new(undetermined, split_nodes)
+    function Branch(undetermined=falses(0, 0), input_bounds=zeros(Float64, 0, 0), split_nodes=SplitNode[])
+        new(undetermined, input_bounds, split_nodes)
     end
 end
 
@@ -48,23 +49,13 @@ end
 
 mutable struct PropState
     split_nodes :: Vector{SplitNode}
-    split_candidate :: SplitNode
     instable_nodes :: Tuple{Vector{BitVector}, Vector{BitVector}}
     intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
     relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
     input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
-    input_bounds :: Matrix{Float64}
-    function PropState(split_nodes=SplitNode[], split_candidate=SplitNode())
-        return new(split_nodes, split_candidate, (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix[], Matrix[]), zeros(Float64, 0, 0))
+    function PropState()
+        return new(SplitNode[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
     end
-end
-
-struct SpecificationEpsilon
-    nn_file₁ :: String
-    nn_file₂ :: String
-    spec_file :: String
-    epsilon :: Float64
-    timeout :: Int64
 end
 
 struct PropConfig

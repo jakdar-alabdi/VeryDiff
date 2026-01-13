@@ -17,8 +17,9 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
             distance = distance[non_zero_indices]
         
             input_dim = length(lower)
+            input_bounds = [-ones(size(non_zero_indices, 1)) ones(size(non_zero_indices, 1))]
             ∂Z = Zonotope(Matrix(0.0I, input_dim, size(non_zero_indices, 1)), zeros(Float64, input_dim), nothing)
-            initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, Inf64, Branch(trues(1, 2)))
+            initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, Inf64, Branch(trues(1, 2), input_bounds))
 
             split_heuristic = deepsplit_heuristic
             if DEEPSPLIT_HUERISTIC_ALTERNATIVE[]
@@ -68,15 +69,13 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 @timeit to "Zonotope Propagate" begin
                     prop_state = PropState()
                     Zin = to_diff_zono(task)
-                    input_dim = size(Zin.Z₁.G, 2)
                     prop_state.split_nodes = task.branch.split_nodes
-                    prop_state.input_bounds = hcat(-ones(input_dim), ones(input_dim))
                     Zout = N(Zin, prop_state)
                 end
-
+                
                 @timeit to "Property Check" begin
                     prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing)
-
+                    
                     if first_task
                         println("Zono Bounds:")
                         bounds = zono_bounds(Zout.∂Z)
@@ -87,31 +86,78 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         first_task = false
                     end
                 end
-
+                
                 if !prop_satisfied
                     if !isnothing(cex)
                         return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
                     end
-
+                    
                     if !isempty(prop_state.split_nodes)
+                        input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
+                        
+                        var_num = size(Zout.∂Z.G, 2)
+                        input_bounds = [-ones(var_num) ones(var_num)]
+                        input_bounds[1:input_dim, :] .= task.branch.input_bounds
+                        
+                        for node in prop_state.split_nodes
+                            offset = ifelse(node.network == 1, 0, Zout.num_approx₁)
+                            g = zeros(var_num)
+                            g[1:input_dim] .= node.g[1:input_dim]
+                            g[(input_dim + offset + 1) : (offset + size(node.g, 1))] .= node.g[(input_dim + 1) : end]
+                            node.g = g
+                        end
+                        
+                        @timeit to "Contract Zono" begin
+                            
+                            # sort_prop = node -> -node.score
+
+                            centroid = (input_bounds[:, 1] + input_bounds[:, 2]) ./ 2.0
+                            sort_prop = node -> geometric_distance(centroid, node.g, node.c)
+
+                            sorted_consts = sort(prop_state.split_nodes, by=sort_prop)
+                            # sorted_consts = prop_state.split_nodes
+                            
+                            empty_intersection = false
+                            for (;g, c, direction) in sorted_consts
+                                input_bounds = contract_zono(input_bounds, g, c, direction)
+                                if isnothing(input_bounds)
+                                    empty_intersection = true
+                                    break
+                                end
+                            end
+                            
+                            if empty_intersection
+                                continue
+                            end
+
+                            task.branch.input_bounds = input_bounds[1:input_dim, :]
+
+                            # in_lower = @view task.branch.input_bounds[:, 1]
+                            # in_upper = @view task.branch.input_bounds[:, 2]
+                            # b = vcat([sum(ifelse.(g .>= 0.0, g .* [in_lower in_upper], g .* [in_upper in_lower]), dims=1) for g in eachrow(Zin.Z₁.G)]...)
+                            # bounds = b .+ Zin.Z₁.c
+
+                            # lower = @view bounds[:, 1]
+                            # upper = @view bounds[:, 2]
+                            # mid = (upper .+ lower) ./ 2.0
+                            # distance = mid .- lower
+                            # middle = task.middle
+                            # middle[task.distance_indices] .= mid
+
+                            # task = VerificationTask(middle, distance, task.distance_indices, task.∂Z, nothing, task.distance_bound, task.branch)
+                        end
+
                         @timeit to "Initialize LP-solver" begin
                             # Initialize the LP solver
                             model = Model(() -> Gurobi.Optimizer(GRB_ENV[]))
                             set_time_limit_sec(model, 10)
                             
                             # Add input variables
-                            var_num = size(Zout.∂Z.G, 2)
-                            input_bounds = hcat(-ones(var_num), ones(var_num))
-                            input_bounds[1:input_dim, :] .= prop_state.input_bounds
-                            # @variable(model, -1.0 <= x[1:var_num] <= 1.0)
                             @variable(model, input_bounds[i, 1] <= x[i=1:var_num] <= input_bounds[i, 2])
     
                             # Add split constraints
-                            for (;network, g, c, direction) in prop_state.split_nodes
-                                offset = network == 2 ? Zout.num_approx₁ : 0
-                                g₁, g₂ = g[1 : input_dim], g[input_dim + 1 : end]
-                                x₁, x₂ = x[1 : input_dim], x[input_dim + offset + 1 : offset + size(g, 1)]
-                                @constraint(model, direction * (g₁' * x₁ + g₂' * x₂ + c) >= 0.0)
+                            for (;g, c, direction) in prop_state.split_nodes
+                                @constraint(model, direction * (g'x + c) >= 0.0)
                             end
                         end
     
@@ -163,6 +209,9 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         if (time_ns() - start_time) / 1.0e9 > timeout
                             _, next_task = first(queue)
                             final_δ_bound = next_task.distance_bound
+                            println("Next Branch Input Bounds:")
+                            println(next_task.branch.input_bounds[:, 1])
+                            println(next_task.branch.input_bounds[:, 2])
                             println("\nTIMEOUT REACHED")
                             return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
                         end
@@ -198,28 +247,36 @@ function split_neuron(node::SplitNode, task::VerificationTask, work_share::Float
     return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
 end
 
-function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64)
-    n, m = size(bounds)
-    @assert m == 2 "Two endpoints are necessary to define interval bounds"
-    @assert n == size(g, 1) "Dimension mismatch"
-    @assert direction == 1 || direction == -1 "Unspecified direction"
-
+function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, d::Int64)
+    n, _ = size(bounds)
+    # @assert d == 1 || d == -1 "Unspecified direction"
+    
     l = @view bounds[:, 1]
     u = @view bounds[:, 2]
+    
+    # With (g, c, d) we impose a linear constraint on the input space
+    # Depending on the given direction d (i.e., d = −1 or d = 1 for inactive or active ReLU-phase) 
+    # we have one of the following constraints:
+    # For d == −1 (incative phase):
+    #   gᵀx + c <= 0.0 ⇔ gᵀx <= −c ⇔ -d * gᵀx <= d * c
+    # For d == 1 (active phase):
+    #   gᵀx + c >= 0.0 ⇔ −gᵀx <= c ⇔ -d * gᵀx <= d * c
+    g, c = -d * g, d * c
 
-    if direction == 1
-        g, c = -g, -c
+    # Compute a vector v ∈ [l₁, u₁] × ... × [lₙ, uₙ] that minimizes the dot prodoct gᵀv
+    v = ifelse.(g .>= 0.0, l, u)
+
+    # If gᵀv > c then we have an empty intersection
+    s = g'v
+    if s > c
+        return nothing
     end
 
-    v = ifelse.(g .>= 0, l, u)
-
-    if g' * v > -c
-        return zeros(n, m)
-    end
-
+    # For each input dimension i we attempt to increase lᵢ and decrease uᵢ
     for i in 1:n
         if g[i] != 0.0
-            x = 1 / g[i] * (-c - v[1:i-1]'g[1:i-1] - v[i+1:end]'g[i+1:end])
+            # x = (1 / g[i]) * (c - g[1:i-1]'v[1:i-1] - g[i+1:end]'v[i+1:end])
+            x = (1 / g[i]) * (c - (s - g[i] * v[i])) # ⇔ x = (1 / g[i]) (c - g[1:i-1]ᵀv[1:i-1] - g[i+1:]ᵀv[i+1:])
             if g[i] > 0
                 u[i] = min(u[i], x)
             else
@@ -229,4 +286,8 @@ function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, 
     end
 
     return bounds
+end
+
+function geometric_distance(x̂::Vector{Float64}, g::Vector{Float64}, c::Float64)
+    return abs(g'x̂ + c) / sqrt(g'g)
 end
