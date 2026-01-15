@@ -1,16 +1,16 @@
-function init_zonotope(layer :: Dense, input :: Zonotope, influence::Union{Vector{Matrix{Float64}},Nothing}, owned_generators :: Union{Int64, Nothing})
+function init_zonotope(layer :: ONNXLinear{S}, input :: Zonotope, influence::Union{Vector{Matrix{Float64}},Nothing}, owned_generators :: Union{Int64, Nothing}) where {S}
     # Compute new generators
     generators = Vector{Matrix{Float64}}()
     generator_ids = deepcopy(input.generator_ids)
     for g in input.Gs
-        new_g = zeros(Float64, size(layer.W,1), size(g,2))
+        new_g = zeros(Float64, size(layer.dense.weight,1), size(g,2))
         push!(generators, new_g)
     end
-    c = zeros(Float64, size(layer.W,1))
+    c = zeros(Float64, size(layer.dense.weight,1))
     return Zonotope(generators, c, influence, generator_ids, owned_generators)
 end
 
-function init_layer_dense_z1_z2(L1 :: Dense, L2 :: Dense, input_zono :: DiffZonotope, input_zono_cache :: CachedZonotope, layer_idx :: Int64) :: Tuple{Zonotope,Zonotope}
+function init_layer_dense_z1_z2(L1 :: ONNXLinear{S1}, L2 :: ONNXLinear{S2}, input_zono :: DiffZonotope, input_zono_cache :: CachedZonotope, layer_idx :: Int64) :: Tuple{Zonotope,Zonotope} where {S1,S2}
     # Instantiate Z₁
     # Dense Layer can reuse influence matrix from input (nocopy)
     influence = input_zono.Z₁.influence

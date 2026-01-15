@@ -1,17 +1,19 @@
-function propagate_layer!(ZoutRef :: Zonotope, L :: Dense, inputs :: Vector{Zonotope})
+function propagate_layer!(ZoutRefVec :: Vector{Zonotope}, L :: ONNXLinear{S1}, inputs :: Vector{Zonotope}) where {S1}
     @assert length(inputs) == 1 "Dense layer should have exactly one input"
+    @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output"
+    ZoutRef = ZoutRefVec[1]
     Zin = inputs[1]
     return propagate_layer!(ZoutRef, L, Zin)
 end
 
-function propagate_layer!(ZoutRef :: Zonotope, L :: Dense, Zin :: Zonotope)
+function propagate_layer!(ZoutRef :: Zonotope, L :: ONNXLinear{S1}, Zin :: Zonotope) where {S1}
     # Zout must have exactly the same ids as Zin
     # @assert all(ZoutRef.generator_ids .== Zin.generator_ids) "Zonotope generator IDs do not match during Dense propagation!"
     for i in 1:length(Zin.Gs)
-        mul!(ZoutRef.Gs[i], L.W, Zin.Gs[i])
+        mul!(ZoutRef.Gs[i], L.dense.weight, Zin.Gs[i])
     end
-    mul!(ZoutRef.c, L.W, Zin.c)
-    ZoutRef.c .+= L.b
+    mul!(ZoutRef.c, L.dense.weight, Zin.c)
+    ZoutRef.c .+= L.dense.bias
 end
 
 function get_slope(l,u, alpha)
@@ -24,13 +26,15 @@ function get_slope(l,u, alpha)
     end
 end
 
-function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, inputs :: Vector{Zonotope}; lower=nothing, upper=nothing)
+function propagate_layer!(ZoutRefVec :: Vector{Zonotope}, L :: ONNXRelu{S}, inputs :: Vector{Zonotope}; lower=nothing, upper=nothing) where {S}
     @assert length(inputs) == 1 "Dense layer should have exactly one input"
+    @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output"
+    ZoutRef = ZoutRefVec[1]
     Zin = inputs[1]
     return propagate_layer!(ZoutRef, L, Zin; lower=lower, upper=upper)
 end
 
-function propagate_layer!(ZoutRef :: Zonotope, L :: ReLU, Zin :: Zonotope; lower=nothing, upper=nothing)
+function propagate_layer!(ZoutRef :: Zonotope, _L :: ONNXRelu{S}, Zin :: Zonotope; lower=nothing, upper=nothing) where {S}
     if isnothing(lower) || isnothing(upper)
         bounds = zono_bounds(Zin)
         lower = @view bounds[:,1]

@@ -24,8 +24,9 @@ function init_default_zono(Z :: CachedZonotope)
     )
 end
 
-function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ReLU, ReLU, ReLU}, inputs :: Vector{CachedZonotope})
+function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXRelu{S1}, ONNXRelu{S2}, ONNXRelu{S3}}, inputs :: Vector{CachedZonotope}, output_positions :: Vector{Int64}) where {S1, S2, S3}
     @assert length(inputs) == 1 "ReLU DiffLayer should have exactly one input"
+    @assert length(output_positions) == 1 "ReLU DiffLayer should have exactly one output"
     input_zono_cache = inputs[1]
     input_zono = get_zonotope(input_zono_cache)
     # Compute Bounds
@@ -94,17 +95,20 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ReLU, ReLU, ReLU},
             nothing
         )
     init_default_zono(Z)
-    push!(PS.zono_storage.zonotopes, Z)
+    PS.zono_storage.zonotopes[output_positions[1]] = Z
 end
 
-function init_layer!(PS :: PropState, diff_layer :: DiffLayer{Dense, ZeroDense, Dense}, inputs :: Vector{CachedZonotope})
+function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXLinear{S1}, ZeroDense{S2}, ONNXLinear{S3}}, inputs :: Vector{CachedZonotope}, output_positions :: Vector{Int64}) where {S1, S2, S3}
     @assert length(inputs) == 1 "Dense DiffLayer should have exactly one input"
+    @assert length(output_positions) == 1 "Dense DiffLayer should have exactly one output"
     input_zono_cache = inputs[1]
     input_zono = get_zonotope(input_zono_cache)
     L1 = get_layer1(diff_layer)
     L2 = get_layer2(diff_layer)
-    @assert size(L1.W,2) == size(input_zono.Z₁.Gs[1],1) "Input dimension mismatch for Dense layer 1"
-    @assert size(L2.W,2) == size(input_zono.Z₂.Gs[1],1) "Input dimension mismatch for Dense layer 2"
+    L1_W = L1.dense.weight
+    L2_W = L2.dense.weight
+    @assert size(L1_W,2) == size(input_zono.Z₁.Gs[1],1) "Input dimension mismatch for Dense layer 1"
+    @assert size(L2_W,2) == size(input_zono.Z₂.Gs[1],1) "Input dimension mismatch for Dense layer 2"
     Z₁, Z₂ = init_layer_dense_z1_z2(L1, L2, input_zono, input_zono_cache, diff_layer.layer_idx)
     ∂Z = init_zonotope(L2, input_zono.∂Z, input_zono.∂Z.influence, input_zono.∂Z.owned_generators)
     Z =CachedZonotope(
@@ -116,11 +120,12 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{Dense, ZeroDense, 
         nothing
     )
     init_default_zono(Z)
-    push!(PS.zono_storage.zonotopes, Z)
+    PS.zono_storage.zonotopes[output_positions[1]] = Z
 end
 
-function init_layer!(PS :: PropState, diff_layer :: DiffLayer{Dense,Dense,Dense}, inputs :: Vector{CachedZonotope})
+function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXLinear{S1},ONNXLinear{S2},ONNXLinear{S3}}, inputs :: Vector{CachedZonotope}, output_positions :: Vector{Int64}) where {S1, S2, S3}
     @assert length(inputs) == 1 "Dense DiffLayer should have exactly one input"
+    @assert length(output_positions) == 1 "Dense DiffLayer should have exactly one output"
     input_zono_cache = inputs[1]
     input_zono = get_zonotope(input_zono_cache)
     L1 = get_layer1(diff_layer)
@@ -183,5 +188,5 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{Dense,Dense,Dense}
         nothing
     )
     init_default_zono(Z)
-    push!(PS.zono_storage.zonotopes, Z)
+    PS.zono_storage.zonotopes[output_positions[1]] = Z
 end
