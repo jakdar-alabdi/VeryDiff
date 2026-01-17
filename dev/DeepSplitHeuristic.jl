@@ -1,5 +1,5 @@
 function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int})
-    input_dim = size(distance_indices, 1)
+    input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
     
     max_node = SplitNode(-1, -1, -1, -Inf64)
     for net in 1:2
@@ -7,6 +7,7 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
         intermediates = prop_state.intermediate_zonos[net]
         crossings = prop_state.instable_nodes[net]
         L = size(crossings, 1)
+        offset = ifelse(net == 1, 0, Zout.num_approx₁)
         
         s = [zeros(size(crossings[l])) for l in 1:L]
         s_input = zeros(input_dim)
@@ -41,7 +42,8 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
 
             n = argmax(s[l₁])
             if s[l₁][n] > max_node.score
-                max_node = SplitNode(net, l₁, n, s[l₁][n])
+                g, c = algin_vector(Z₁.G[n, :], size(Zout.∂Z.G, 2), input_dim, offset), Z₁.c[n]
+                max_node = SplitNode(net, l₁, n, s[l₁][n], 0, g, c)
             end
 
             offset₁ += num_instable₁

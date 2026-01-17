@@ -14,13 +14,19 @@ USE_GUROBI = true
 
 USE_DIFFZONO = true
 
-"""If true, then computation corresponding to DeepSplit neuron splitting are conducted during propagations"""
-DEEPSPLIT_NEURON_SPLITTING = Ref{Bool}(false)
+"""If true, neuron splitting utilized to refine the bounds of the output Zonotopes"""
+USE_NEURON_SPLITTING = Ref{Bool}(false)
+
+"""All the approaches used in VeryDiff to split a neuron"""
+@enum NeuronSplittingApproach LP ZonoContraction VerticalSplitting
+
+"""Initially we utilize LP to split a neuron"""
+NEURON_SPLITTING_APPROACH = Ref{NeuronSplittingApproach}(LP)
 
 """Use the alternative DeepSplit heuristic for neuron splitting"""
 DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(false)
 
-"""Use the generators of the difference zonotope for the heuristic instead of the corresponding network's zonotope"""
+"""Use the generators of the difference Zonotope for the heuristic instead of the corresponding network's Zonotope"""
 DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(false)
 
 """Incorporate DeepSplit input splitting into DeepSplit neuron splitting"""
@@ -33,12 +39,13 @@ INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
 @enum DeepSplitHeuristicMode ZonoBiased ZonoUnbiased DeepSplitBiased DeepSplitUnbiased
 DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(ZonoBiased)
 
-function set_deepsplit_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased)
-    global DEEPSPLIT_NEURON_SPLITTING = Ref{Bool}(config[1])
+function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP)
+    global USE_NEURON_SPLITTING = Ref{Bool}(config[1])
     global DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(config[2])
     global DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(config[3])
     global DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(config[4])
     global DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(mode)
+    global NEURON_SPLITTING_APPROACH = Ref{NeuronSplittingApproach}(approach)
 end
 
 # We have our own multithreadding so we don't want to use BLAS multithreadding
@@ -82,6 +89,7 @@ include("Properties.jl")
 include("Verifier.jl")
 include("Cli.jl")
 include("../dev/NeuronSplitting.jl")
+include("../dev/ZonoContraction.jl")
 include("../dev/DeepSplitHeuristic.jl")
 # include("../util.jl")
 
@@ -98,7 +106,8 @@ export get_epsilon_property, epsilon_split_heuristic, get_epsilon_property_naive
 export get_top1_property, top1_configure_split_heuristic
 export propagate_diff_layer
 export run_cmd
-export deepsplit_lp_search_epsilon, contract_zono
+export deepsplit_lp_search_epsilon
+export contract_zono, geometric_distance, transform_offset_zono
 export deepsplit_heuristic
 # export run_mnist_all
 # export run_acas_all

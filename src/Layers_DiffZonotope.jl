@@ -99,7 +99,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     lower₂ = @view bounds₂[:,1]
     upper₂ = @view bounds₂[:,2]
 
-    if DEEPSPLIT_NEURON_SPLITTING[]
+    if USE_NEURON_SPLITTING[]
         
         lowers = [lower₁, lower₂]
         uppers = [upper₁, upper₂]
