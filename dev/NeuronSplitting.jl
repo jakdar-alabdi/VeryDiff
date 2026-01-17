@@ -187,6 +187,8 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                     bounds = zono_bounds(Zout.∂Z)
                                     distance_bound = maximum(abs, bounds)
                                     mask .&= abs.(bounds) .> ϵ
+                                else
+                                    continue
                                 end
                             end
                         else
@@ -239,59 +241,26 @@ function split_neuron(node::SplitNode, input_bounds::Matrix{Float64}, Zin::DiffZ
     
     (;network, layer, neuron, score, g, c) = node
     direction₁, direction₂ = -1, 1 # inactive, active
-    
+
     branch₁, branch₂ = task.branch, deepcopy(task.branch)
     push!(branch₁.split_nodes, SplitNode(network, layer, neuron, score, direction₁, g, c))
     push!(branch₂.split_nodes, SplitNode(network, layer, neuron, score, direction₂, g, c))
     
-    task₁, task₂ = nothing, nothing
+    task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
+    task₂ = VerificationTask(deepcopy(task.middle), deepcopy(task.distance), task.distance_indices, deepcopy(task.∂Z), deepcopy(task.verification_status), distance_bound, branch₂)
 
     if NEURON_SPLITTING_APPROACH[] == ZonoContraction
         input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
-        
-        input_bounds₁ = contract_zono(input_bounds₁, g, c, direction₁)
-        if !isnothing(input_bounds₁)
-    
-            Z = transform_offset_zono(input_bounds₁, Zin.Z₁)
-            bounds = zono_bounds(Z)
-            
-            lower = @view bounds[:, 1]
-            upper = @view bounds[:, 2]
-    
-            mid = (upper .+ lower) ./ 2
-            distance = mid .- lower
-            middle = deepcopy(task.middle)
-            middle[task.distance_indices] .= mid
-    
-            task₁ = VerificationTask(middle, distance, task.distance_indices, deepcopy(task.∂Z), deepcopy(task.verification_status), distance_bound, branch₁)
-        end
-        
-        input_bounds₂ = contract_zono(input_bounds₂, g, c, direction₂)
-        if !isnothing(input_bounds₂)
-    
-            Z = transform_offset_zono(input_bounds₂, Zin.Z₂)
-            bounds = zono_bounds(Z)
-            
-            lower = @view bounds[:, 1]
-            upper = @view bounds[:, 2]
-    
-            mid = (upper .+ lower) ./ 2
-            distance = mid .- lower
-            middle = task.middle
-            middle[task.distance_indices] .= mid
-    
-            task₂ = VerificationTask(middle, distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₂)
-        end
-    else
-        task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
-        task₂ = VerificationTask(deepcopy(task.middle), deepcopy(task.distance), task.distance_indices, deepcopy(task.∂Z), deepcopy(task.verification_status), distance_bound, branch₂)
+
+        task₁ = contract_to_verification_task(input_bounds₁, g, c, direction₁, Zin.Z₁, task₁)
+        task₂ = contract_to_verification_task(input_bounds₂, g, c, direction₂, Zin.Z₂, task₂)
     end
 
     return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
 end
 
-function algin_vector(g::Vector{Float64}, alginment::Int64, offset₁::Int64, offset₂::Int64)
-    ĝ = zeros(alginment)
+function algin_vector(g::Vector{Float64}, len::Int64, offset₁::Int64, offset₂::Int64)
+    ĝ = zeros(len)
     ĝ[1:offset₁] .= g[1:offset₁]
     ĝ[(offset₁ + offset₂ + 1) : (offset₂ + size(g, 1))] .= g[(offset₁ + 1) : end]
     return ĝ

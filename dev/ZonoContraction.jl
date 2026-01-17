@@ -37,10 +37,6 @@ function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, 
     return bounds
 end
 
-function geometric_distance(x̂::Vector{Float64}, g::Vector{Float64}, c::Float64)
-    return abs(g'x̂ + c) / sqrt(g'g)
-end
-
 function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope)
     input_dim = size(Z.G, 2)
     lower = @view bounds[1:input_dim, 1]
@@ -49,8 +45,39 @@ function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope)
     α = (upper - lower) ./ 2
     β = (upper + lower) ./ 2
 
-    Z.G .*= α' # Z.G * diag(α)
-    Z.c .-= Z.G * β
+    G = Z.G .* α' # Z.G * diag(α)
+    c = Z.c + Z.G * β
 
-    return Z
+    return Zonotope(G, c, Z.influence)
+end
+
+function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, Z::Zonotope, task::VerificationTask)
+    input_bounds = contract_zono(input_bounds, g, c, direction)
+    
+    if !isnothing(input_bounds)
+
+        # in_lower = @view input_bounds[1:size(Z.G, 2), 1]
+        # in_upper = @view input_bounds[1:size(Z.G, 2), 2]
+        # b = vcat([sum(ifelse.(g .>= 0, g .* [in_lower in_upper], g .* [in_upper in_lower]), dims=1) for g in eachrow(Z.G)]...)
+        # bounds = b .+ Z.c
+        # Above is another efficient way to transform the offset Zonotope Z
+
+        Z = transform_offset_zono(input_bounds, Z)
+        bounds = zono_bounds(Z)
+        
+        lower = @view bounds[task.distance_indices, 1]
+        upper = @view bounds[task.distance_indices, 2]
+
+        mid = (upper .+ lower) ./ 2
+        task.distance[:] .= mid .- lower
+        task.middle[task.distance_indices] .= mid
+
+        return task
+    end
+
+    return nothing
+end
+
+function geometric_distance(x̂::Vector{Float64}, g::Vector{Float64}, c::Float64)
+    return abs(g'x̂ + c) / sqrt(g'g)
 end

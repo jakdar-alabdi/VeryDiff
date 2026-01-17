@@ -42,8 +42,8 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
 
             n = argmax(s[l₁])
             if s[l₁][n] > max_node.score
-                g, c = algin_vector(Z₁.G[n, :], size(Zout.∂Z.G, 2), input_dim, offset), Z₁.c[n]
-                max_node = SplitNode(net, l₁, n, s[l₁][n], 0, g, c)
+                g = algin_vector(Z₁.G[n, :], size(Zout.∂Z.G, 2), input_dim, offset)
+                max_node = SplitNode(net, l₁, n, s[l₁][n], 0, g, Z₁.c[n])
             end
 
             offset₁ += num_instable₁
