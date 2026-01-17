@@ -1,7 +1,20 @@
 cur_dir = @__DIR__
 benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 
-function _run_acas_all(specs_csv_file::String, log_dir::String, run_name::String, eval_func)
+function _run_acas_all(specs_csv_file::String, warmup_specs_csv_file::String, log_dir::String, run_name::String, eval_func)
+    println("\nWarmup...")
+    open(warmup_specs_csv_file, "r") do f
+        while !eof(f)
+            spec = split(readline(f), ",")
+            nn_file₁ = "$benchmarks_dir/$(spec[1])"
+            nn_file₂ = "$benchmarks_dir/$(spec[2])"
+            spec_file = "$benchmarks_dir/$(spec[3])"
+            epsilon = parse(Float64, string(spec[4]))
+            timeout = parse(Int64, string(spec[5]))
+            eval_func(nn_file₁, nn_file₂, spec_file, epsilon, timeout, ""; save=false)
+        end
+    end
+
     open(specs_csv_file, "r") do f
         while !eof(f)
             spec = split(readline(f), ",")
@@ -37,5 +50,5 @@ function _run_acas_all(specs_csv_file::String, log_dir::String, run_name::String
 end
 
 function run_acas_all(eval_func, run_name::String)
-    _run_acas_all("$cur_dir/acas-prune.csv", "$cur_dir/experiments_final", run_name, eval_func)
+    _run_acas_all("$cur_dir/acas-prune.csv", "$cur_dir/acas-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
 end

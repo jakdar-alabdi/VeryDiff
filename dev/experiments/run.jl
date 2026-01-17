@@ -46,7 +46,7 @@ function save_results(out_dir::String, net_name::String, spec_name::String, stat
     end
 end
 
-function verydiff(nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String)
+function verydiff(nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String; save=true)
     N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
     f, n_inputs, _ = get_ast(spec_file)
     property_check = get_epsilon_property(epsilon)
@@ -56,35 +56,51 @@ function verydiff(nn_file₁::String, nn_file₂::String, spec_file::String, eps
         status, δ_bounds = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout)
         net_name = replace(basename(nn_file₂), ".onnx" => "")
         spec_name = replace(basename(spec_file), ".vnnlib" => "")
-        save_results(result_out_dir, net_name, spec_name, status, δ_bounds, VeryDiff.to)
-    end
-end
-
-function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased)
-    return (nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String) -> begin
-        N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
-        f, n_inputs, _ = get_ast(spec_file)
-        println("Using DeepSplit...")
-        set_neuron_splitting_config(config; mode=mode)
-        for (bounds, _, _, _) in f
-            status, δ_bounds = deepsplit_lp_search_epsilon(N₁, N₂, bounds, epsilon; timeout=timeout)
-            net_name = replace(basename(nn_file₂), ".onnx" => "")
-            spec_name = replace(basename(spec_file), ".vnnlib" => "")
+        if save
             save_results(result_out_dir, net_name, spec_name, status, δ_bounds, VeryDiff.to)
         end
     end
 end
 
+function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP)
+    return (nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String; save=true) -> begin
+        N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
+        f, n_inputs, _ = get_ast(spec_file)
+        println("Using DeepSplit...")
+        set_neuron_splitting_config(config; mode=mode, approach=approach)
+        for (bounds, _, _, _) in f
+            status, δ_bounds = deepsplit_lp_search_epsilon(N₁, N₂, bounds, epsilon; timeout=timeout)
+            net_name = replace(basename(nn_file₂), ".onnx" => "")
+            spec_name = replace(basename(spec_file), ".vnnlib" => "")
+            if save
+                save_results(result_out_dir, net_name, spec_name, status, δ_bounds, VeryDiff.to)
+            end
+        end
+    end
+end
+
 function run_experiments()
-    println("Running ACAS all...")
+    println("\nRunning ACAS all...")
     println("\nRunning on ZonoContract-Base")
     println("\nMode: ZonoBiased")
-    run_acas_all(deepsplit((true, false, false, false); mode=ZonoBiased), "ZonoContract-ZB-Base")
+    run_acas_all(deepsplit((true, false, false, false); mode=ZonoBiased, approach=ZonoContraction), "ZonoContract-ZB-Base")
+    println("\nMode: ZonoUnbiased")
+    run_acas_all(deepsplit((true, false, false, false); mode=ZonoUnbiased, approach=ZonoContraction), "ZonoContract-ZU-Base")
+    println("\nMode: DeepSplitBiased")
+    run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitBiased, approach=ZonoContraction), "ZonoContract-DB-Base")
+    println("\nMode: DeepSplitUnbiased")
+    run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction), "ZonoContract-DU-Base")
 
     println("\nRunning MNIST all...")
     println("\nRunning on ZonoContract-Base")
     println("\nMode: ZonoBiased")
-    run_mnist_all(deepsplit((true, false, false, false); mode=ZonoBiased), "ZonoContract-ZB-Base")
+    run_mnist_all(deepsplit((true, false, false, false); mode=ZonoBiased, approach=ZonoContraction), "ZonoContract-ZB-Base")
+    println("\nMode: ZonoUnbiased")
+    run_mnist_all(deepsplit((true, false, false, false); mode=ZonoUnbiased, approach=ZonoContraction), "ZonoContract-ZU-Base")
+    println("\nMode: DeepSplitBiased")
+    run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitBiased, approach=ZonoContraction), "ZonoContract-DB-Base")
+    println("\nMode: DeepSplitUnbiased")
+    run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction), "ZonoContract-DU-Base")
 
     # println("Running ACAS all...")
 

@@ -17,9 +17,8 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
             distance = distance[non_zero_indices]
         
             input_dim = length(lower)
-            input_bounds = [-ones(size(non_zero_indices, 1)) ones(size(non_zero_indices, 1))]
             ∂Z = Zonotope(Matrix(0.0I, input_dim, size(non_zero_indices, 1)), zeros(Float64, input_dim), nothing)
-            initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, Inf64, Branch(trues(1, 2), input_bounds))
+            initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, Inf64, Branch(trues(1, 2)))
 
             split_heuristic = deepsplit_heuristic
             if DEEPSPLIT_HUERISTIC_ALTERNATIVE[]
@@ -247,7 +246,7 @@ function split_neuron(node::SplitNode, input_bounds::Matrix{Float64}, Zin::DiffZ
     
     task₁, task₂ = nothing, nothing
 
-    if NEURON_SPLITTING_APPROACH[] == ZonoContraction       
+    if NEURON_SPLITTING_APPROACH[] == ZonoContraction
         input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
         
         input_bounds₁ = contract_zono(input_bounds₁, g, c, direction₁)

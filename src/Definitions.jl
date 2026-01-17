@@ -19,10 +19,9 @@ end
 
 mutable struct Branch
     undetermined :: BitMatrix
-    input_bounds :: Matrix{Float64}
     split_nodes :: Vector{SplitNode}
-    function Branch(undetermined=falses(0, 0), input_bounds=zeros(Float64, 0, 0), split_nodes=SplitNode[])
-        new(undetermined, input_bounds, split_nodes)
+    function Branch(undetermined=falses(0, 0), split_nodes=SplitNode[])
+        new(undetermined, split_nodes)
     end
 end
 
