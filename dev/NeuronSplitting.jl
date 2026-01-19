@@ -65,7 +65,9 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 final_δ_bound = task.distance_bound
                 # println(task.distance_bound)
                 
-                if !check_resources(start_time, timeout, 1)
+                if !check_resources(start_time, timeout, 2)
+                    empty!(queue)
+                    GC.gc()
                     return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
                 end
 
