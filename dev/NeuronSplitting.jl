@@ -175,13 +175,16 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 end
 
                                 Zin.Z₁ = transform_offset_zono(input_bounds, Zin.Z₁)
-                                Zin.Z₂ = Zin.Z₁
+                                Zin.Z₂.G .= Zin.Z₁.G
+                                Zin.Z₂.c .= Zin.Z₁.c
                                 Zout.∂Z = transform_offset_zono(input_bounds, Zout.∂Z)
                                 prop_satisfied, cex, _, _, _ = property_check(N₁, N₂, Zin, Zout, nothing)
 
                                 if !prop_satisfied
                                     if !isnothing(cex)
-                                        return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
+                                        @timeit to "ContractZono Solution" begin
+                                            return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
+                                        end
                                     end
 
                                     bounds = zono_bounds(Zout.∂Z)
@@ -212,10 +215,18 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             end
                         end
 
-                        if (time_ns() - start_time) / 1.0e9 > timeout
+                        timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
+                        memory_out = (Sys.free_memory() / (1 << 30)) < 0
+                        
+                        if timeout_reached || memory_out
+                            if timeout_reached
+                                println("\nTIMEOUT REACHED")
+                            end
+                            if memory_out
+                                println("\nMEMORY OUT")
+                            end
                             _, next_task = first(queue)
                             final_δ_bound = next_task.distance_bound
-                            println("\nTIMEOUT REACHED")
                             return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
                         end
                     end

@@ -45,25 +45,28 @@ function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope)
     α = (upper - lower) ./ 2
     β = (upper + lower) ./ 2
 
-    G = Z.G .* α' # Z.G * diag(α)
-    c = Z.c + Z.G * β
+    Z.G .*= α' # Z.G * diag(α)
+    Z.c .+= Z.G * β
 
-    return Zonotope(G, c, Z.influence)
+    return Z
+end
+
+function offset_zono_bounds(input_bounds::Matrix{Float64}, Z::Zonotope; input_dim=nothing)
+    input_range = 1:(!isnothing(input_dim) ? input_dim : size(Z.G, 2))
+    lower = @view input_bounds[input_range, 1]
+    upper = @view input_bounds[input_range, 2]
+    u_bounds = mapreduce(g -> sum(ifelse.(g .>= 0, g .* [lower upper], g .* [upper lower]), dims=1), vcat, eachrow(Z.G))
+    # u_bounds = vcat([sum(ifelse.(g .>= 0, g .* [lower upper], g .* [upper lower]), dims=1) for g in eachrow(Z.G)]...)
+    return u_bounds .+ Z.c
 end
 
 function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, Z::Zonotope, task::VerificationTask)
+    
     input_bounds = contract_zono(input_bounds, g, c, direction)
     
     if !isnothing(input_bounds)
 
-        # in_lower = @view input_bounds[1:size(Z.G, 2), 1]
-        # in_upper = @view input_bounds[1:size(Z.G, 2), 2]
-        # b = vcat([sum(ifelse.(g .>= 0, g .* [in_lower in_upper], g .* [in_upper in_lower]), dims=1) for g in eachrow(Z.G)]...)
-        # bounds = b .+ Z.c
-        # Above is another efficient way to transform the offset Zonotope Z
-
-        Z = transform_offset_zono(input_bounds, Z)
-        bounds = zono_bounds(Z)
+        bounds = offset_zono_bounds(input_bounds, Z; input_dim=size(Z.G, 2))
         
         lower = @view bounds[task.distance_indices, 1]
         upper = @view bounds[task.distance_indices, 2]

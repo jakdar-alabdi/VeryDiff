@@ -2,6 +2,10 @@ cur_dir = @__DIR__
 benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 
 function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, log_dir::String, run_name::String, eval_func)
+    
+    println("\nWarmup...")
+    println("\nConfiguration: $run_name\n")
+    
     open(warmup_specs_csv_file, "r") do f
         while !eof(f)
             spec = split(readline(f), ",")
@@ -13,6 +17,8 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
             eval_func(nn_file₁, nn_file₂, spec_file, epsilon, timeout, ""; save=false)
         end
     end
+
+    println("\nConfiguration: $run_name\n")
     
     open(specs_csv_file, "r") do f
         while !eof(f)
@@ -37,7 +43,7 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
                 redirect_stderr(f)
                 flush(stdout)
                 flush(stderr)
-                eval_func(nn_file₁, nn_file₂, spec_file, epsilon, timeout, csv_file_name)
+                eval_func(nn_file₁, nn_file₂, spec_file, epsilon, timeout, csv_file_name; save=true)
                 flush(stdout)
                 flush(stderr)
                 GC.gc()
