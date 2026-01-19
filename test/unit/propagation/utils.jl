@@ -6,10 +6,14 @@ using Random
     create_random_dense_network(input_dim::Int, layer_dims::Vector{Int})
 
 Create a randomized neural network with only Dense layers using the provided layer dimensions.
+Returns both a Network and an OnnxNet representation.
 """
 function create_random_dense_network(input_dim::Int, layer_dims::Vector{Int}; relu=false)
-    layers = Layer[]
+    layers = Vector{Node{String}}()
     cur_dim = input_dim
+    layer_count = 0
+    prev_output_id = "network_input"
+    
     for new_dim in layer_dims
         W = 0.1*randn(Float64, (new_dim, cur_dim))
         b = 0.1*randn(Float64, new_dim)
@@ -20,44 +24,73 @@ function create_random_dense_network(input_dim::Int, layer_dims::Vector{Int}; re
         # Set some components to zero
         zero_one_components = randn(size(W)) .< -3.0
         W[zero_one_components] .= 0.0
-        push!(layers, Dense(W, b))
+        layer_count += 1
+        input_id = prev_output_id
+        output_id = "output_$layer_count"
+        push!(layers, ONNXLinear([input_id], [output_id], "dense_$layer_count", W, b))
+        prev_output_id = output_id
         if relu
-            push!(layers, ReLU())
+            layer_count += 1
+            relu_input_id = output_id
+            relu_output_id = "output_$layer_count"
+            push!(layers, ONNXRelu([relu_input_id], [relu_output_id], "relu_$layer_count"))
+            prev_output_id = relu_output_id
         end
         cur_dim = new_dim
     end
-    return Network(layers)
+    
+    # Create OnnxNet with appropriate input/output shapes and node structure
+    node_dict = Dict{String, Node{String}}()
+    for layer in layers
+        node_dict[layer.name] = layer
+    end
+    
+    start_nodes = ["dense_1"]
+    final_nodes = [layers[end].name]
+    input_shapes = Dict("network_input" => (input_dim,))
+    output_shapes = Dict(layers[end].outputs[1] => (layer_dims[end],))
+    
+    onnx_net = OnnxNet(layers, start_nodes, final_nodes, input_shapes, output_shapes)
+    
+    return onnx_net
 end
 
 """
-    create_randon_network_mutant(network :: Network)
+    create_random_network_mutant(onnx_net :: OnnxNet)
 
-Create a mutated version of the provided network layers by slightly perturbing weights and biases according to different strategies.
+Create a mutated version of the provided ONNX network by mutating every ONNXLinear layer.
 """
-function create_random_network_mutant(network :: Network)
-    new_layers = Layer[]
-    for layer in network.layers
-        push!(new_layers, create_random_layer_mutant(layer))
+function create_random_network_mutant(onnx_net :: OnnxNet)
+    new_layers = Vector{Node{String}}()
+    for (node_name, node) in onnx_net.nodes
+        push!(new_layers, create_random_layer_mutant(node))
     end
-    return Network(new_layers)
+    
+    # Reconstruct OnnxNet with mutated layers
+    start_nodes = onnx_net.start_nodes
+    final_nodes = onnx_net.final_nodes
+    input_shapes = onnx_net.input_shapes
+    output_shapes = onnx_net.output_shapes
+    
+    return OnnxNet(new_layers, start_nodes, final_nodes, input_shapes, output_shapes)
 end
 
 """
     create_random_layer_mutant(layer :: Layer)
 Create a mutated version of the provided layer by slightly perturbing weights and biases according to different strategies.
 """
-function create_random_layer_mutant(layer :: Dense)
+function create_random_layer_mutant(layer :: ONNXLinear{String})
     mutation_type = rand(1:4)
     if mutation_type == 1
         @debug "Independent layer"
         # New random weights and biases
-        W_new = 0.1*randn(Float64, size(layer.W))
-        b_new = 0.1*randn(Float64, size(layer.b))
+        W_new = 0.1*randn(Float64, size(layer.dense.weight))
+        b_new = 0.1*randn(Float64, size(layer.dense.bias))
     elseif mutation_type == 2
         @debug "Zeroed components"
         # Set some weights / biases to zero
-        W_new = deepcopy(layer.W)
-        b_new = deepcopy(layer.b)
+        W_new = deepcopy(layer.dense.weight)
+        b_new = deepcopy(layer.dense.bias)
         W_mask = randn(size(W_new)) .< -2.0
         b_mask = randn(size(b_new)) .< -2.0
         W_new[W_mask] .= 0.0
@@ -65,35 +98,53 @@ function create_random_layer_mutant(layer :: Dense)
     elseif mutation_type == 3
         @debug "Pruned rows"
         # Prune some rows
-        W_new = deepcopy(layer.W)
-        b_new = deepcopy(layer.b)
+        W_new = deepcopy(layer.dense.weight)
+        b_new = deepcopy(layer.dense.bias)
         row_mask = randn(size(W_new, 1)) .< -2.0
         W_new[row_mask, :] .= 0.0
         b_new[row_mask] .= 0.0
     elseif mutation_type == 4
         @debug "Small perturbation"
         # Small random perturbation
-        W_new = layer.W .+ 0.01*randn(Float64, size(layer.W))
-        b_new = layer.b .+ 0.01*randn(Float64, size(layer.b))
+        W_new = layer.dense.weight .+ 0.01*randn(Float64, size(layer.dense.weight))
+        b_new = layer.dense.bias .+ 0.01*randn(Float64, size(layer.dense.bias))
     else
         error("Unknown mutation type")
     end
-    return Dense(W_new, b_new)
+    return ONNXLinear(layer.inputs, layer.outputs, layer.name, W_new, b_new, transpose=layer.transpose)
 end
 
-function create_random_layer_mutant(layer :: ReLU)
-    return deepcopy(ReLU())
+function create_random_layer_mutant(layer :: ONNXRelu{String})
+    return deepcopy(layer)
 end
 
 """
     make_dense_pair(input_dim::Int, layer_dims::Vector{Int}; identical::Bool=false)
 
 Create two networks sharing the same architecture. When `identical` is true, the weights/biases are identical.
+Returns tuples of (Network, OnnxNet) pairs.
 """
 function make_dense_pair(input_dim::Int, layer_dims::Vector{Int}; identical::Bool=false, relu=false)
-    N1 = create_random_dense_network(input_dim, layer_dims; relu=relu)
-    N2 = identical ? deepcopy(N1) : create_random_network_mutant(N1)
-    return N1, N2
+    N1_onnx = create_random_dense_network(input_dim, layer_dims; relu=relu)
+    if identical
+        N2_onnx = deepcopy(N1_onnx)
+    else
+        N2_onnx = create_random_network_mutant(N1_onnx)
+    end
+    return N1_onnx, N2_onnx
+end
+
+"""
+    create_mutant_layers(layers::Vector{Node{String}})
+
+Helper function to create mutated versions of layers.
+"""
+function create_mutant_layers(layers::Vector{Node{String}})
+    new_layers = Vector{Node{String}}()
+    for layer in layers
+        push!(new_layers, create_random_layer_mutant(layer))
+    end
+    return new_layers
 end
 
 """

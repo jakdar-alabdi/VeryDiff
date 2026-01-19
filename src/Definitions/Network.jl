@@ -157,7 +157,7 @@ struct GeminiNetwork{LayerIdT}
                     @info "Detected zero difference in Dense layer, replacing with ZeroDense layer."
                     diff_l = ZeroDense{LayerIdT}()
                 else
-                    diff_l = mk_dense(new_W, new_b)
+                    diff_l = ONNXLinear(l1.node.inputs, l1.node.outputs, l1.node.name, new_W, new_b)
                 end
                 push!(diff_layers, DiffLayer(l1.layer_index, l1.input_ids, l1.output_ids, l1.node, diff_l, l2.node))
             else
