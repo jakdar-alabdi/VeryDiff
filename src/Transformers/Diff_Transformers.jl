@@ -55,6 +55,47 @@ end
 function propagate_layer!(
     ZoutRefVec :: Vector{CachedZonotope},
     Ls :: DiffLayer{
+        ONNXAddConst{S1},
+        ONNXAddConst{S2},
+        ONNXAddConst{S3}},
+    inputs :: Vector{DiffZonotope};
+    bounds_cache :: Union{Nothing,BoundsCache}=nothing) where {S1, S2, S3}
+    @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
+    @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
+    ZoutRef = ZoutRefVec[1]
+    Zin = inputs[1]
+    i_out = 1
+    ∂g_dims = Int64[]
+    resize!(∂g_dims, length(ZoutRef.zonotope_proto.∂Z.Gs))
+    for i_out in 1:length(∂g_dims)
+        res = attempt_find_index_position(Zin.∂Z.generator_ids, ZoutRef.zonotope_proto.∂Z.generator_ids[i_out])
+        if res > 0
+            ∂g_dims[i_out] = size(Zin.∂Z.Gs[res],2)
+        else
+            res = find_index_position(Zin.Z₂.generator_ids, ZoutRef.zonotope_proto.∂Z.generator_ids[i_out])
+            ∂g_dims[i_out] = size(Zin.Z₂.Gs[res],2)
+        end
+    end
+    Zout = get_zonotope!(ZoutRef, size.(Zin.Z₁.Gs,2), size.(Zin.Z₂.Gs,2), ∂g_dims)
+    L1 = get_layer1(Ls)
+    ∂L = get_diff_layer(Ls)
+    ∂L_b = ∂L.c
+    L2 = get_layer2(Ls)
+    if VeryDiff.USE_DIFFZONO[]
+        # @debug "IDs of Output Zonotope Generators: $(Zout.∂Z.generator_ids)"
+        ∂indices = intersect_indices(Zout.∂Z.generator_ids, Zin.∂Z.generator_ids)
+        for (i, g) in zip(∂indices, Zin.∂Z.Gs)
+            Zout.∂Z.Gs[i] .= g
+        end
+        Zout.∂Z.c .= Zin.∂Z.c .+ ∂L_b
+    end
+    propagate_layer!(Zout.Z₁, L1, Zin.Z₁)
+    propagate_layer!(Zout.Z₂, L2, Zin.Z₂)
+end
+
+function propagate_layer!(
+    ZoutRefVec :: Vector{CachedZonotope},
+    Ls :: DiffLayer{
         ONNXLinear{S1},
         ZeroDense{S2},
         ONNXLinear{S3}},

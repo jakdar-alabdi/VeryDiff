@@ -16,6 +16,15 @@ function propagate_layer!(ZoutRef :: Zonotope, L :: ONNXLinear{S1}, Zin :: Zonot
     ZoutRef.c .+= L.dense.bias
 end
 
+function propagate_layer!(ZoutRef :: Zonotope, L :: ONNXAddConst{S1}, Zin :: Zonotope) where {S1}
+    # Zout must have exactly the same ids as Zin
+    # @assert all(ZoutRef.generator_ids .== Zin.generator_ids) "Zonotope generator IDs do not match during Dense propagation!"
+    for i in 1:length(Zin.Gs)
+        ZoutRef.Gs[i] .= Zin.Gs[i]
+    end
+    ZoutRef.c .= Zin.c .+ L.c
+end
+
 function get_slope(l,u, alpha)
     if u <= 0
         return 0.0

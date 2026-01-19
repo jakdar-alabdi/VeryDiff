@@ -119,10 +119,6 @@ function sort_mirror_network(layers :: Vector{OnnxLayer{LayerIdT}}, io_map :: Di
     return sorted_layers
 end
 
-function mk_dense(W::AbstractMatrix{Float64}, b::AbstractVector{Float64}) 
-    return ONNXLinear{Int64}(Dense(W, b, identity))
-end
-
 
 struct GeminiNetwork{LayerIdT}
     inputs :: Dict{LayerIdT, Int64}
@@ -159,6 +155,12 @@ struct GeminiNetwork{LayerIdT}
                 else
                     diff_l = ONNXLinear(l1.node.inputs, l1.node.outputs, l1.node.name, new_W, new_b)
                 end
+                push!(diff_layers, DiffLayer(l1.layer_index, l1.input_ids, l1.output_ids, l1.node, diff_l, l2.node))
+            elseif typeof(l1.node) == ONNXAddConst{LayerIdT}
+                b1 = l1.node.c
+                b2 = l2.node.c
+                new_b = b1 .- b2
+                diff_l = ONNXAddConst(l1.node.inputs, l1.node.outputs, l1.node.name, new_b)
                 push!(diff_layers, DiffLayer(l1.layer_index, l1.input_ids, l1.output_ids, l1.node, diff_l, l2.node))
             else
                 push!(diff_layers, DiffLayer(l1.layer_index, l1.input_ids, l1.output_ids, l1.node, l1.node, l2.node))

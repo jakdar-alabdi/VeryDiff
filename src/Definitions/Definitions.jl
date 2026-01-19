@@ -4,7 +4,7 @@ using LinearAlgebra
 using Statistics
 
 using VNNLib
-using VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu
+using VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu, ONNXAddConst
 
 using VeryDiff
 

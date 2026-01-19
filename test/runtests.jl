@@ -1,7 +1,7 @@
 using Test
 
 using VNNLib
-using VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu, OnnxNet
+using VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu, OnnxNet, ONNXAddConst
 
 using VeryDiff
 using VeryDiff.Definitions: executable_network

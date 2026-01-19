@@ -109,8 +109,27 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXLinear{S1}, Ze
     L2_W = L2.dense.weight
     @assert size(L1_W,2) == size(input_zono.Z₁.Gs[1],1) "Input dimension mismatch for Dense layer 1"
     @assert size(L2_W,2) == size(input_zono.Z₂.Gs[1],1) "Input dimension mismatch for Dense layer 2"
-    Z₁, Z₂ = init_layer_dense_z1_z2(L1, L2, input_zono, input_zono_cache, diff_layer.layer_idx)
-    ∂Z = init_zonotope(L2, input_zono.∂Z, input_zono.∂Z.influence, input_zono.∂Z.owned_generators)
+    Z₁, Z₂ = init_layer_dense_z1_z2(size(L1_W,1), input_zono, input_zono_cache, diff_layer.layer_idx)
+    ∂Z = init_zonotope(size(L1_W,1), input_zono.∂Z, input_zono.∂Z.influence, input_zono.∂Z.owned_generators)
+    Z =CachedZonotope(
+        DiffZonotope(
+            Z₁,
+            Z₂,
+            ∂Z
+        ),
+        nothing
+    )
+    init_default_zono(Z)
+    PS.zono_storage.zonotopes[output_positions[1]] = Z
+end
+
+function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXAddConst{S1},ONNXAddConst{S2},ONNXAddConst{S3}}, inputs :: Vector{CachedZonotope}, output_positions :: Vector{Int64}) where {S1, S2, S3}
+    @assert length(inputs) == 1 "Dense DiffLayer should have exactly one input"
+    @assert length(output_positions) == 1 "Dense DiffLayer should have exactly one output"
+    input_zono_cache = inputs[1]
+    input_zono = get_zonotope(input_zono_cache)
+    Z₁, Z₂ = init_layer_dense_z1_z2(length(input_zono.Z₁.c), input_zono, input_zono_cache, diff_layer.layer_idx)
+    ∂Z = init_zonotope(length(input_zono.Z₁.c), input_zono.∂Z, input_zono.∂Z.influence, input_zono.∂Z.owned_generators)
     Z =CachedZonotope(
         DiffZonotope(
             Z₁,
@@ -136,7 +155,7 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXLinear{S1},ONN
     diff_layer_output_W = diff_layer_output.dense.weight
     @assert size(L1_W,2) == size(input_zono.Z₁.Gs[1],1) "Input dimension mismatch for Dense layer 1"
     @assert size(L2_W,2) == size(input_zono.Z₂.Gs[1],1) "Input dimension mismatch for Dense layer 2"
-    Z₁, Z₂ = init_layer_dense_z1_z2(L1, L2, input_zono, input_zono_cache, diff_layer.layer_idx)
+    Z₁, Z₂ = init_layer_dense_z1_z2(size(L1_W,1), input_zono, input_zono_cache, diff_layer.layer_idx)
     # Instantiate ∂Z
     influence = input_zono.∂Z.influence
     if diff_layer.layer_idx == input_zono_cache.first_usage && !isnothing(input_zono.∂Z.owned_generators)
