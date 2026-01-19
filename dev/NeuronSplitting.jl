@@ -65,6 +65,10 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 final_δ_bound = task.distance_bound
                 # println(task.distance_bound)
                 
+                if !check_resources(start_time, timeout, 1)
+                    return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
+                end
+
                 @timeit to "Zonotope Propagate" begin
                     prop_state = PropState()
                     Zin = to_diff_zono(task)
@@ -154,9 +158,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             
                         elseif NEURON_SPLITTING_APPROACH[] == ZonoContraction
                             @timeit to "Contract Zono" begin
-                                
-                                # sort_prop = node -> -node.score
-    
+                                    
                                 centroid = (input_bounds[:, 1] + input_bounds[:, 2]) ./ 2.0
                                 sort_prop = node -> geometric_distance(centroid, node.g, node.c)
                                 sorted_consts = sort(prop_state.split_nodes, by=sort_prop)
@@ -214,21 +216,6 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 push!(queue, task₂)
                             end
                         end
-
-                        timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
-                        memory_out = (Sys.free_memory() / (1 << 30)) < 0
-                        
-                        if timeout_reached || memory_out
-                            if timeout_reached
-                                println("\nTIMEOUT REACHED")
-                            end
-                            if memory_out
-                                println("\nMEMORY OUT")
-                            end
-                            _, next_task = first(queue)
-                            final_δ_bound = next_task.distance_bound
-                            return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
-                        end
                     end
                 end
             end
@@ -275,4 +262,19 @@ function algin_vector(g::Vector{Float64}, len::Int64, offset₁::Int64, offset�
     ĝ[1:offset₁] .= g[1:offset₁]
     ĝ[(offset₁ + offset₂ + 1) : (offset₂ + size(g, 1))] .= g[(offset₁ + 1) : end]
     return ĝ
+end
+
+function check_resources(start_time::UInt64, timeout::Int64, mem_min::Int64)
+    timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
+    memout_reached = (Sys.free_memory() / (1 << 30)) < mem_min
+    
+    if timeout_reached
+        println("\nTIMEOUT REACHED")
+    end
+
+    if memout_reached
+        println("\nMEMOUT REACHED")
+    end
+    
+    return !timeout_reached && !memout_reached
 end
