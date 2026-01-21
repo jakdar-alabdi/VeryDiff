@@ -8,20 +8,20 @@ mutable struct SplitNode
     network :: Int64
     layer :: Int64
     neuron :: Int64
-    score :: Float64
     direction :: Int64
+end
+
+mutable struct SplitConstraint
+    node :: SplitNode
     g :: Vector{Float64}
     c :: Float64
-    function SplitNode(network=-1, layer=-1, neuron=-1, score=-Inf64, direction=0, g=zeros(0), c=0.0)
-        new(network, layer, neuron, score, direction, g, c)
-    end
 end
 
 mutable struct Branch
-    undetermined :: BitMatrix
     split_nodes :: Vector{SplitNode}
-    function Branch(undetermined=falses(0, 0), split_nodes=SplitNode[])
-        new(undetermined, split_nodes)
+    undetermined :: BitMatrix
+    function Branch(split_nodes=SplitNode[], undetermined=trues(1, 2))
+        new(split_nodes, undetermined)
     end
 end
 
@@ -48,12 +48,13 @@ end
 
 mutable struct PropState
     split_nodes :: Vector{SplitNode}
+    split_constraints :: Vector{SplitConstraint}
     instable_nodes :: Tuple{Vector{BitVector}, Vector{BitVector}}
     intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
     relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
     input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
     function PropState()
-        return new(SplitNode[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
+        return new(SplitNode[], SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
     end
 end
 

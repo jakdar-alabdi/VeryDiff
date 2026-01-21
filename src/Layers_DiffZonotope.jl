@@ -141,8 +141,9 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
         for node in P.split_nodes[indices_mask]
             lowers[node.network][node.neuron] *= node.direction == -1
             uppers[node.network][node.neuron] *= node.direction == 1
-            node.g = zonos[node.network].G[node.neuron, :]
-            node.c = zonos[node.network].c[node.neuron]
+            g = zonos[node.network].G[node.neuron, :]
+            c = zonos[node.network].c[node.neuron]
+            push!(P.split_constraints, SplitConstraint(node, g, c))
         end
     end
 

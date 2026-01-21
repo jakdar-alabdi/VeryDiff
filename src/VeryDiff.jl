@@ -48,6 +48,17 @@ function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool, Bool}; mode
     global NEURON_SPLITTING_APPROACH = Ref{NeuronSplittingApproach}(approach)
 end
 
+function get_config()
+    if !USE_NEURON_SPLITTING[]
+        return "VeryDiff"
+    end
+    config = "$(NEURON_SPLITTING_APPROACH[])-$(DEEPSPLIT_HEURISTIC_MODE[])"
+    config *= ifelse(DEEPSPLIT_HUERISTIC_ALTERNATIVE[], "-Alt", "-Base")
+    config *= ifelse(DEEPSPLIT_INPUT_SPLITTING[], "-Input", "")
+    config *= ifelse(DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS[], "-DiffZono", "")
+    return config
+end
+
 # We have our own multithreadding so we don't want to use BLAS multithreadding
 function __init__()
     BLAS.set_num_threads(1)

@@ -33,13 +33,13 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
 
         if USE_NEURON_SPLITTING[]
             # Get split nodes corresponding to this network and this layer
-            # layer_split_nodes = filter(node -> node.network == network && node.layer == layer, P.split_nodes)
             indices_mask = map(node -> node.network == network && node.layer == layer, P.split_nodes)
             for node in P.split_nodes[indices_mask]
                 bounds[node.neuron, 1] *= node.direction == -1
                 bounds[node.neuron, 2] *= node.direction == 1
-                node.g = Z.G[node.neuron, :]
-                node.c = Z.c[node.neuron]
+                g = Z.G[node.neuron, :]
+                c = Z.c[node.neuron]
+                push!(P.split_constraints, SplitConstraint(node, g, c))
             end
         end
     end

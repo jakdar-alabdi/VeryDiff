@@ -1,4 +1,4 @@
-import Base: push!, length, pop!, isempty, first
+import Base: empty!, push!, length, pop!, isempty, first
 import Base.Order.lt
 import Base.Order.Ordering
 using DataStructures
@@ -14,6 +14,7 @@ mutable struct Queue
 end
 
 function empty!(q::Queue)
+    empty!(q.queue.valtree)
     q.queue = BinaryHeap{Tuple{Float64,VerificationTask}}(VerificationTaskOrdering())
 end
 

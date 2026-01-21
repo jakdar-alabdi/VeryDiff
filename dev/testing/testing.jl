@@ -14,8 +14,8 @@ function verydiff(nn_file₁::String, nn_file₂::String, spec_file::String, eps
     N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
     f, n_inputs, _ = get_ast(spec_file)
     property_check = get_epsilon_property(epsilon)
-    println("Using VeryDiff...")
     VeryDiff.set_neuron_splitting_config((false, false, false, false))
+    println("\nUsing $(VeryDiff.get_config()) as verifier\n")
     for (bounds, _, _, _) in f
         status, δ_bounds = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout)
         net_name = replace(basename(nn_file₂), ".onnx" => "")
@@ -30,8 +30,8 @@ function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, appro
     return (nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String; save=true) -> begin
         N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
         f, n_inputs, _ = get_ast(spec_file)
-        println("Using DeepSplit...")
         VeryDiff.set_neuron_splitting_config(config; mode=mode, approach=approach)
+        println("\nUsing $(VeryDiff.get_config()) as verifier\n")
         for (bounds, _, _, _) in f
             status, δ_bounds = deepsplit_lp_search_epsilon(N₁, N₂, bounds, epsilon; timeout=timeout)
             net_name = replace(basename(nn_file₂), ".onnx" => "")
@@ -47,12 +47,14 @@ function run_tests(benchmarks_dir::String, specs_csv_file::String, run_name::Str
     open(specs_csv_file, "r") do f
         while !eof(f)
             spec = split(readline(f), ",")
-            nn_file₁ = "$benchmarks_dir/$(spec[1])"
-            nn_file₂ = "$benchmarks_dir/$(spec[2])"
-            spec_file = "$benchmarks_dir/$(spec[3])"
-            epsilon = parse(Float64, string(spec[4]))
-            timeout = parse(Int64, string(spec[5]))
-            eval_func(nn_file₁, nn_file₂, spec_file, epsilon, timeout, ""; save=false)
+            if !isempty(spec)
+                nn_file₁ = "$benchmarks_dir/$(spec[1])"
+                nn_file₂ = "$benchmarks_dir/$(spec[2])"
+                spec_file = "$benchmarks_dir/$(spec[3])"
+                epsilon = parse(Float64, string(spec[4]))
+                timeout = parse(Int64, string(spec[5]))
+                eval_func(nn_file₁, nn_file₂, spec_file, epsilon, timeout, ""; save=false)
+            end
         end
     end
 end
@@ -62,4 +64,5 @@ benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 acas_csv_dir = joinpath(cur_dir, "acas-prune.csv")
 mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
 
-run_tests(benchmarks_dir, acas_csv_dir, "ZonoContract-ZB-Base", deepsplit((true, false, false, false); mode=VeryDiff.ZonoBiased, approach=VeryDiff.ZonoContraction))
+run_tests(benchmarks_dir, acas_csv_dir, "ZonoContract-ZB-Base", deepsplit((true, false, false, true); mode=VeryDiff.ZonoBiased, approach=VeryDiff.ZonoContraction))
+# run_tests(benchmarks_dir, acas_csv_dir, "VeryDiff", verydiff)

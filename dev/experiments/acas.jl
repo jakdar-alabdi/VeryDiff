@@ -36,6 +36,7 @@ function _run_acas_all(specs_csv_file::String, warmup_specs_csv_file::String, lo
             log_file_name = joinpath(out_dir, "$spec_file_name.log")
             csv_file_name = joinpath(log_dir, run_name, "acas-$epsilon", "results.csv")
             
+            # print statement bench, prop
             original_stdout = stdout
             original_stderr = stderr
             open(log_file_name, "w") do f

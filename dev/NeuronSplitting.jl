@@ -18,7 +18,7 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
         
             input_dim = length(lower)
             ∂Z = Zonotope(Matrix(0.0I, input_dim, size(non_zero_indices, 1)), zeros(Float64, input_dim), nothing)
-            initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, Inf64, Branch(trues(1, 2)))
+            initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z, nothing, Inf64, Branch())
 
             split_heuristic = deepsplit_heuristic
             if DEEPSPLIT_HUERISTIC_ALTERNATIVE[]
@@ -63,7 +63,6 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
             while !isempty(queue)
                 work_share, task = pop!(queue)
                 final_δ_bound = task.distance_bound
-                # println(task.distance_bound)
                 
                 if !check_resources(start_time, timeout, 2)
                     empty!(queue)
@@ -101,14 +100,16 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                     var_num = size(Zout.∂Z.G, 2)
                     input_bounds = [-ones(var_num) ones(var_num)]
 
-                    if !isempty(prop_state.split_nodes)
+                    if !isempty(prop_state.split_constraints)
                         bounds = zono_bounds(Zout.∂Z)
+
                         # Compute all output dimensions that still need to be proven
                         mask = abs.(bounds) .> ϵ .&& task.branch.undetermined
 
-                        for node in prop_state.split_nodes
-                            offset = ifelse(node.network == 1, 0, Zout.num_approx₁)
-                            node.g = algin_vector(node.g, var_num, input_dim, offset)
+                        # Append zeros to the constraints vectors so that the match the output dimension
+                        for constraint in prop_state.split_constraints
+                            offset = ifelse(constraint.node.network == 1, 0, Zout.num_approx₁)
+                            constraint.g = align_vector(constraint.g, var_num, input_dim, offset)
                         end
                         
                         if NEURON_SPLITTING_APPROACH[] == LP
@@ -119,11 +120,11 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 set_time_limit_sec(model, 10)
                                 
                                 # Add input variables
-                                @variable(model, -1 <= x[i=1:var_num] <= 1)
+                                @variable(model, -1 <= x[1:var_num] <= 1)
         
                                 # Add split constraints
-                                for (;g, c, direction) in prop_state.split_nodes
-                                    @constraint(model, direction * (g'x + c) >= 0.0)
+                                for (;node, g, c) in prop_state.split_constraints
+                                    @constraint(model, node.direction * (g'x + c) >= 0.0)
                                 end
                             end
         
@@ -162,12 +163,12 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             @timeit to "Contract Zono" begin
                                     
                                 centroid = (input_bounds[:, 1] + input_bounds[:, 2]) ./ 2.0
-                                sort_prop = node -> geometric_distance(centroid, node.g, node.c)
-                                sorted_consts = sort(prop_state.split_nodes, by=sort_prop)
+                                sort_prop = constraint -> geometric_distance(centroid, constraint.g, constraint.c)
+                                sorted_consts = sort(prop_state.split_constraints, by=sort_prop)
                                 
                                 empty_intersection = false
-                                for (;g, c, direction) in sorted_consts
-                                    input_bounds = contract_zono(input_bounds, g, c, direction)
+                                for (;node, g, c) in sorted_consts
+                                    input_bounds = contract_zono(input_bounds, g, c, node.direction)
                                     if isnothing(input_bounds)
                                         empty_intersection = true
                                         break
@@ -226,10 +227,10 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
     end
 end
 
-function split_node(node::SplitNode, input_bounds::Matrix{Float64}, Zin::DiffZonotope, task::VerificationTask, work_share::Float64, distance_bound::Float64)
-    if node.layer == 0
+function split_node(node::SplitConstraint, input_bounds::Matrix{Float64}, Zin::DiffZonotope, task::VerificationTask, work_share::Float64, distance_bound::Float64)
+    if node.node.layer == 0
         @timeit to "Split Input" begin
-            return split_zono(node.neuron, task, work_share, nothing, distance_bound)
+            return split_zono(node.node.neuron, task, work_share, nothing, distance_bound)
         end
     end
     @timeit to "Split Neuron" begin
@@ -237,14 +238,14 @@ function split_node(node::SplitNode, input_bounds::Matrix{Float64}, Zin::DiffZon
     end
 end
 
-function split_neuron(node::SplitNode, input_bounds::Matrix{Float64}, Zin::DiffZonotope, task::VerificationTask, work_share::Float64, distance_bound::Float64)
+function split_neuron(split_node::SplitConstraint, input_bounds::Matrix{Float64}, Zin::DiffZonotope, task::VerificationTask, work_share::Float64, distance_bound::Float64)
     
-    (;network, layer, neuron, score, g, c) = node
+    (;node, g, c) = split_node
     direction₁, direction₂ = -1, 1 # inactive, active
 
     branch₁, branch₂ = task.branch, deepcopy(task.branch)
-    push!(branch₁.split_nodes, SplitNode(network, layer, neuron, score, direction₁, g, c))
-    push!(branch₂.split_nodes, SplitNode(network, layer, neuron, score, direction₂, g, c))
+    push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₁))
+    push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₂))
     
     task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
     task₂ = VerificationTask(deepcopy(task.middle), deepcopy(task.distance), task.distance_indices, deepcopy(task.∂Z), deepcopy(task.verification_status), distance_bound, branch₂)
@@ -259,7 +260,7 @@ function split_neuron(node::SplitNode, input_bounds::Matrix{Float64}, Zin::DiffZ
     return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
 end
 
-function algin_vector(g::Vector{Float64}, len::Int64, offset₁::Int64, offset₂::Int64)
+function align_vector(g::Vector{Float64}, len::Int64, offset₁::Int64, offset₂::Int64)
     ĝ = zeros(len)
     ĝ[1:offset₁] .= g[1:offset₁]
     ĝ[(offset₁ + offset₂ + 1) : (offset₂ + size(g, 1))] .= g[(offset₁ + 1) : end]

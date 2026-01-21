@@ -1,5 +1,5 @@
 function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, d::Int64)
-    n, _ = size(bounds)
+    n = size(bounds, 1)
     # @assert d == 1 || d == -1 "Unspecified direction"
     
     l = @view bounds[:, 1]
@@ -38,9 +38,8 @@ function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, 
 end
 
 function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope)
-    input_dim = size(Z.G, 2)
-    lower = @view bounds[1:input_dim, 1]
-    upper = @view bounds[1:input_dim, 2]
+    lower = @view bounds[1:size(Z.G, 2), 1]
+    upper = @view bounds[1:size(Z.G, 2), 2]
 
     α = (upper - lower) ./ 2
     β = (upper + lower) ./ 2
