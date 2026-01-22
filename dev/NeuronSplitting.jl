@@ -271,15 +271,10 @@ end
 
 function check_resources(start_time::UInt64, timeout::Int64, mem_min::Float64)
     timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
-    memout_reached = (Sys.free_memory() / (1 << 30)) < mem_min
     
     if timeout_reached
         println("\nTIMEOUT REACHED")
     end
-
-    if memout_reached
-        println("\nMEMOUT REACHED")
-    end
     
-    return !timeout_reached && !memout_reached
+    return !timeout_reached
 end
