@@ -64,10 +64,12 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 work_share, task = pop!(queue)
                 final_δ_bound = task.distance_bound
                 
-                if !check_resources(start_time, timeout, 2)
-                    empty!(queue)
-                    GC.gc()
-                    return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
+                @timeit to "Resource Check" begin
+                    if !check_resources(start_time, timeout, 0.1)
+                        empty!(queue)
+                        GC.gc()
+                        return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
+                    end
                 end
 
                 @timeit to "Zonotope Propagate" begin
@@ -267,7 +269,7 @@ function align_vector(g::Vector{Float64}, len::Int64, offset₁::Int64, offset�
     return ĝ
 end
 
-function check_resources(start_time::UInt64, timeout::Int64, mem_min::Int64)
+function check_resources(start_time::UInt64, timeout::Int64, mem_min::Float64)
     timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
     memout_reached = (Sys.free_memory() / (1 << 30)) < mem_min
     

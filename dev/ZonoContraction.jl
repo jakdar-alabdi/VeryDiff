@@ -58,8 +58,8 @@ end
 function offset_zono_bounds(input_bounds::Matrix{Float64}, Z::Zonotope)
     lower = @view input_bounds[1:size(Z.G, 2), 1]
     upper = @view input_bounds[1:size(Z.G, 2), 2]
-    u_bounds = mapreduce(g -> sum(ifelse.(g .>= 0, g .* [lower upper], g .* [upper lower]), dims=1), vcat, eachrow(Z.G))
-    return u_bounds .+ Z.c
+    ub_bounds = mapreduce(g -> sum(ifelse.(g .>= 0, g .* [lower upper], g .* [upper lower]), dims=1), vcat, eachrow(Z.G))
+    return ub_bounds .+ Z.c
 end
 
 function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, Z::Zonotope, task::VerificationTask)

@@ -80,9 +80,9 @@ function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, appro
 end
 
 function run_experiments()
-    println("\nRunning ACAS all...")
-    run_acas_all(deepsplit((true, false, true, true); mode=ZonoUnbiased, approach=ZonoContraction), "ZonoContract-ZU-Input-DiffZono")
-    run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction), "ZonoContract-DU-Input-DiffZono")
+    # println("\nRunning ACAS all...")
+    # run_acas_all(deepsplit((true, false, true, true); mode=ZonoUnbiased, approach=ZonoContraction), "ZonoContract-ZU-Input-DiffZono")
+    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction), "ZonoContract-DU-Input-DiffZono")
 
     println("\nRunning MNIST all...")
     run_mnist_all(deepsplit((true, false, false, false); mode=ZonoUnbiased, approach=ZonoContraction), "ZonoContract-ZU-Base")
