@@ -16,7 +16,7 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
             timeout = parse(Int64, string(spec[5]))
 
             println("\nNN₁: $(basename(nn_file₁))")
-            println("NN₁: $(basename(nn_file₂))")
+            println("NN₂: $(basename(nn_file₂))")
             println("Prop: $(basename(spec_file))")
             
             original_stdout = stdout
@@ -38,8 +38,8 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
     
     open(specs_csv_file, "r") do f
         while !eof(f)
-            sleep(10)
-	    spec = split(readline(f), ",")
+            # sleep(10)
+	        spec = split(readline(f), ",")
             nn_file₁ = "$benchmarks_dir/$(spec[1])"
             nn_file₂ = "$benchmarks_dir/$(spec[2])"
             spec_file = "$benchmarks_dir/$(spec[3])"
@@ -54,7 +54,7 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
             csv_file_name = joinpath(log_dir, run_name, "mnist-$epsilon", "results.csv")
             
             println("\nNN₁: $(basename(nn_file₁))")
-            println("NN₁: $(basename(nn_file₂))")
+            println("NN₂: $(basename(nn_file₂))")
             println("Prop: $(basename(spec_file))")
 
             original_stdout = stdout

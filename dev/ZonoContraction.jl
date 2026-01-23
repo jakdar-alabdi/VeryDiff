@@ -46,8 +46,20 @@ function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope)
 
     G = Z.G .* α' # Z.G * diag(α)
     c = Z.c + Z.G * β
-
     return Zonotope(G, c, Z.influence)
+end
+
+function transform_offset_zono!(bounds::Matrix{Float64}, Z::Zonotope)
+    lower = @view bounds[1:size(Z.G, 2), 1]
+    upper = @view bounds[1:size(Z.G, 2), 2]
+
+    α = (upper - lower) ./ 2
+    β = (upper + lower) ./ 2
+
+    Z.G .*= α'
+    Z.c .+= Z.G * β
+
+    return Z
 end
 
 function offset_zono_bounds(input_bounds::Matrix{Float64}, Z::Zonotope)
@@ -64,7 +76,7 @@ function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{
     if !isnothing(input_bounds)
 
         # bounds = offset_zono_bounds(input_bounds, Z)
-        Z = transform_offset_zono(input_bounds, Z)
+        Z = transform_offset_zono!(input_bounds, Z)
         bounds = zono_bounds(Z)
         lower = @view bounds[task.distance_indices, 1]
         upper = @view bounds[task.distance_indices, 2]

@@ -51,6 +51,7 @@ function verydiff(nn_file₁::String, nn_file₂::String, spec_file::String, eps
     f, n_inputs, _ = get_ast(spec_file)
     property_check = get_epsilon_property(epsilon)
     set_neuron_splitting_config((false, false, false, false))
+    VeryDiff.NEW_HEURISTIC = true
     println("Using $(VeryDiff.get_config())...")
     for (bounds, _, _, _) in f
         status, δ_bounds = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout)

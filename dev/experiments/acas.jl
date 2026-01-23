@@ -16,7 +16,7 @@ function _run_acas_all(specs_csv_file::String, warmup_specs_csv_file::String, lo
             timeout = parse(Int64, string(spec[5]))
                         
             println("\nNN₁: $(basename(nn_file₁))")
-            println("NN₁: $(basename(nn_file₂))")
+            println("NN₂: $(basename(nn_file₂))")
             println("Prop: $(basename(spec_file))")
             
             original_stdout = stdout
@@ -53,7 +53,7 @@ function _run_acas_all(specs_csv_file::String, warmup_specs_csv_file::String, lo
             csv_file_name = joinpath(log_dir, run_name, "acas-$epsilon", "results.csv")
             
             println("\nNN₁: $(basename(nn_file₁))")
-            println("NN₁: $(basename(nn_file₂))")
+            println("NN₂: $(basename(nn_file₂))")
             println("Prop: $(basename(spec_file))")
 
             original_stdout = stdout

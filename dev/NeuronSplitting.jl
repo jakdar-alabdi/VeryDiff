@@ -64,13 +64,13 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 work_share, task = pop!(queue)
                 final_δ_bound = task.distance_bound
                 
-                @timeit to "Resource Check" begin
-                    if !check_resources(start_time, timeout, 0.1)
-                        empty!(queue)
-                        GC.gc()
-                        return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
-                    end
+                # @timeit to "Resource Check" begin
+                if !check_resources(start_time, timeout, 0.1)
+                    empty!(queue)
+                    GC.gc()
+                    return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
                 end
+                # end
 
                 @timeit to "Zonotope Propagate" begin
                     prop_state = PropState()
@@ -183,10 +183,10 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                     continue
                                 end
 
-                                Zin.Z₁ = transform_offset_zono(input_bounds, Zin.Z₁)
+                                Zin.Z₁ = transform_offset_zono!(input_bounds, Zin.Z₁)
                                 Zin.Z₂.G .= Zin.Z₁.G
                                 Zin.Z₂.c .= Zin.Z₁.c
-                                Zout.∂Z = transform_offset_zono(input_bounds, Zout.∂Z)
+                                Zout.∂Z = transform_offset_zono!(input_bounds, Zout.∂Z)
                                 prop_satisfied, cex, _, _, _ = property_check(N₁, N₂, Zin, Zout, nothing)
 
                                 if !prop_satisfied
@@ -213,7 +213,9 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
 
                     if any(task.branch.undetermined)
                         @timeit to "Compute Split" begin
-                            split_candidate = split_heuristic(Zout, prop_state, task.distance_indices)
+                            @timeit to "DeepSplit Heuristic" begin
+                                split_candidate = split_heuristic(Zout, prop_state, task.distance_indices)
+                            end
                             distance_bound = min(distance_bound, task.distance_bound)
                             task₁, task₂ = split_node(split_candidate, input_bounds, Zin, task, work_share, distance_bound)
                             if !isnothing(task₁[2])
@@ -244,21 +246,25 @@ end
 
 function split_neuron(split_node::SplitConstraint, input_bounds::Matrix{Float64}, Zin::DiffZonotope, task::VerificationTask, work_share::Float64, distance_bound::Float64)
     
-    (;node, g, c) = split_node
-    direction₁, direction₂ = -1, 1 # inactive, active
-
-    branch₁, branch₂ = task.branch, deepcopy(task.branch)
-    push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₁))
-    push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₂))
+    @timeit to "Allocate Tasks" begin
+        (;node, g, c) = split_node
+        direction₁, direction₂ = -1, 1 # inactive, active
     
-    task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
-    task₂ = VerificationTask(deepcopy(task.middle), deepcopy(task.distance), task.distance_indices, deepcopy(task.∂Z), deepcopy(task.verification_status), distance_bound, branch₂)
+        branch₁, branch₂ = task.branch, deepcopy(task.branch)
+        push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₁))
+        push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₂))
+        
+        task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
+        task₂ = VerificationTask(deepcopy(task.middle), deepcopy(task.distance), task.distance_indices, deepcopy(task.∂Z), deepcopy(task.verification_status), distance_bound, branch₂)
+    end
 
     if NEURON_SPLITTING_APPROACH[] == ZonoContraction
-        input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
-
-        task₁ = contract_to_verification_task(input_bounds₁, g, c, direction₁, Zin.Z₁, task₁)
-        task₂ = contract_to_verification_task(input_bounds₂, g, c, direction₂, Zin.Z₂, task₂)
+        @timeit to "Contract VeriTask" begin
+            input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
+    
+            task₁ = contract_to_verification_task(input_bounds₁, g, c, direction₁, Zin.Z₁, task₁)
+            task₂ = contract_to_verification_task(input_bounds₂, g, c, direction₂, Zin.Z₂, task₂)
+        end
     end
 
     return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
