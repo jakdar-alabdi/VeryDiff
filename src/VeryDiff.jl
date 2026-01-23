@@ -14,38 +14,36 @@ USE_GUROBI = true
 
 USE_DIFFZONO = true
 
-"""If true, neuron splitting utilized to refine the bounds of the output Zonotopes"""
-USE_NEURON_SPLITTING = Ref{Bool}(false)
+"""If true, neuron splitting is utilized to refine the bounds of the output Zonotopes"""
+global const USE_NEURON_SPLITTING = Ref{Bool}(false)
 
 """All the approaches used in VeryDiff to split a neuron"""
 @enum NeuronSplittingApproach LP ZonoContraction VerticalSplitting
+global const NEURON_SPLITTING_APPROACH = Ref{NeuronSplittingApproach}(LP)
 
-"""Initially we utilize LP to split a neuron"""
-NEURON_SPLITTING_APPROACH = Ref{NeuronSplittingApproach}(LP)
+"""Use the alternative implementation of the DeepSplit heuristic for neuron splitting"""
+global const DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(false)
 
-"""Use the alternative DeepSplit heuristic for neuron splitting"""
-DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(false)
-
-"""Use the generators of the difference Zonotope for the heuristic instead of the corresponding network's Zonotope"""
-DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(false)
+"""Use the generators of the Differential Zonotope for the heuristic instead of the corresponding NN's Zonotope"""
+global const DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(false)
 
 """Incorporate DeepSplit input splitting into DeepSplit neuron splitting"""
-DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(true)
+global const DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(true)
 
 """Constant multiplier used to weight the effect of input nodes in the DeepSplit heuristic"""
-INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
+global const INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
 
 """Different modes for the computation of the relative impactes in the DeepSplit heuristic"""
 @enum DeepSplitHeuristicMode ZonoBiased ZonoUnbiased DeepSplitBiased DeepSplitUnbiased
-DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(ZonoBiased)
+global const DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(ZonoBiased)
 
 function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP)
-    global USE_NEURON_SPLITTING = Ref{Bool}(config[1])
-    global DEEPSPLIT_HUERISTIC_ALTERNATIVE = Ref{Bool}(config[2])
-    global DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS = Ref{Bool}(config[3])
-    global DEEPSPLIT_INPUT_SPLITTING = Ref{Bool}(config[4])
-    global DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(mode)
-    global NEURON_SPLITTING_APPROACH = Ref{NeuronSplittingApproach}(approach)
+    global USE_NEURON_SPLITTING[] = config[1]
+    global DEEPSPLIT_HUERISTIC_ALTERNATIVE[] = config[2]
+    global DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS[] = config[3]
+    global DEEPSPLIT_INPUT_SPLITTING[] = config[4]
+    global DEEPSPLIT_HEURISTIC_MODE[] = mode
+    global NEURON_SPLITTING_APPROACH[] = approach
 end
 
 function get_config()

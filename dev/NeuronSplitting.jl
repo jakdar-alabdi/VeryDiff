@@ -109,9 +109,11 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         mask = abs.(bounds) .> ϵ .&& task.branch.undetermined
 
                         # Append zeros to the constraints vectors so that the match the output dimension
-                        for constraint in prop_state.split_constraints
-                            offset = ifelse(constraint.node.network == 1, 0, Zout.num_approx₁)
-                            constraint.g = align_vector(constraint.g, var_num, input_dim, offset)
+                        @timeit to "Align Constraints" begin
+                            for constraint in prop_state.split_constraints
+                                offset = ifelse(constraint.node.network == 1, 0, Zout.num_approx₁)
+                                constraint.g = align_vector(constraint.g, var_num, input_dim, offset)
+                            end
                         end
                         
                         if NEURON_SPLITTING_APPROACH[] == LP

@@ -44,11 +44,6 @@ function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope)
     α = (upper - lower) ./ 2
     β = (upper + lower) ./ 2
 
-    # Z.G .*= α' # Z.G * diag(α)
-    # Z.c .+= Z.G * β
-
-    # return Z
-
     G = Z.G .* α' # Z.G * diag(α)
     c = Z.c + Z.G * β
 
@@ -58,8 +53,9 @@ end
 function offset_zono_bounds(input_bounds::Matrix{Float64}, Z::Zonotope)
     lower = @view input_bounds[1:size(Z.G, 2), 1]
     upper = @view input_bounds[1:size(Z.G, 2), 2]
-    ub_bounds = mapreduce(g -> sum(ifelse.(g .>= 0, g .* [lower upper], g .* [upper lower]), dims=1), vcat, eachrow(Z.G))
-    return ub_bounds .+ Z.c
+    bounds = mapreduce(g -> sum(ifelse.(g .>= 0, g .* [lower upper], g .* [upper lower]), dims=1), vcat, eachrow(Z.G))
+    bounds .+= Z.c
+    return bounds
 end
 
 function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, Z::Zonotope, task::VerificationTask)
