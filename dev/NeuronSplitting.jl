@@ -80,7 +80,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
 
                 @timeit to "Zonotope Propagate" begin
                     Zin = to_diff_zono(task)
-                    prop_state = PropState(inter_contract, Zin, task.branch.split_nodes)
+                    prop_state = PropState(task, Zin, inter_contract, task.branch.split_nodes)
                     Zout = N(Zin, prop_state)
                 end
                 
@@ -89,7 +89,6 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         if prop_state.isempty_intersection
                             continue
                         end
-                        Zin = prop_state.Zin
                     end
 
                     prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing)
@@ -224,17 +223,11 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         task.branch.undetermined = mask
                     end
 
-                    if any(task.branch.undetermined)                       
+                    if any(task.branch.undetermined)
                         @timeit to "Compute Split" begin
                             
-                            if inter_contract || post_contract && !pre_contract
-                                bounds = zono_bounds(Zin.Z₁)
-                                lower = @view bounds[task.distance_indices, 1]
-                                upper = @view bounds[task.distance_indices, 2]
-
-                                mid = (upper .+ lower) ./ 2
-                                task.distance .= mid .- lower
-                                task.middle[task.distance_indices] .= mid
+                            if post_contract && !pre_contract
+                                transform_verification_task!(input_bounds, task)
                             end
 
                             @timeit to "DeepSplit Heuristic" begin

@@ -49,7 +49,8 @@ function verify_network(
     # split_heuristic = top1_configure_split_heuristic(3) #epsilon_split_heuristic
 
     #Config
-    prop_state = PropState()
+    initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z_original, nothing, 1.0, Branch())
+    prop_state = PropState(initial_task)
     num_threads = Threads.nthreads()
     println("Running with $(num_threads) threads")
     #single_threaded = num_threads == 1
@@ -59,9 +60,7 @@ function verify_network(
     #    common_state = MultiThreaddedQueue(num_threads)
     #end
     work_queue = Queue()
-    push!(work_queue,
-        (1.0,VerificationTask(mid, distance, non_zero_indices, ∂Z_original, nothing, 1.0, Branch()))
-    )
+    push!(work_queue, (1.0, initial_task))
     end
     @timeit to "Verify" begin
     @Debugger.propagation_init_hook(N, prop_state)
