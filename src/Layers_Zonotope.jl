@@ -8,9 +8,12 @@ end
 
 function (L::Dense)(Z :: Zonotope, P :: PropState, network :: Int64, layer :: Int64)
     return @timeit to "Zonotope_DenseProp" begin
-    G = L.W * Z.G
-    c = L.W * Z.c .+ L.b
-    return Zonotope(G,c, Z.influence)
+        if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+            return Z
+        end
+        G = L.W * Z.G
+        c = L.W * Z.c .+ L.b
+        return Zonotope(G,c, Z.influence)
     end
 end
 
@@ -27,24 +30,53 @@ end
 function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; bounds = nothing)
     return @timeit to "Zonotope_ReLUProp" begin
     @timeit to "Bounds" begin
-    row_count = size(Z.G,1)
-    if isnothing(bounds)
-        bounds = zono_bounds(Z)
+        row_count = size(Z.G,1)
+        if isnothing(bounds)
+            if USE_NEURON_SPLITTING[]
+                if P.contract
+                    if P.isempty_intersection
+                        return Z
+                    end
+                    input_bounds = [-ones(size(Z.G, 2)) ones(size(Z.G, 2))]
+                end
+                
+                # Get split nodes corresponding to this network and this layer
+                indices_mask = map(node -> node.network == network && node.layer == layer, P.split_nodes)
+                for node in P.split_nodes[indices_mask]
+                    g = Z.G[node.neuron, :]
+                    c = Z.c[node.neuron]
 
-        if USE_NEURON_SPLITTING[]
-            # Get split nodes corresponding to this network and this layer
-            indices_mask = map(node -> node.network == network && node.layer == layer, P.split_nodes)
-            for node in P.split_nodes[indices_mask]
-                bounds[node.neuron, 1] *= node.direction == -1
-                bounds[node.neuron, 2] *= node.direction == 1
-                g = Z.G[node.neuron, :]
-                c = Z.c[node.neuron]
-                push!(P.split_constraints, SplitConstraint(node, g, c))
+                    if P.contract
+                        input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                        
+                        P.isempty_intersection |= isnothing(input_bounds)
+                        if P.isempty_intersection
+                            P.split_nodes = SplitNode[]
+                            P.instable_nodes = (BitVector[], BitVector[])
+                            P.intermediate_zonos = (Zonotope[], Zonotope[])
+                            return Z
+                        end
+                    else
+                        push!(P.split_constraints, SplitConstraint(node, g, c))
+                    end
+                end
+
+                if P.contract
+                    Z = transform_offset_zono!(input_bounds, Z)
+                end
+            end
+
+            bounds = zono_bounds(Z)
+
+            if USE_NEURON_SPLITTING[]
+                for node in P.split_nodes[indices_mask]
+                    bounds[node.neuron, 1] *= node.direction == -1
+                    bounds[node.neuron, 2] *= node.direction == 1
+                end
             end
         end
-    end
-    lower = @view bounds[:,1]
-    upper = @view bounds[:,2]
+        lower = @view bounds[:,1]
+        upper = @view bounds[:,2]
     end
 
     @timeit to "Vectors" begin
@@ -98,16 +130,6 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
     Ĝ[:,1:size(Z.G,2)] .*= λ
     Ĝ[:,size(Z.G,2)+1:end] .*= abs.(γ)
     end
-
-    # Select a split candidate naively (by only considering each node's generator) for next branching
-    # if any(crossing)
-    #     neuron = argmax(i -> sum(abs.(Z.G[i, :])), (1:size(crossing, 1))[crossing])
-    #     node = SplitNode(network, layer, neuron, 0.0, 0, Z.G[neuron, :], Z.c[neuron])
-    #     if sum(abs.(node.g)) > sum(abs.(P.split_candidate.g))
-    #         P.split_candidate = node
-    #     end
-    # end
-
     return Zonotope(Ĝ, ĉ, influence_new)
     end
 end

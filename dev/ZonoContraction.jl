@@ -37,28 +37,39 @@ function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, 
     return bounds
 end
 
-function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope)
-    lower = @view bounds[1:size(Z.G, 2), 1]
-    upper = @view bounds[1:size(Z.G, 2), 2]
+function transform_offset_zono!(bounds::Matrix{Float64}, Z::Zonotope; bounds_range=nothing)
+    if isnothing(bounds_range)
+        bounds_range = 1:size(Z.G, 2)
+    end
+    lower = @view bounds[bounds_range, 1]
+    upper = @view bounds[bounds_range, 2]
 
     α = (upper - lower) ./ 2
     β = (upper + lower) ./ 2
 
-    G = Z.G .* α' # Z.G * diag(α)
-    c = Z.c + Z.G * β
-    return Zonotope(G, c, Z.influence)
+    Z.c .+= Z.G * β
+    Z.G .*= α'
+
+    return Z
 end
 
-function transform_offset_zono!(bounds::Matrix{Float64}, Z::Zonotope)
-    lower = @view bounds[1:size(Z.G, 2), 1]
-    upper = @view bounds[1:size(Z.G, 2), 2]
+function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope; bounds_range=nothing)
+    return transform_offset_zono!(bounds, Zonotope(deepcopy(Z.G), deepcopy(Z.c), Z.influence); bounds_range=bounds_range)
+end
 
-    α = (upper - lower) ./ 2
-    β = (upper + lower) ./ 2
+function transform_offset_diff_zono(bounds::Matrix{Float64}, Z::DiffZonotope)
+    input_dim = size(Z.Z₁, 2) - Z.num_approx₁
+    
+    N̂ = size(Z.∂Z.G, 2)
+    r₁, r₂ = falses(N̂), falses(N̂)
+    r₁[1:input_dim] .= true
+    r₂[1:input_dim] .= true
+    r₁[input_dim + 1 : input_dim + Z.num_approx₁] .= true
+    r₂[input_dim + Z.num_approx₁ + 1 : input_dim + Z.num_approx₁ + Z.num_approx₂] .= true
 
-    Z.G .*= α'
-    Z.c .+= Z.G * β
-
+    Z.Z₁ = transform_offset_zono!(bounds, Z.Z₁; bounds_range=r₁)
+    Z.Z₂ = transform_offset_zono!(bounds, Z.Z₂; bounds_range=r₂)
+    Z.∂Z = transform_offset_zono!(bounds, Z.∂Z)
     return Z
 end
 
@@ -70,7 +81,7 @@ function offset_zono_bounds(input_bounds::Matrix{Float64}, Z::Zonotope)
     return bounds
 end
 
-function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, Z::Zonotope, task::VerificationTask)
+function contract_to_verification_task!(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, Z::Zonotope, task::VerificationTask)
     
     input_bounds = contract_zono(input_bounds, g, c, direction)
     if !isnothing(input_bounds)

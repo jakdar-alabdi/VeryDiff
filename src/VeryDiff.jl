@@ -37,13 +37,18 @@ global const INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
 @enum DeepSplitHeuristicMode ZonoBiased ZonoUnbiased DeepSplitBiased DeepSplitUnbiased
 global const DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(ZonoBiased)
 
-function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP)
+"""Different modes for the contraction of Zonotopes"""
+@enum ZonoContractMode ZonoContract ZonoContractPre ZonoContractPost ZonoContractInter
+global const ZONO_CONTRACT_MODE = Ref{ZonoContractMode}(ZonoContract)
+
+function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP, contract=ZonoContract)
     global USE_NEURON_SPLITTING[] = config[1]
     global DEEPSPLIT_HUERISTIC_ALTERNATIVE[] = config[2]
     global DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS[] = config[3]
     global DEEPSPLIT_INPUT_SPLITTING[] = config[4]
     global DEEPSPLIT_HEURISTIC_MODE[] = mode
     global NEURON_SPLITTING_APPROACH[] = approach
+    global ZONO_CONTRACT_MODE[] = contract
 end
 
 function get_config()
@@ -51,6 +56,9 @@ function get_config()
         return "VeryDiff"
     end
     config = "$(NEURON_SPLITTING_APPROACH[])-$(DEEPSPLIT_HEURISTIC_MODE[])"
+    if NEURON_SPLITTING_APPROACH[] == ZonoContraction
+        config *= "-$(ZONO_CONTRACT_MODE[])"
+    end
     config *= ifelse(DEEPSPLIT_HUERISTIC_ALTERNATIVE[], "-Alt", "-Base")
     config *= ifelse(DEEPSPLIT_INPUT_SPLITTING[], "-Input", "")
     config *= ifelse(DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS[], "-DiffZono", "")

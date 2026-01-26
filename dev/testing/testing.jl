@@ -27,11 +27,11 @@ function verydiff(nn_file₁::String, nn_file₂::String, spec_file::String, eps
     end
 end
 
-function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP)
+function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP, contract=ZonoContract)
     return (nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String; save=true) -> begin
         N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
         f, n_inputs, _ = get_ast(spec_file)
-        VeryDiff.set_neuron_splitting_config(config; mode=mode, approach=approach)
+        VeryDiff.set_neuron_splitting_config(config; mode=mode, approach=approach, contract=contract)
         println("\nUsing $(VeryDiff.get_config())...\n")
         for (bounds, _, _, _) in f
             status, δ_bounds = deepsplit_lp_search_epsilon(N₁, N₂, bounds, epsilon; timeout=timeout)
@@ -65,7 +65,6 @@ benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 acas_csv_dir = joinpath(cur_dir, "acas-prune.csv")
 mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
 
-# run_tests(benchmarks_dir, acas_csv_dir, "ZonoContract-ZB-Base", deepsplit((true, false, false, false); mode=VeryDiff.ZonoBiased, approach=VeryDiff.ZonoContraction))
-run_tests(benchmarks_dir, mnist_csv_dir, "ZonoContract-ZB-Base", deepsplit((true, false, false, false); mode=VeryDiff.ZonoBiased, approach=VeryDiff.ZonoContraction))
-# run_tests(benchmarks_dir, acas_csv_dir, "VeryDiff", verydiff)
-# run_tests(benchmarks_dir, mnist_csv_dir, "ZonoContract-ZB-Base", verydiff)
+verifier = deepsplit((true, false, false, false); mode=VeryDiff.ZonoBiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.ZonoContractInter)
+
+run_tests(benchmarks_dir, mnist_csv_dir, "ZonoContract-ZB-Base", verifier)
