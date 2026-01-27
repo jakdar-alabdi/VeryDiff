@@ -100,8 +100,9 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
         end
         
         if P.contract && !isempty(layer_split_nodes)
-            Z = transform_offset_diff_zono(input_bounds, Z)
-            P.Zin.Z₁ = transform_offset_zono!(input_bounds, P.Zin.Z₁)
+            transform_offset_diff_zono(input_bounds, Z)
+            transform_verification_task!(P.task, input_bounds)
+            transform_offset_zono!(input_bounds, P.Zin.Z₁)
             P.Zin.Z₂.G .= P.Zin.Z₁.G
             P.Zin.Z₂.c .= P.Zin.Z₁.c
         end

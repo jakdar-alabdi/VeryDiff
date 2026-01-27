@@ -47,8 +47,9 @@ mutable struct DiffZonotope
 end
 
 mutable struct PropState
-    contract :: Bool
+    task :: VerificationTask
     Zin :: Union{DiffZonotope, Nothing}
+    contract :: Bool
     isempty_intersection :: Bool
     split_nodes :: Vector{SplitNode}
     split_constraints :: Vector{SplitConstraint}
@@ -56,8 +57,8 @@ mutable struct PropState
     intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
     relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
     input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
-    function PropState(contract=false, Zin=nothing, split_nodes=SplitNode[])
-        return new(contract, Zin, false, split_nodes, SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
+    function PropState(task::VerificationTask, Zin=nothing, contract=false, split_nodes=SplitNode[])
+        return new(task, Zin, contract, false, split_nodes, SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
     end
 end
 
