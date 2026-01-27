@@ -57,18 +57,18 @@ function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope; bounds_rang
     return transform_offset_zono!(bounds, Zonotope(deepcopy(Z.G), deepcopy(Z.c), Z.influence); bounds_range=bounds_range)
 end
 
-function transform_offset_diff_zono(bounds::Matrix{Float64}, Z::DiffZonotope)
+function transform_offset_diff_zono!(bounds::Matrix{Float64}, Z::DiffZonotope)
     input_dim = size(Z.Z₁, 2) - Z.num_approx₁
     
     N̂ = size(Z.∂Z.G, 2)
-    r₁, r₂ = falses(N̂), falses(N̂)
-    r₁[1:input_dim] .= true
-    r₂[1:input_dim] .= true
-    r₁[input_dim + 1 : input_dim + Z.num_approx₁] .= true
-    r₂[input_dim + Z.num_approx₁ + 1 : input_dim + Z.num_approx₁ + Z.num_approx₂] .= true
+    range₁, range₂ = falses(N̂), falses(N̂)
+    range₁[1:input_dim] .= true
+    range₂[1:input_dim] .= true
+    range₁[input_dim + 1 : input_dim + Z.num_approx₁] .= true
+    range₂[input_dim + Z.num_approx₁ + 1 : input_dim + Z.num_approx₁ + Z.num_approx₂] .= true
 
-    Z.Z₁ = transform_offset_zono!(bounds, Z.Z₁; bounds_range=r₁)
-    Z.Z₂ = transform_offset_zono!(bounds, Z.Z₂; bounds_range=r₂)
+    Z.Z₁ = transform_offset_zono!(bounds, Z.Z₁; bounds_range=range₁)
+    Z.Z₂ = transform_offset_zono!(bounds, Z.Z₂; bounds_range=range₂)
     Z.∂Z = transform_offset_zono!(bounds, Z.∂Z)
     return Z
 end
@@ -87,6 +87,17 @@ function transform_verification_task!(task::VerificationTask, bounds::Matrix{Flo
     return task
 end
 
+function contract_to_verification_task!(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, task::VerificationTask)
+    input_bounds = contract_zono(input_bounds, g, c, direction)
+    if !isnothing(input_bounds)
+        if !all(isone.(abs.(input_bounds)))
+            return transform_verification_task!(task, input_bounds)
+        end
+        return task
+    end
+    return nothing
+end
+
 function offset_zono_bounds(input_bounds::Matrix{Float64}, Z::Zonotope)
     lower = @view input_bounds[1:size(Z.G, 2), 1]
     upper = @view input_bounds[1:size(Z.G, 2), 2]
@@ -95,29 +106,11 @@ function offset_zono_bounds(input_bounds::Matrix{Float64}, Z::Zonotope)
     return bounds
 end
 
-function contract_to_verification_task!(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, Z::Zonotope, task::VerificationTask)
-    
-    input_bounds = contract_zono(input_bounds, g, c, direction)
-    if !isnothing(input_bounds)
-
-        return transform_verification_task!(task, input_bounds)
-        # bounds = offset_zono_bounds(input_bounds, Z)
-
-        # Z = transform_offset_zono!(input_bounds, Z)
-        # bounds = zono_bounds(Z)
-        # lower = @view bounds[task.distance_indices, 1]
-        # upper = @view bounds[task.distance_indices, 2]
-
-        # mid = (upper .+ lower) ./ 2
-        # task.distance .= mid .- lower
-        # task.middle[task.distance_indices] .= mid
-
-        # return task
-    end
-
-    return nothing
-end
-
 function geometric_distance(x̂::Vector{Float64}, g::Vector{Float64}, c::Float64)
     return abs(g'x̂ + c) / sqrt(g'g)
+end
+
+function sort_constraints!(constraints::Vector{SplitConstraint}, x̂::Vector{Float64})
+    sort!(constraints, by=constraint -> geometric_distance(x̂, constraint.g, constraint.c))
+    return constraints
 end

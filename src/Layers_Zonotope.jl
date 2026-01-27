@@ -7,10 +7,11 @@ function (N::Network)(Z :: Zonotope, P :: PropState, network :: Int64)
 end
 
 function (L::Dense)(Z :: Zonotope, P :: PropState, network :: Int64, layer :: Int64)
+    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+        return Z
+    end
+
     return @timeit to "Zonotope_DenseProp" begin
-        if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
-            return Z
-        end
         G = L.W * Z.G
         c = L.W * Z.c .+ L.b
         return Zonotope(G,c, Z.influence)
@@ -28,48 +29,72 @@ function get_slope(l,u, alpha)
 end
 
 function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; bounds = nothing)
+    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+        return Z
+    end
+
     return @timeit to "Zonotope_ReLUProp" begin
     @timeit to "Bounds" begin
         row_count = size(Z.G,1)
         if isnothing(bounds)
             if USE_NEURON_SPLITTING[]
-                if P.contract
-                    if P.isempty_intersection
-                        return Z
-                    end
-                    input_bounds = [-ones(size(Z.G, 2)) ones(size(Z.G, 2))]
-                end
-                
                 # Get split nodes corresponding to this network and this layer
-                indices_mask = map(node -> node.network == network && node.layer == layer, P.split_nodes)
-                for node in P.split_nodes[indices_mask]
-                    g = Z.G[node.neuron, :]
-                    c = Z.c[node.neuron]
+                indices_mask = map(node -> node.network == network && node.layer == layer, P.task.branch.split_nodes)
+                layer_split_nodes = @view P.task.branch.split_nodes[indices_mask]
+
+                if !isempty(layer_split_nodes)
+                    N̂ = size(Z.G, 2)
 
                     if P.contract
-                        input_bounds = contract_zono(input_bounds, g, c, node.direction)
-                        
-                        P.isempty_intersection |= isnothing(input_bounds)
-                        if P.isempty_intersection
-                            P.split_nodes = SplitNode[]
-                            P.instable_nodes = (BitVector[], BitVector[])
-                            P.intermediate_zonos = (Zonotope[], Zonotope[])
-                            return Z
+                        @timeit to "Inter-Contract Zono" begin
+                            layer_constraints = SplitConstraint[]
+                            @timeit to "Collect Constraints" begin
+                                for node in layer_split_nodes
+                                    g = Z.G[node.neuron, :]
+                                    c = Z.c[node.neuron]
+                                    push!(layer_constraints, SplitConstraint(node, g, c))
+                                end
+                            end
+                            
+                            sort_constraints!(layer_constraints, zeros(N̂))
+                            input_bounds = [-ones(N̂) ones(N̂)]
+                            
+                            for (;node, g, c) in layer_constraints
+                                @timeit to "Contract Zono" begin
+                                    input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                                    
+                                    P.isempty_intersection |= isnothing(input_bounds)
+                                    if P.isempty_intersection
+                                        P.instable_nodes = (BitVector[], BitVector[])
+                                        P.intermediate_zonos = (Zonotope[], Zonotope[])
+                                        return Z
+                                    end
+                                end
+                            end
+
+                            if !all(isone.(abs.(input_bounds)))
+                                @timeit to "Transform Zono" begin
+                                    transform_offset_zono!(input_bounds, Z)
+                                    transform_verification_task!(P.task, input_bounds)
+                                end
+                            end
                         end
                     else
-                        push!(P.split_constraints, SplitConstraint(node, g, c))
+                        @timeit to "Collect Constraints" begin
+                            for node in layer_split_nodes
+                                g = zonos[node.network].G[node.neuron, :]
+                                c = zonos[node.network].c[node.neuron]
+                                push!(P.split_constraints, SplitConstraint(node, g, c))
+                            end
+                        end
                     end
-                end
-
-                if P.contract
-                    Z = transform_offset_zono!(input_bounds, Z)
                 end
             end
 
             bounds = zono_bounds(Z)
 
             if USE_NEURON_SPLITTING[]
-                for node in P.split_nodes[indices_mask]
+                for node in layer_split_nodes
                     bounds[node.neuron, 1] *= node.direction == -1
                     bounds[node.neuron, 2] *= node.direction == 1
                 end

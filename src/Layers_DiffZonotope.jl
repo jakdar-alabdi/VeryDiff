@@ -3,6 +3,10 @@ import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
 function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, layer::Int64)
+    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+        return Z
+    end
+
     #println("Prop dense")
     return @timeit to "DiffZonotope_DenseProp" begin
     #println("Dense")
@@ -10,10 +14,6 @@ function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P
 
     Debugger.@pre_diffzono_prop_hook Z context="Pre Dense"
     Debugger.@diff_layer_inspection_hook Ls
-    
-    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
-        return Z
-    end
 
     if USE_DIFFZONO
         ∂G = Matrix{Float64}(undef, size(L1.W,1), size(Z.∂Z.G,2))
@@ -53,6 +53,10 @@ function two_generator_bound(G::Matrix{Float64}, b, H::Matrix{Float64})
 end
 
 function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, layer::Int64)
+    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+        return Z
+    end
+
     #println("Prop relu")
     return @timeit to "DiffZonotope_ReLUProp" begin
     #println("ReLU")
@@ -62,49 +66,61 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     input_dim = size(Z.Z₂,2)-Z.num_approx₂
 
     if USE_NEURON_SPLITTING[]
-        
-        if P.contract
-            if P.isempty_intersection
-                return Z
-            end
-            N̂ = size(Z.∂Z.G, 2)
-            input_bounds = [-ones(N̂) ones(N̂)]
-        end
-        
         # Get split nodes corresponding to this layer
-        indices_mask = map(node -> node.layer == layer, P.split_nodes)
-        layer_split_nodes = @view P.split_nodes[indices_mask]
-        zonos = [Z.Z₁, Z.Z₂]
+        indices_mask = map(node -> node.layer == layer, P.task.branch.split_nodes)
+        layer_split_nodes = @view P.task.branch.split_nodes[indices_mask]
 
-        for node in layer_split_nodes
-            g = zonos[node.network].G[node.neuron, :]
-            c = zonos[node.network].c[node.neuron]
+        if !isempty(layer_split_nodes)
+            Zs = (Z.Z₁, Z.Z₂)
+            N̂ = size(Z.∂Z.G, 2)
 
             if P.contract
                 @timeit to "Inter-Contract Zono" begin
-                    offset = ifelse(node.network == 1, 0, Z.num_approx₁)
-                    g = align_vector(g, N̂, input_dim, offset)
-                    input_bounds = contract_zono(input_bounds, g, c, node.direction)
-                    
-                    P.isempty_intersection |= isnothing(input_bounds)
-                    if P.isempty_intersection
-                        P.split_nodes = SplitNode[]
-                        P.instable_nodes = (BitVector[], BitVector[])
-                        P.intermediate_zonos = (Zonotope[], Zonotope[])
-                        return Z
+                    input_bounds = [-ones(N̂) ones(N̂)]
+
+                    layer_constraints = SplitConstraint[]
+                    @timeit to "Collect Constraints" begin
+                        for node in layer_split_nodes
+                            offset = ifelse(node.network == 1, 0, Z.num_approx₁)
+                            g = align_vector(Zs[node.network].G[node.neuron, :], N̂, input_dim, offset)
+                            c = Zs[node.network].c[node.neuron]
+                            push!(layer_constraints, SplitConstraint(node, g, c))
+                        end
+                    end
+
+                    sort_constraints!(layer_constraints, zeros(N̂))
+
+                    for (;node, g, c) in layer_constraints
+                        @timeit to "Contract Zono" begin
+                            input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                            
+                            P.isempty_intersection |= isnothing(input_bounds)
+                            if P.isempty_intersection
+                                @timeit to "Empty Intersection" begin
+                                    P.instable_nodes = (BitVector[], BitVector[])
+                                    P.intermediate_zonos = (Zonotope[], Zonotope[])
+                                    return Z
+                                end
+                            end
+                        end
+                    end
+
+                    if !all(isone.(abs.(input_bounds)))
+                        @timeit to "Transform Zono" begin
+                            transform_offset_diff_zono!(input_bounds, Z)
+                            transform_verification_task!(P.task, input_bounds)
+                        end
                     end
                 end
             else
-                push!(P.split_constraints, SplitConstraint(node, g, c))
+                @timeit to "Collect Constraints" begin
+                    for node in layer_split_nodes
+                        g = Zs[node.network].G[node.neuron, :]
+                        c = Zs[node.network].c[node.neuron]
+                        push!(P.split_constraints, SplitConstraint(node, g, c))
+                    end
+                end
             end
-        end
-        
-        if P.contract && !isempty(layer_split_nodes)
-            transform_offset_diff_zono(input_bounds, Z)
-            transform_verification_task!(P.task, input_bounds)
-            transform_offset_zono!(input_bounds, P.Zin.Z₁)
-            P.Zin.Z₂.G .= P.Zin.Z₁.G
-            P.Zin.Z₂.c .= P.Zin.Z₁.c
         end
     end
 
@@ -151,21 +167,20 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     upper₂ = @view bounds₂[:,2]
 
     if USE_NEURON_SPLITTING[]
-        
-        lowers = [lower₁, lower₂]
-        uppers = [upper₁, upper₂]
-        zonos = [Z.Z₁, Z.Z₂]
-
         for node in layer_split_nodes
-            lowers[node.network][node.neuron] *= node.direction == -1
-            uppers[node.network][node.neuron] *= node.direction == 1
+            if node.network == 1
+                lower₁[node.neuron] *= node.direction == -1
+                upper₁[node.neuron] *= node.direction == 1
+            else
+                lower₂[node.neuron] *= node.direction == -1
+                upper₂[node.neuron] *= node.direction == 1
+            end
         end
 
         for net in 1:2
-            Z̃ = zonos[net]
+            Z̃ = ifelse(net == 1, Z.Z₁, Z.Z₂)
             if DEEPSPLIT_HUERISTIC_ALTERNATIVE[]
-                lower = lowers[net]
-                upper = uppers[net]
+                lower, upper = ifelse(net == 1, (lower₁, upper₁), (lower₂, upper₂))
                 crossings = P.instable_nodes[net]
                 crossing = lower .< 0.0 .< upper
                 relative_impactes = P.relative_impactes[net]
