@@ -67,7 +67,7 @@ function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, appro
     return (nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String; save=true) -> begin
         N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
         f, n_inputs, _ = get_ast(spec_file)
-        set_neuron_splitting_config(config; mode=mode, approach=approach)
+        set_neuron_splitting_config(config; mode=mode, approach=approach, contract=contract)
         println("Using $(VeryDiff.get_config())...")
         for (bounds, _, _, _) in f
             status, δ_bounds = deepsplit_lp_search_epsilon(N₁, N₂, bounds, epsilon; timeout=timeout)
