@@ -82,12 +82,12 @@ end
 
 function run_experiments()
     println("\nRunning MNIST all...")
-    run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Base")
-    run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Input-DiffZono")
-
     run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Base")
     run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Input-DiffZono")
     
+    run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Base")
+    run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Input-DiffZono")
+
     run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPre), "ZonoContractPre-DU-Base")
     run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPre), "ZonoContractPre-DU-Input-DiffZono")
 
