@@ -1,0 +1,60 @@
+Parsing mnist_relu_2_512.onnx...
+Found input X
+op: matmul, weight: (512, 784), bias: nothing
+op: bias, weight: nothing, bias: (512,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (512, 512), bias: nothing
+op: bias, weight: nothing, bias: (512,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (10, 512), bias: nothing
+op: bias, weight: nothing, bias: (10,)
+Parsing mnist_relu_2_512_0.79.onnx...
+Found input X
+op: gemm, weight: (512, 784), bias: (512,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (512, 512), bias: (512,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (10, 512), bias: (10,)
+Using ZonoContraction-DeepSplitUnbiased-ZonoContract-Base...
+Zono Bounds:
+[-20.235159902573955, -19.50672205673931, -16.528716490735302, -18.755376175111397, -19.678337846723934, -17.73505011235117, -19.431127747940877, -19.310937900942296, -16.28095253877603, -15.534035045188173]
+[24.974305540729517, 23.04706794223645, 20.819017304267792, 23.178350192970388, 23.725502048389757, 20.316610272505518, 22.710834247511983, 22.98044964524544, 18.094232422467503, 19.205616526406597]
+
+TIMEOUT REACHED
+
+Initial δ-bound: 24.974305540729517
+Final δ-bound: 24.974305540729517
+UNKNOWN
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                 121s / 100.0%           79.2GiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1     121s  100.0%    121s   79.1GiB  100.0%  79.1GiB
+  Zonotope Loop                     1     121s  100.0%    121s   79.1GiB  100.0%  79.1GiB
+    Zonotope Propagate            840     112s   93.0%   133ms   67.6GiB   85.4%  82.5MiB
+      DiffZonotope_DenseProp    2.52k    90.6s   75.1%  35.9ms   17.8GiB   22.5%  7.24MiB
+        Zonotope_DenseProp      5.04k    43.7s   36.2%  8.67ms   11.2GiB   14.1%  2.27MiB
+      DiffZonotope_ReLUProp     1.68k    19.9s   16.5%  11.9ms   41.2GiB   52.0%  25.1MiB
+        Zonotope_ReLUProp       3.36k    11.7s    9.7%  3.49ms   28.9GiB   36.5%  8.80MiB
+          Column Multiply       3.36k    7.22s    6.0%  2.15ms   14.4GiB   18.2%  4.39MiB
+          Allocation            3.36k    2.57s    2.1%   766μs   14.4GiB   18.2%  4.38MiB
+          Set Matrix            3.36k    1.85s    1.5%   551μs   23.1MiB    0.0%  7.05KiB
+          Vectors               3.36k   55.5ms    0.0%  16.5μs   67.3MiB    0.1%  20.5KiB
+          Influence Matrix      3.36k   1.16ms    0.0%   344ns     0.00B    0.0%    0.00B
+          Bounds                3.36k    623μs    0.0%   186ns     0.00B    0.0%    0.00B
+        Collect Constraints       839    340ms    0.3%   405μs    357MiB    0.4%   436KiB
+    Compute Split                 840    3.46s    2.9%  4.12ms   7.88GiB   10.0%  9.61MiB
+      DeepSplit Heuristic         840    2.60s    2.2%  3.10ms   3.92GiB    4.9%  4.77MiB
+      Split Neuron                840    852ms    0.7%  1.01ms   3.97GiB    5.0%  4.84MiB
+        Create Tasks              840    811ms    0.7%   965μs   3.88GiB    4.9%  4.73MiB
+        Pre-Contract Zono         840   38.2ms    0.0%  45.5μs   93.2MiB    0.1%   114KiB
+    Property Check                840    2.54s    2.1%  3.02ms    193MiB    0.2%   236KiB
+    Post-Contract Zono            839    1.40s    1.2%  1.67ms   2.02GiB    2.5%  2.46MiB
+      Contract Zono             58.5k    796ms    0.7%  13.6μs   2.00GiB    2.5%  35.8KiB
+      Sort Constraints            839    593ms    0.5%   707μs   15.8MiB    0.0%  19.3KiB
+    Align Constraints             839    547ms    0.5%   652μs   1.35GiB    1.7%  1.64MiB
+Initialize                          1   1.79ms    0.0%  1.79ms   9.83MiB    0.0%  9.83MiB
+─────────────────────────────────────────────────────────────────────────────────────────

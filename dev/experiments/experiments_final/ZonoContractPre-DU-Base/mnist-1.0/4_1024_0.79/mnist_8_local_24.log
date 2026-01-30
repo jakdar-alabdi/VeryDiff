@@ -1,0 +1,67 @@
+Parsing mnist_relu_4_1024.onnx...
+Found input X
+op: matmul, weight: (1024, 784), bias: nothing
+op: bias, weight: nothing, bias: (1024,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (1024, 1024), bias: nothing
+op: bias, weight: nothing, bias: (1024,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (1024, 1024), bias: nothing
+op: bias, weight: nothing, bias: (1024,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (10, 1024), bias: nothing
+op: bias, weight: nothing, bias: (10,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (10, 10), bias: nothing
+op: bias, weight: nothing, bias: (10,)
+Parsing mnist_relu_4_1024_0.79.onnx...
+Found input X
+op: gemm, weight: (1024, 784), bias: (1024,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (1024, 1024), bias: (1024,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (1024, 1024), bias: (1024,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (10, 1024), bias: (10,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (10, 10), bias: (10,)
+Using ZonoContraction-DeepSplitUnbiased-ZonoContractPre-Base...
+Zono Bounds:
+[-160.9148462284592, -164.27264852968253, -181.0778757342039, -179.73355610161244, -172.5462186376736, -183.17022740439532, -163.5669810714269, -171.08592217756188, -174.81695076505935, -182.57319238946954]
+[160.8429570883914, 163.74423350998634, 180.44276789277123, 179.5314218154077, 172.12993945842496, 183.0303565159587, 163.53477785820726, 170.17299553378007, 174.89953228199983, 182.40568374923637]
+
+TIMEOUT REACHED
+
+Initial δ-bound: 183.17022740439532
+Final δ-bound: 183.17022740439532
+UNKNOWN
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                 121s / 100.0%           64.5GiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1     121s  100.0%    121s   64.5GiB  100.0%  64.5GiB
+  Zonotope Loop                     1     121s  100.0%    121s   64.5GiB  100.0%  64.5GiB
+    Zonotope Propagate            165    95.9s   79.4%   581ms   46.9GiB   72.6%   291MiB
+      DiffZonotope_DenseProp      825    80.4s   66.5%  97.5ms   11.1GiB   17.2%  13.8MiB
+        Zonotope_DenseProp      1.65k    27.5s   22.7%  16.6ms   4.51GiB    7.0%  2.80MiB
+      DiffZonotope_ReLUProp       660    15.5s   12.8%  23.4ms   35.6GiB   55.2%  55.3MiB
+        Zonotope_ReLUProp       1.32k    7.56s    6.3%  5.73ms   20.4GiB   31.6%  15.8MiB
+          Column Multiply       1.32k    4.67s    3.9%  3.54ms   10.2GiB   15.7%  7.88MiB
+          Set Matrix            1.32k    2.00s    1.7%  1.52ms   18.7MiB    0.0%  14.5KiB
+          Allocation            1.32k    857ms    0.7%   649μs   10.2GiB   15.7%  7.88MiB
+          Vectors               1.32k   25.8ms    0.0%  19.5μs   39.5MiB    0.1%  30.6KiB
+          Influence Matrix      1.32k    430μs    0.0%   326ns     0.00B    0.0%    0.00B
+          Bounds                1.32k    218μs    0.0%   165ns     0.00B    0.0%    0.00B
+        Collect Constraints       164   2.14ms    0.0%  13.0μs   2.04MiB    0.0%  12.7KiB
+    Compute Split                 165    22.7s   18.8%   138ms   17.2GiB   26.6%   107MiB
+      DeepSplit Heuristic         165    22.7s   18.8%   137ms   17.1GiB   26.5%   106MiB
+      Split Neuron                165   32.1ms    0.0%   195μs   80.4MiB    0.1%   499KiB
+        Pre-Contract Zono         165   15.8ms    0.0%  95.5μs   52.8MiB    0.1%   328KiB
+        Create Tasks              165   15.7ms    0.0%  95.4μs   27.5MiB    0.0%   171KiB
+    Property Check                165    1.76s    1.5%  10.6ms   87.2MiB    0.1%   541KiB
+    Align Constraints             164   37.6ms    0.0%   229μs    358MiB    0.5%  2.18MiB
+Initialize                          1   6.39ms    0.0%  6.39ms   22.4MiB    0.0%  22.4MiB
+─────────────────────────────────────────────────────────────────────────────────────────
