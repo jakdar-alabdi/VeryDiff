@@ -65,7 +65,7 @@ benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 acas_csv_dir = joinpath(cur_dir, "acas-prune.csv")
 mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
 
-verifier = deepsplit((true, false, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.ZonoContract)
+verifier = deepsplit((true, false, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.LP, contract=VeryDiff.ZonoContractPost)
 
 # run_tests(benchmarks_dir, acas_csv_dir, "ZonoContract-DB-Base", verifier)
 run_tests(benchmarks_dir, mnist_csv_dir, "ZonoContract-DB-Base", verifier)
