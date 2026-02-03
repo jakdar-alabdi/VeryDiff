@@ -38,7 +38,7 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
     
     open(specs_csv_file, "r") do f
         while !eof(f)
-            sleep(20)
+            # sleep(20)
 	        spec = split(readline(f), ",")
             nn_file₁ = "$benchmarks_dir/$(spec[1])"
             nn_file₂ = "$benchmarks_dir/$(spec[2])"
@@ -76,5 +76,5 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
 end
 
 function run_mnist_all(eval_func, run_name::String)
-    _run_mnist_all("$cur_dir/mnist-prune.csv", "$cur_dir/mnist-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
+    _run_mnist_all("$cur_dir/fixpoint-mnist-prune.csv", "$cur_dir/mnist-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
 end

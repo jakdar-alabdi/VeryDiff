@@ -183,38 +183,39 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                         end
     
                                         empty_intersection = false
-                                        # input_bounds_old = zeros(N̂, 2)
-                                        # @timeit to "Fixpoint Contract" begin
-                                        #     first_round = true
-                                        #     iter_count = 0
-                                        #     initial_bounds = (0.0, 0.0, 0.0)
-                                        #     while !empty_intersection && input_bounds != input_bounds_old
-                                        #         input_bounds_old .= input_bounds
-                                        for (;node, g, c) in prop_state.split_constraints
-                                            @timeit to "Contract Zono" begin
-                                                input_bounds = contract_zono(input_bounds, g, c, node.direction)
-                                                if isnothing(input_bounds)
-                                                    empty_intersection = true
-                                                    break
+                                        input_bounds_old = zeros(N̂, 2)
+                                        @timeit to "Fixpoint Contract" begin
+                                            first_round = true
+                                            iter_count = 0
+                                            initial_bounds, final_bounds = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
+                                            while !empty_intersection && input_bounds != input_bounds_old
+                                                input_bounds_old .= input_bounds
+                                                for (;node, g, c) in prop_state.split_constraints
+                                                    @timeit to "Contract Zono" begin
+                                                        input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                                                        if isnothing(input_bounds)
+                                                            empty_intersection = true
+                                                            break
+                                                        end
+                                                    end
                                                 end
+                                                if first_round && !empty_intersection
+                                                    first_round = false
+                                                    compute_bounds = Z -> offset_zono_bounds(input_bounds, Z)
+                                                    initial_bounds = maximum.(abs, compute_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
+                                                    final_bounds = initial_bounds
+                                                end
+                                                iter_count += 1
                                             end
                                         end
-                                        #         if first_round && !empty_intersection
-                                        #             first_round = false
-                                        #             transform_offset_diff_zono!(input_bounds, Zout)
-                                        #             initial_bounds = maximum.(abs, zono_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
-                                        #         end
-                                        #         iter_count += 1
-                                        #     end
-                                        # end
                                         
                                         if empty_intersection
                                             @timeit to "Empty Intersection" begin
-                                                # if iter_count > 1                        
-                                                #     println("Initial Contraction Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
-                                                #     println("Final Contraction Bounds (NN₁, NN₂, ∂NN): (0, 0, 0)")
-                                                #     println("Fixpoint Iterations: $iter_count")
-                                                # end
+                                                if iter_count > 1
+                                                    println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
+                                                    println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
+                                                    println("Fixpoint Iterations: $iter_count")
+                                                end
                                                 continue
                                             end
                                         end
@@ -222,10 +223,10 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                         if !all(isone.(abs.(input_bounds)))
                                             @timeit to "Transform Zono" begin
                                                 transform_offset_diff_zono!(input_bounds, Zout)
-                                                # final_bounds = maximum.(abs, zono_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
-                                                # println("Initial Contraction Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
-                                                # println("Final Contraction Bounds (NN₁, NN₂, ∂NN): $final_bounds")
-                                                # println("Fixpoint Iterations: $iter_count")
+                                                final_bounds = maximum.(abs, zono_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
+                                                println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
+                                                println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
+                                                println("Fixpoint Iterations: $iter_count")
                                             end
     
                                             @timeit to "Property Check" begin
@@ -281,6 +282,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                 if e isa OutOfMemoryError
                     empty!(queue)
                     GC.gc()
+                    println("\nMEMOUT")
                     return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
                 else
                     rethrow(e)

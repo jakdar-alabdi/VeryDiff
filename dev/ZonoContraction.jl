@@ -25,7 +25,7 @@ function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, 
     for i in 1:n
         if g[i] != 0.0
             # x = (1 / g[i]) * (c - g[1:i-1]'v[1:i-1] - g[i+1:end]'v[i+1:end])
-            x = (1 / g[i]) * (c - (s - g[i] * v[i])) # ⇔ x = (1 / g[i]) (c - g[1:i-1]ᵀv[1:i-1] - g[i+1:]ᵀv[i+1:])
+            x = (c - (s - g[i] * v[i])) / g[i] # ⇔ x = (1 / g[i]) (c - g[1:i-1]ᵀv[1:i-1] - g[i+1:]ᵀv[i+1:])
             if g[i] > 0
                 u[i] = min(u[i], x)
             else

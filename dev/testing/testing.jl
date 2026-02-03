@@ -67,5 +67,5 @@ mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
 
 verifier = deepsplit((true, false, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.ZonoContract)
 
-# run_tests(benchmarks_dir, acas_csv_dir, "ZonoContract-ZB-Base", verifier)
-run_tests(benchmarks_dir, mnist_csv_dir, "ZonoContract-ZB-Base", verifier)
+# run_tests(benchmarks_dir, acas_csv_dir, "ZonoContract-DB-Base", verifier)
+run_tests(benchmarks_dir, mnist_csv_dir, "ZonoContract-DB-Base", verifier)
