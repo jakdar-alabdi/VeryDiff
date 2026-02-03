@@ -1,10 +1,10 @@
-function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int})
+function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
     input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
     
     max_score = -Inf64
     max_node = nothing
     for net in 1:2
-        generators = get_generators(Zout, net)
+        generators = get_generators(Zout, net, undetermined)
         intermediates = prop_state.intermediate_zonos[net]
         crossings = prop_state.instable_nodes[net]
         L = size(crossings, 1)
@@ -67,13 +67,13 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
     return SplitConstraint(max_node, g, c)
 end
 
-function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int})
+function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
     input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
 
     max_score = -Inf64
     max_node = nothing
     for net in 1:2
-        generators = get_generators(Zout, net)
+        generators = get_generators(Zout, net, undetermined)
         crossings = prop_state.instable_nodes[net]
         L = size(crossings, 1)
         relative_impactes = prop_state.relative_impactes[net]
@@ -144,7 +144,7 @@ function compute_relative_impact(Z::Zonotope, offset::Int64, num::Int64, crossin
     end
 end
 
-function get_generators(Z::DiffZonotope, network::Int64)
+function get_generators(Z::DiffZonotope, network::Int64, undetermined::BitVector)
     if DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS[]
         Z̃ = Z.∂Z
         net_offset = Z.∂num_approx + ifelse(network == 1, Z.num_approx₂, 0)
@@ -154,6 +154,7 @@ function get_generators(Z::DiffZonotope, network::Int64)
     end
 
     return (offset::Int64, num::Int64) -> begin
+        # return @view Z̃.G[undetermined, end - offset - net_offset - num + 1 : end - net_offset - offset]
         return @view Z̃.G[:, end - offset - net_offset - num + 1 : end - net_offset - offset]
     end
 end

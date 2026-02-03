@@ -113,12 +113,12 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                         input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
                         N̂ = size(Zout.∂Z.G, 2)
                         input_bounds = [-ones(N̂) ones(N̂)]
+                        bounds = zono_bounds(Zout.∂Z)
+
+                        # Compute all output dimensions that still need to be proven
+                        mask = abs.(bounds) .> ϵ .&& task.branch.undetermined
     
                         if !isempty(prop_state.split_constraints)
-                            bounds = zono_bounds(Zout.∂Z)
-    
-                            # Compute all output dimensions that still need to be proven
-                            mask = abs.(bounds) .> ϵ .&& task.branch.undetermined
     
                             # Append zeros to the constraints vectors so that the match the output dimension
                             @timeit to "Align Constraints" begin
@@ -255,14 +255,14 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 throw(ErrorException("Vertical splitting not implemented yet :("))
                             end
     
-                            task.branch.undetermined = mask
                         end
-    
+                        
+                        task.branch.undetermined = mask
                         if any(task.branch.undetermined)
                             @timeit to "Compute Split" begin
     
                                 @timeit to "DeepSplit Heuristic" begin
-                                    split_candidate = split_heuristic(Zout, prop_state, task.distance_indices)
+                                    split_candidate = split_heuristic(Zout, prop_state, task.distance_indices, task.branch.undetermined[:, 1] .|| task.branch.undetermined[:, 2])
                                 end
     
                                 distance_bound = min(distance_bound, task.distance_bound)
