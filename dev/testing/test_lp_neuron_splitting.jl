@@ -16,7 +16,7 @@ function run(nn_file₁, nn_file₂, spec_file, epsilon)
 
     for (bounds, _, _, _) in f
         println("\nExecuting DeepSplit LP-based Search")
-        runtime_deepsplit = @elapsed deepsplit_lp_search_epsilon(N₁, N₂, bounds, ϵ; timeout=120)
+        runtime_deepsplit = @elapsed deepsplit_verify_network(N₁, N₂, bounds, ϵ; timeout=120)
         
         println("\nExecuting VeryDiff")
         VeryDiff.set_neuron_splitting_config((false, false, false, false))

@@ -56,15 +56,7 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
         end
     end
 
-    g, c = zeros(0), 0.0
-    if max_node.layer > 0
-        offset = ifelse(max_node.network == 1, 0, Zout.num_approx₁)
-        Z = prop_state.intermediate_zonos[max_node.network][max_node.layer]
-        g = align_vector(Z.G[max_node.neuron, :], size(Zout.∂Z.G, 2), input_dim, offset)
-        c = Z.c[max_node.neuron]
-    end
-
-    return SplitConstraint(max_node, g, c)
+    return max_node
 end
 
 function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
@@ -118,7 +110,7 @@ function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropSta
         end
     end
 
-    return SplitConstraint(max_node, zeros(0), 0.0)
+    return max_node
 end
 
 function compute_relative_impact(Z::Zonotope, offset::Int64, num::Int64, crossing::BitVector)

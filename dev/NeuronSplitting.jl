@@ -1,8 +1,8 @@
-function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, Zin::Zonotope, ϵ::Float64)
-    return deepsplit_lp_search_epsilon(N₁, N₂, zono_bounds(Zin), ϵ)
+function deepsplit_verify_network(N₁::Network, N₂::Network, Zin::Zonotope, ϵ::Float64)
+    return deepsplit_verify_network(N₁, N₂, zono_bounds(Zin), ϵ)
 end
 
-function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsilon::Float64; timeout=Inf64)
+function deepsplit_verify_network(N₁::Network, N₂::Network, bounds, epsilon::Float64; timeout=Inf64)
     try
         reset_timer!(to)
         @timeit to "Initialize" begin
@@ -29,7 +29,7 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
         end
     
         @timeit to "Verify" begin
-            status, cex, δ_bounds = deepsplit_lp_search_epsilon(epsilon)(N, N₁, N₂, initial_task, split_heuristic; timeout=timeout)
+            status, cex, δ_bounds = deepsplit_verify_network(epsilon)(N, N₁, N₂, initial_task, split_heuristic; timeout=timeout)
             if !isnothing(cex)
                 println("\nFound counterexample: $cex")
             end
@@ -47,7 +47,7 @@ function deepsplit_lp_search_epsilon(N₁::Network, N₂::Network, bounds, epsil
     end
 end
 
-function deepsplit_lp_search_epsilon(ϵ::Float64)
+function deepsplit_verify_network(ϵ::Float64)
     property_check = get_epsilon_property(ϵ)
     
     return (N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VerificationTask, split_heuristic; timeout=Inf64) -> begin
@@ -58,8 +58,8 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
 
         use_lp = NEURON_SPLITTING_APPROACH[] == LP
         use_zono_contract = NEURON_SPLITTING_APPROACH[] == ZonoContraction
-        inter_contract = use_zono_contract && ZONO_CONTRACT_MODE[] == ZonoContractInter
         use_lp_zc = use_zono_contract && ZONO_CONTRACT_MODE[] == LPZonoContract
+        inter_contract = use_lp_zc || use_zono_contract && ZONO_CONTRACT_MODE[] == ZonoContractInter
         pre_contract = use_zono_contract && (ZONO_CONTRACT_MODE[] == ZonoContract || ZONO_CONTRACT_MODE[] == ZonoContractPre)
         post_contract = use_zono_contract && (ZONO_CONTRACT_MODE[] == ZonoContract || ZONO_CONTRACT_MODE[] == ZonoContractPost)
 
@@ -90,7 +90,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                     @timeit to "Property Check" begin
                         prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing)
                         
-                        if prop_state.contract_inter
+                        if prop_state.inter_contract
                             if prop_state.isempty_intersection
                                 continue
                             end
@@ -103,7 +103,6 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             println(bounds[:, 1])
                             println(bounds[:, 2])
                             initial_δ_bound = distance_bound
-                            final_δ_bound = distance_bound
                             first_task = false
                         end
                     end
@@ -148,7 +147,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 end
             
                                 @timeit to "Solve LP" begin
-                                    distance_bound = 0.0
+                                    lp_distance_bound = 0.0
         
                                     # For each unproven output dimension we solve an LP for corresponding lower and upper bound
                                     for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
@@ -170,13 +169,15 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                             if has_values(model)
                                                 δ = abs(objective_value(model))
                                                 mask[i, j] &= δ > ϵ
-                                                distance_bound = max(distance_bound, δ)
+                                                lp_distance_bound = max(lp_distance_bound, δ)
                                             end
             
                                             mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
                                         end
                                     end
                                 end
+
+                                distance_bound = min(distance_bound, lp_distance_bound)
                                 
                             elseif use_zono_contract
                                 if post_contract
@@ -241,7 +242,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                                     end
             
                                                     bounds = zono_bounds(Zout.∂Z)
-                                                    distance_bound = maximum(abs, bounds)
+                                                    distance_bound = min(distance_bound, maximum(abs, bounds))
                                                     mask .&= abs.(bounds) .> ϵ
                                                 else
                                                     continue
@@ -262,28 +263,34 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             @timeit to "Compute Split" begin
     
                                 @timeit to "DeepSplit Heuristic" begin
-                                    split_candidate = split_heuristic(Zout, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
+                                    split_node = split_heuristic(Zout, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
                                 end
     
                                 distance_bound = min(distance_bound, task.distance_bound)
+                                final_δ_bound = distance_bound
 
-                                if (post_contract || inter_contract || use_lp_zc) && split_candidate.node.layer == 0
-                                    @timeit to "Split-Contract Input" begin
-                                        (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_candidate.node.neuron, N̂, prop_state.split_constraints, task, work_share, distance_bound)
+                                if (post_contract || inter_contract || use_lp_zc) && split_node.layer == 0
+                                    @timeit to "Split Input" begin
+                                        (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_node.neuron, N̂, prop_state.split_constraints, task, work_share, distance_bound)
                                     end
                                 else
                                     if use_zono_contract && !pre_contract
                                         task = transform_verification_task(task, input_bounds)
                                     end
 
-                                    (ws₁, task₁, direction₁), (ws₂, task₂, direction₂) = split_node(split_candidate.node, task, work_share, distance_bound)
+                                    (ws₁, task₁, direction₁), (ws₂, task₂, direction₂) = split_node(split_node, task, work_share, distance_bound)
                                     
-                                    if pre_contract && split_candidate.node.layer > 0
+                                    if pre_contract && split_node.layer > 0
                                         @timeit to "Pre-Contract Zono" begin
+                                            offset = ifelse(split_node.network == 1, 0, Zout.num_approx₁)
+                                            Z = prop_state.intermediate_zonos[split_node.network][split_node.layer]
+                                            g = align_vector(Z.G[split_node.neuron, :], N̂, input_dim, offset)
+                                            c = Z.c[split_node.neuron]
+
                                             input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
     
-                                            task₁ = contract_to_verification_task(input_bounds₁, split_candidate.g, split_candidate.c, direction₁, task₁)
-                                            task₂ = contract_to_verification_task(input_bounds₂, split_candidate.g, split_candidate.c, direction₂, task₂)
+                                            task₁ = contract_to_verification_task(input_bounds₁, g, c, direction₁, task₁)
+                                            task₂ = contract_to_verification_task(input_bounds₂, g, c, direction₂, task₂)
                                         end
                                     end
                                 end

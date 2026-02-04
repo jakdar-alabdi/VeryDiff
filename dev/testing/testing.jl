@@ -34,7 +34,7 @@ function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, appro
         VeryDiff.set_neuron_splitting_config(config; mode=mode, approach=approach, contract=contract)
         println("\nUsing $(VeryDiff.get_config())...\n")
         for (bounds, _, _, _) in f
-            status, δ_bounds = deepsplit_lp_search_epsilon(N₁, N₂, bounds, epsilon; timeout=timeout)
+            status, δ_bounds = deepsplit_verify_network(N₁, N₂, bounds, epsilon; timeout=timeout)
             net_name = replace(basename(nn_file₂), ".onnx" => "")
             spec_name = replace(basename(spec_file), ".vnnlib" => "")
             if save
@@ -65,7 +65,7 @@ benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 acas_csv_dir = joinpath(cur_dir, "acas-prune.csv")
 mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
 
-verifier = deepsplit((true, false, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.LPZonoContract)
+verifier = deepsplit((true, false, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.ZonoContractPre)
 # verifier = verydiff
 
 run_tests(benchmarks_dir, acas_csv_dir, "ZonoContract-DB-Base", verifier)

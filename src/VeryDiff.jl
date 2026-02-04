@@ -123,7 +123,7 @@ export get_epsilon_property, epsilon_split_heuristic, get_epsilon_property_naive
 export get_top1_property, top1_configure_split_heuristic
 export propagate_diff_layer
 export run_cmd
-export deepsplit_lp_search_epsilon
+export deepsplit_verify_network
 export contract_zono, geometric_distance, transform_offset_zono
 export deepsplit_heuristic
 # export run_mnist_all

@@ -48,7 +48,7 @@ end
 
 mutable struct PropState
     task :: VerificationTask
-    contract_inter :: Bool
+    inter_contract :: Bool
     isempty_intersection :: Bool
     first_improvement :: Bool
     split_constraints :: Vector{SplitConstraint}

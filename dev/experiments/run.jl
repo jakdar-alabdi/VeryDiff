@@ -70,7 +70,7 @@ function deepsplit(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, appro
         set_neuron_splitting_config(config; mode=mode, approach=approach, contract=contract)
         println("Using $(VeryDiff.get_config())...")
         for (bounds, _, _, _) in f
-            status, δ_bounds = deepsplit_lp_search_epsilon(N₁, N₂, bounds, epsilon; timeout=timeout)
+            status, δ_bounds = deepsplit_verify_network(N₁, N₂, bounds, epsilon; timeout=timeout)
             net_name = replace(basename(nn_file₂), ".onnx" => "")
             spec_name = replace(basename(spec_file), ".vnnlib" => "")
             if save

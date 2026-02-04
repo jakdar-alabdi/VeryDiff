@@ -134,7 +134,7 @@ function run_cmd(args)
         for (bounds, _, _, num) in spec
             passed_time = @timed begin
                 if parsed_args["neuron-splitting"] && epsilon >= 0.0
-                    current_result = deepsplit_lp_search_epsilon(net1, net2, bounds[1:n_inputs,:], epsilon)
+                    current_result = deepsplit_verify_network(net1, net2, bounds[1:n_inputs,:], epsilon)
                 else
                     current_result = verify_network(net1, net2, bounds[1:n_inputs,:], property, split_heuristic, timeout=timeout)
                 end

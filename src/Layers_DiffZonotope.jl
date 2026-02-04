@@ -3,7 +3,7 @@ import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
 function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, layer::Int64)
-    if USE_NEURON_SPLITTING[] && P.contract_inter && P.isempty_intersection
+    if USE_NEURON_SPLITTING[] && P.inter_contract && P.isempty_intersection
         return Z
     end
 
@@ -53,7 +53,7 @@ function two_generator_bound(G::Matrix{Float64}, b, H::Matrix{Float64})
 end
 
 function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, layer::Int64)
-    if USE_NEURON_SPLITTING[] && P.contract_inter && P.isempty_intersection
+    if USE_NEURON_SPLITTING[] && P.inter_contract && P.isempty_intersection
         return Z
     end
 
@@ -82,12 +82,12 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                 end
             end
 
-            if P.contract_inter
+            if P.inter_contract
                 @timeit to "Inter-Contract Zono" begin
                     input_bounds = [-ones(N̂) ones(N̂)]
 
                     layer_constraints = SplitConstraint[]
-                    @timeit to "Collect Constraints" begin
+                    @timeit to "Align Constraints" begin
                         for node in layer_split_nodes
                             offset = ifelse(node.network == 1, 0, Z.num_approx₁)
                             g = align_vector(Zs[node.network].G[node.neuron, :], N̂, input_dim, offset)
