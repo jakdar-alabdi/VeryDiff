@@ -48,15 +48,16 @@ end
 
 mutable struct PropState
     task :: VerificationTask
-    contract :: Bool
+    contract_inter :: Bool
     isempty_intersection :: Bool
+    first_improvement :: Bool
     split_constraints :: Vector{SplitConstraint}
     instable_nodes :: Tuple{Vector{BitVector}, Vector{BitVector}}
     intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
     relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
     input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
     function PropState(task::VerificationTask, contract=false)
-        return new(task, contract, false, SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
+        return new(task, contract, false, false, SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
     end
 end
 

@@ -59,6 +59,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
         use_lp = NEURON_SPLITTING_APPROACH[] == LP
         use_zono_contract = NEURON_SPLITTING_APPROACH[] == ZonoContraction
         inter_contract = use_zono_contract && ZONO_CONTRACT_MODE[] == ZonoContractInter
+        use_lp_zc = use_zono_contract && ZONO_CONTRACT_MODE[] == LPZonoContract
         pre_contract = use_zono_contract && (ZONO_CONTRACT_MODE[] == ZonoContract || ZONO_CONTRACT_MODE[] == ZonoContractPre)
         post_contract = use_zono_contract && (ZONO_CONTRACT_MODE[] == ZonoContract || ZONO_CONTRACT_MODE[] == ZonoContractPost)
 
@@ -82,17 +83,19 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                     @timeit to "Zonotope Propagate" begin
                         Zin = to_diff_zono(task)
                         prop_state = PropState(task, inter_contract)
+                        prop_state.first_improvement = true
                         Zout = N(Zin, prop_state)
                     end
                     
                     @timeit to "Property Check" begin
-                        if prop_state.contract
+                        prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing)
+                        
+                        if prop_state.contract_inter
                             if prop_state.isempty_intersection
                                 continue
                             end
+                            task = prop_state.task
                         end
-    
-                        prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing)
                         
                         if first_task
                             println("Zono Bounds:")
@@ -128,7 +131,7 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                 end
                             end
                             
-                            if use_lp
+                            if use_lp || use_lp_zc
     
                                 @timeit to "Initialize LP-solver" begin
                                     # Initialize the LP solver
@@ -183,39 +186,39 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                         end
     
                                         empty_intersection = false
-                                        input_bounds_old = zeros(N̂, 2)
-                                        @timeit to "Fixpoint Contract" begin
-                                            first_round = true
-                                            iter_count = 0
-                                            initial_bounds, final_bounds = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
-                                            while !empty_intersection && input_bounds != input_bounds_old
-                                                input_bounds_old .= input_bounds
-                                                for (;node, g, c) in prop_state.split_constraints
-                                                    @timeit to "Contract Zono" begin
-                                                        input_bounds = contract_zono(input_bounds, g, c, node.direction)
-                                                        if isnothing(input_bounds)
-                                                            empty_intersection = true
-                                                            break
-                                                        end
-                                                    end
+                                        # input_bounds_old = zeros(N̂, 2)
+                                        # @timeit to "Fixpoint Contract" begin
+                                        #     first_round = true
+                                        #     iter_count = 0
+                                        #     initial_bounds, final_bounds = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
+                                        #     while !empty_intersection && input_bounds != input_bounds_old
+                                        #         input_bounds_old .= input_bounds
+                                        for (;node, g, c) in prop_state.split_constraints
+                                            @timeit to "Contract Zono" begin
+                                                input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                                                if isnothing(input_bounds)
+                                                    empty_intersection = true
+                                                    break
                                                 end
-                                                if first_round && !empty_intersection
-                                                    first_round = false
-                                                    compute_bounds = Z -> offset_zono_bounds(input_bounds, Z)
-                                                    initial_bounds = maximum.(abs, compute_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
-                                                    final_bounds = initial_bounds
-                                                end
-                                                iter_count += 1
                                             end
                                         end
+                                        #         if first_round && !empty_intersection
+                                        #             first_round = false
+                                        #             compute_bounds = Z -> offset_zono_bounds(input_bounds, Z)
+                                        #             initial_bounds = maximum.(abs, compute_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
+                                        #             final_bounds = initial_bounds
+                                        #         end
+                                        #         iter_count += 1
+                                        #     end
+                                        # end
                                         
                                         if empty_intersection
                                             @timeit to "Empty Intersection" begin
-                                                if iter_count > 1
-                                                    println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
-                                                    println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
-                                                    println("Fixpoint Iterations: $iter_count")
-                                                end
+                                                # if iter_count > 1
+                                                #     println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
+                                                #     println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
+                                                #     println("Fixpoint Iterations: $iter_count")
+                                                # end
                                                 continue
                                             end
                                         end
@@ -223,10 +226,10 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                         if !all(isone.(abs.(input_bounds)))
                                             @timeit to "Transform Zono" begin
                                                 transform_offset_diff_zono!(input_bounds, Zout)
-                                                final_bounds = maximum.(abs, zono_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
-                                                println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
-                                                println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
-                                                println("Fixpoint Iterations: $iter_count")
+                                                # final_bounds = maximum.(abs, zono_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
+                                                # println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
+                                                # println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
+                                                # println("Fixpoint Iterations: $iter_count")
                                             end
     
                                             @timeit to "Property Check" begin
@@ -244,10 +247,6 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                                                     continue
                                                 end
                                             end
-        
-                                            if !pre_contract
-                                                transform_verification_task!(task, input_bounds)
-                                            end
                                         end
                                     end
                                 end
@@ -263,16 +262,37 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
                             @timeit to "Compute Split" begin
     
                                 @timeit to "DeepSplit Heuristic" begin
-                                    split_candidate = split_heuristic(Zout, prop_state, task.distance_indices, task.branch.undetermined[:, 1] .|| task.branch.undetermined[:, 2])
+                                    split_candidate = split_heuristic(Zout, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
                                 end
     
                                 distance_bound = min(distance_bound, task.distance_bound)
-                                task₁, task₂ = split_node(split_candidate, pre_contract, input_bounds, task, work_share, distance_bound)
-                                if !isnothing(task₁[2])
-                                    push!(queue, task₁)
+
+                                if (post_contract || inter_contract || use_lp_zc) && split_candidate.node.layer == 0
+                                    @timeit to "Split-Contract Input" begin
+                                        (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_candidate.node.neuron, N̂, prop_state.split_constraints, task, work_share, distance_bound)
+                                    end
+                                else
+                                    if use_zono_contract && !pre_contract
+                                        task = transform_verification_task(task, input_bounds)
+                                    end
+
+                                    (ws₁, task₁, direction₁), (ws₂, task₂, direction₂) = split_node(split_candidate.node, task, work_share, distance_bound)
+                                    
+                                    if pre_contract && split_candidate.node.layer > 0
+                                        @timeit to "Pre-Contract Zono" begin
+                                            input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
+    
+                                            task₁ = contract_to_verification_task(input_bounds₁, split_candidate.g, split_candidate.c, direction₁, task₁)
+                                            task₂ = contract_to_verification_task(input_bounds₂, split_candidate.g, split_candidate.c, direction₂, task₂)
+                                        end
+                                    end
                                 end
-                                if !isnothing(task₂[2])
-                                    push!(queue, task₂)
+                                
+                                if !isnothing(task₁)
+                                    push!(queue, (ws₁, task₁))
+                                end
+                                if !isnothing(task₂)
+                                    push!(queue, (ws₂, task₂))
                                 end
                             end
                         end
@@ -293,39 +313,43 @@ function deepsplit_lp_search_epsilon(ϵ::Float64)
     end
 end
 
-function split_node(node::SplitConstraint, pre_contract::Bool, input_bounds::Matrix{Float64}, task::VerificationTask, work_share::Float64, distance_bound::Float64)
-    if node.node.layer == 0
+function split_node(node::SplitNode, task::VerificationTask, work_share::Float64, distance_bound::Float64)
+    if node.layer == 0
         @timeit to "Split Input" begin
-            return split_zono(node.node.neuron, task, work_share, nothing, distance_bound)
+            (ws₁, task₁), (ws₂, task₂) = split_zono(node.neuron, task, work_share, nothing, distance_bound)
+            return (ws₁, task₁, 0), (ws₂, task₂, 0)
         end
     end
     @timeit to "Split Neuron" begin
-        return split_neuron(node, pre_contract, input_bounds, task, work_share, distance_bound)
+        return split_neuron(node, task, work_share, distance_bound)
     end
 end
 
-function split_neuron(split_node::SplitConstraint, pre_contract::Bool, input_bounds::Matrix{Float64}, task::VerificationTask, work_share::Float64, distance_bound::Float64)
+function split_neuron(node::SplitNode, task::VerificationTask, work_share::Float64, distance_bound::Float64)
+    direction₁, direction₂ = -1, 1 # inactive, active
+    branch₁, branch₂ = task.branch, deepcopy(task.branch)
+    push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₁))
+    push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₂))
     
-    @timeit to "Create Tasks" begin
-        (;node, g, c) = split_node
-        direction₁, direction₂ = -1, 1 # inactive, active
-    
-        branch₁, branch₂ = task.branch, deepcopy(task.branch)
-        push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₁))
-        push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₂))
-        
-        task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
-        task₂ = VerificationTask(deepcopy(task.middle), deepcopy(task.distance), task.distance_indices, deepcopy(task.∂Z), deepcopy(task.verification_status), distance_bound, branch₂)
-    end
+    task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
+    task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₂)
 
-    if pre_contract
-        @timeit to "Pre-Contract Zono" begin
-            input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
-    
-            task₁ = contract_to_verification_task!(input_bounds₁, g, c, direction₁, task₁)
-            task₂ = contract_to_verification_task!(input_bounds₂, g, c, direction₂, task₂)
-        end
-    end
+    return (work_share / 2.0, task₁, direction₁), (work_share / 2.0, task₂, direction₂)
+end
+
+function split_contract_zono(d::Int, N̂::Int, constraints::Vector{SplitConstraint}, task::VerificationTask, work_share::Float64, distance_bound::Float64)
+    distance_d = findfirst(x -> x == d, task.distance_indices)
+    @assert !isnothing(distance_d)
+
+    input_bounds₁, input_bounds₂ = [-ones(N̂) ones(N̂)], [-ones(N̂) ones(N̂)]
+    input_bounds₁[distance_d, 1] = 0
+    input_bounds₂[distance_d, 2] = 0
+
+    task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, task.branch)
+    task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, task.branch)
+
+    task₁ = contract_all_to_verification_task(task₁, input_bounds₁, constraints)
+    task₂ = contract_all_to_verification_task(task₂, input_bounds₂, constraints)
 
     return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
 end

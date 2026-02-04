@@ -38,7 +38,7 @@ global const INDIRECT_INPUT_MULTIPLIER = Ref{Float64}(2.0)
 global const DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(ZonoBiased)
 
 """Different modes for the contraction of Zonotopes"""
-@enum ZonoContractMode ZonoContract ZonoContractPre ZonoContractPost ZonoContractInter
+@enum ZonoContractMode ZonoContract ZonoContractPre ZonoContractPost ZonoContractInter LPZonoContract
 global const ZONO_CONTRACT_MODE = Ref{ZonoContractMode}(ZonoContract)
 
 function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP, contract=ZonoContract)

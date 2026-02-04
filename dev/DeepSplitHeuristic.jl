@@ -154,7 +154,7 @@ function get_generators(Z::DiffZonotope, network::Int64, undetermined::BitVector
     end
 
     return (offset::Int64, num::Int64) -> begin
-        # return @view Z̃.G[undetermined, end - offset - net_offset - num + 1 : end - net_offset - offset]
-        return @view Z̃.G[:, end - offset - net_offset - num + 1 : end - net_offset - offset]
+        return @view Z̃.G[undetermined, end - offset - net_offset - num + 1 : end - net_offset - offset]
+        # return @view Z̃.G[:, end - offset - net_offset - num + 1 : end - net_offset - offset]
     end
 end

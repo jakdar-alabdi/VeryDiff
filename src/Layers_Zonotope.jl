@@ -7,7 +7,7 @@ function (N::Network)(Z :: Zonotope, P :: PropState, network :: Int64)
 end
 
 function (L::Dense)(Z :: Zonotope, P :: PropState, network :: Int64, layer :: Int64)
-    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+    if USE_NEURON_SPLITTING[] && P.contract_inter && P.isempty_intersection
         return Z
     end
 
@@ -29,7 +29,7 @@ function get_slope(l,u, alpha)
 end
 
 function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; bounds = nothing)
-    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+    if USE_NEURON_SPLITTING[] && P.contract_inter && P.isempty_intersection
         return Z
     end
 
@@ -45,7 +45,7 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
                 if !isempty(layer_split_nodes)
                     N̂ = size(Z.G, 2)
 
-                    if P.contract
+                    if P.contract_inter
                         @timeit to "Inter-Contract Zono" begin
                             layer_constraints = SplitConstraint[]
                             @timeit to "Collect Constraints" begin

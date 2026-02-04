@@ -87,13 +87,37 @@ function transform_verification_task!(task::VerificationTask, bounds::Matrix{Flo
     return task
 end
 
-function contract_to_verification_task!(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, task::VerificationTask)
+function transform_verification_task(task::VerificationTask, bounds::Matrix{Float64})
+    return transform_verification_task!(deepcopy(task), bounds)
+end
+
+function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, task::VerificationTask)
     input_bounds = contract_zono(input_bounds, g, c, direction)
     if !isnothing(input_bounds)
         if !all(isone.(abs.(input_bounds)))
-            return transform_verification_task!(task, input_bounds)
+            return transform_verification_task(task, input_bounds)
         end
         return task
+    end
+    return nothing
+end
+
+function contract_all_to_verification_task(task::VerificationTask, input_bounds::Matrix{Float64}, constraints::Vector{SplitConstraint})
+    for (;node, g, c) in constraints
+        @timeit to "Contract Input Zono" begin
+            input_bounds = contract_zono(input_bounds, g, c, node.direction)
+            if isnothing(input_bounds)
+                break
+            end
+        end
+    end
+    if !isnothing(input_bounds)
+        if !all(isone.(abs.(input_bounds)))
+            @timeit to "Transform Input Zono" begin
+                return transform_verification_task(task, input_bounds)
+            end
+        end
+        return task        
     end
     return nothing
 end

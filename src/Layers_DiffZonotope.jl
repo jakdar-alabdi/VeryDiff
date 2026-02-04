@@ -3,7 +3,7 @@ import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
 function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, layer::Int64)
-    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+    if USE_NEURON_SPLITTING[] && P.contract_inter && P.isempty_intersection
         return Z
     end
 
@@ -53,7 +53,7 @@ function two_generator_bound(G::Matrix{Float64}, b, H::Matrix{Float64})
 end
 
 function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, layer::Int64)
-    if USE_NEURON_SPLITTING[] && P.contract && P.isempty_intersection
+    if USE_NEURON_SPLITTING[] && P.contract_inter && P.isempty_intersection
         return Z
     end
 
@@ -74,7 +74,15 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
             Zs = (Z.Z₁, Z.Z₂)
             N̂ = size(Z.∂Z.G, 2)
 
-            if P.contract
+            @timeit to "Collect Constraints" begin
+                for node in layer_split_nodes
+                    g = Zs[node.network].G[node.neuron, :]
+                    c = Zs[node.network].c[node.neuron]
+                    push!(P.split_constraints, SplitConstraint(node, g, c))
+                end
+            end
+
+            if P.contract_inter
                 @timeit to "Inter-Contract Zono" begin
                     input_bounds = [-ones(N̂) ones(N̂)]
 
@@ -89,7 +97,6 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                     end
 
                     sort_constraints!(layer_constraints, zeros(N̂))
-
                     for (;node, g, c) in layer_constraints
                         @timeit to "Contract Zono" begin
                             input_bounds = contract_zono(input_bounds, g, c, node.direction)
@@ -108,16 +115,13 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                     if !all(isone.(abs.(input_bounds)))
                         @timeit to "Transform Zono" begin
                             transform_offset_diff_zono!(input_bounds, Z)
-                            transform_verification_task!(P.task, input_bounds)
+                            if P.first_improvement
+                                P.first_improvement = false
+                                P.task = transform_verification_task(P.task, input_bounds)
+                            else
+                                transform_verification_task!(P.task, input_bounds)
+                            end
                         end
-                    end
-                end
-            else
-                @timeit to "Collect Constraints" begin
-                    for node in layer_split_nodes
-                        g = Zs[node.network].G[node.neuron, :]
-                        c = Zs[node.network].c[node.neuron]
-                        push!(P.split_constraints, SplitConstraint(node, g, c))
                     end
                 end
             end

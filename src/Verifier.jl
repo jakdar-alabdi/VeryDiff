@@ -206,10 +206,10 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
         end
         # Even if we haven't done any work we may find a counterexample, but unfortunately
         # memory is bounded...
-        if length(work_queue) > 10000
-        # if length(work_queue) > 2500 && total_work < 1e-3 && input_dim > 100
-            println("10000 Zonotopes in task queue: NO MORE SPLITTING!")
-            # println("2500 Zonotopes in task queue: NO MORE SPLITTING!")
+        # if length(work_queue) > 10000
+        if length(work_queue) > 2500 && total_work < 1e-3 && input_dim > 100
+            # println("10000 Zonotopes in task queue: NO MORE SPLITTING!")
+            println("2500 Zonotopes in task queue: NO MORE SPLITTING!")
             println("This is to avoid memory overflows.")
             println("WARNING: FROM THIS POINT ONWARDS, WE ARE ONLY SEARCHING FOR COUNTEREXAMPLES!")
             do_not_split = true

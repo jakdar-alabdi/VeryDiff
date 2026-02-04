@@ -25,21 +25,39 @@ op: relu, weight: nothing, bias: nothing
 op: gemm, weight: (10, 1024), bias: (10,)
 op: relu, weight: nothing, bias: nothing
 op: gemm, weight: (10, 10), bias: (10,)
-Using DeepSplit...
+Using ZonoContraction-DeepSplitUnbiased-ZonoContract-Base-Input-DiffZono...
+Zono Bounds:
+[-204.26881200196962, -208.39006912867123, -229.89933782874763, -228.60645908911474, -219.9754968529712, -232.2208349716563, -207.84915597040845, -217.2189868054335, -222.37881010092045, -231.60057989657508]
+[204.17613432136332, 207.98176592179013, 229.4142290057388, 227.65945360133983, 219.82056007343968, 231.98266634568517, 207.82045560142762, 216.25464449685754, 222.51900346250338, 231.34658611696722]
 
-MEMOUT REACHED
+TIMEOUT REACHED
 
-Initial δ-bound: Inf
-Final δ-bound: Inf
+Initial δ-bound: 232.2208349716563
+Final δ-bound: 184.52684666591782
 UNKNOWN
-────────────────────────────────────────────────────────────────────────────
-                                   Time                    Allocations      
-                          ───────────────────────   ────────────────────────
-    Tot / % measured:          522ms / 100.0%           22.4MiB / 100.0%    
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                 121s / 100.0%           64.3GiB / 100.0%    
 
-Section           ncalls     time    %tot     avg     alloc    %tot      avg
-────────────────────────────────────────────────────────────────────────────
-Verify                 1    516ms   98.8%   516ms   2.41KiB    0.0%  2.41KiB
-  Zonotope Loop        1    515ms   98.8%   515ms     48.0B    0.0%    48.0B
-Initialize             1   6.46ms    1.2%  6.46ms   22.4MiB  100.0%  22.4MiB
-────────────────────────────────────────────────────────────────────────────
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1     121s  100.0%    121s   64.3GiB  100.0%  64.3GiB
+  Zonotope Loop                     1     121s  100.0%    121s   64.3GiB  100.0%  64.3GiB
+    Zonotope Propagate            147     102s   83.7%   691ms   46.3GiB   72.0%   323MiB
+      DiffZonotope_DenseProp      735    81.3s   67.0%   111ms   11.2GiB   17.4%  15.6MiB
+        Zonotope_DenseProp      1.47k    28.3s   23.3%  19.2ms   4.56GiB    7.1%  3.18MiB
+      DiffZonotope_ReLUProp       588    20.2s   16.7%  34.4ms   35.0GiB   54.4%  60.9MiB
+        Zonotope_ReLUProp       1.18k    13.3s   10.9%  11.3ms   20.0GiB   31.1%  17.4MiB
+          Column Multiply       1.18k    8.88s    7.3%  7.55ms   10.0GiB   15.5%  8.70MiB
+          Allocation            1.18k    2.37s    1.9%  2.01ms   10.0GiB   15.5%  8.70MiB
+          Set Matrix            1.18k    2.02s    1.7%  1.71ms   17.8MiB    0.0%  15.5KiB
+          Vectors               1.18k   23.0ms    0.0%  19.6μs   35.2MiB    0.1%  30.6KiB
+          Influence Matrix      1.18k    357μs    0.0%   304ns     0.00B    0.0%    0.00B
+          Bounds                1.18k    170μs    0.0%   145ns     0.00B    0.0%    0.00B
+    Compute Split                 147    17.9s   14.7%   122ms   17.9GiB   27.8%   125MiB
+      DeepSplit Heuristic         147    17.9s   14.7%   121ms   17.9GiB   27.8%   124MiB
+      Split Input                 147   9.67ms    0.0%  65.8μs   23.2MiB    0.0%   161KiB
+    Property Check                147    1.55s    1.3%  10.5ms   78.5MiB    0.1%   547KiB
+Initialize                          1   6.30ms    0.0%  6.30ms   22.4MiB    0.0%  22.4MiB
+─────────────────────────────────────────────────────────────────────────────────────────
