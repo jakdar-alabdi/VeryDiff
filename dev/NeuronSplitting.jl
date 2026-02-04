@@ -263,29 +263,29 @@ function deepsplit_verify_network(ϵ::Float64)
                             @timeit to "Compute Split" begin
     
                                 @timeit to "DeepSplit Heuristic" begin
-                                    split_node = split_heuristic(Zout, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
+                                    split_candidate = split_heuristic(Zout, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
                                 end
     
                                 distance_bound = min(distance_bound, task.distance_bound)
                                 final_δ_bound = distance_bound
 
-                                if (post_contract || inter_contract || use_lp_zc) && split_node.layer == 0
+                                if (post_contract || inter_contract || use_lp_zc) && split_candidate.layer == 0
                                     @timeit to "Split Input" begin
-                                        (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_node.neuron, N̂, prop_state.split_constraints, task, work_share, distance_bound)
+                                        (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_candidate.neuron, N̂, prop_state.split_constraints, task, work_share, distance_bound)
                                     end
                                 else
                                     if use_zono_contract && !pre_contract
                                         task = transform_verification_task(task, input_bounds)
                                     end
 
-                                    (ws₁, task₁, direction₁), (ws₂, task₂, direction₂) = split_node(split_node, task, work_share, distance_bound)
+                                    (ws₁, task₁, direction₁), (ws₂, task₂, direction₂) = split_node(split_candidate, task, work_share, distance_bound)
                                     
-                                    if pre_contract && split_node.layer > 0
+                                    if pre_contract && split_candidate.layer > 0
                                         @timeit to "Pre-Contract Zono" begin
-                                            offset = ifelse(split_node.network == 1, 0, Zout.num_approx₁)
-                                            Z = prop_state.intermediate_zonos[split_node.network][split_node.layer]
-                                            g = align_vector(Z.G[split_node.neuron, :], N̂, input_dim, offset)
-                                            c = Z.c[split_node.neuron]
+                                            offset = ifelse(split_candidate.network == 1, 0, Zout.num_approx₁)
+                                            Z = prop_state.intermediate_zonos[split_candidate.network][split_candidate.layer]
+                                            g = align_vector(Z.G[split_candidate.neuron, :], N̂, input_dim, offset)
+                                            c = Z.c[split_candidate.neuron]
 
                                             input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
     
