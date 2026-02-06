@@ -9,6 +9,7 @@ mutable struct SplitNode
     layer :: Int64
     neuron :: Int64
     direction :: Int64
+    intersections :: Union{Tuple{Float64, Float64}, Nothing}
 end
 
 mutable struct SplitConstraint

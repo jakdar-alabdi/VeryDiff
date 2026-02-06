@@ -41,7 +41,7 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
             n = argmax(s[l₁])
             if s[l₁][n] > max_score
                 max_score = s[l₁][n]
-                max_node = SplitNode(net, l₁, n, 0)
+                max_node = SplitNode(net, l₁, n, 0, nothing)
             end
 
             offset₁ += num_instable₁
@@ -51,7 +51,7 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
             d = argmax(s_input)
             if s_input[d] > max_score
                 max_score = s_input[d]
-                max_node = SplitNode(0, 0, distance_indices[d], 0)
+                max_node = SplitNode(0, 0, distance_indices[d], 0, nothing)
             end
         end
     end
@@ -95,7 +95,7 @@ function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropSta
             n = argmax(s[l₁])
             if s[l₁][n] > max_score
                 max_score = s[l₁][n]
-                max_node = SplitNode(net, l₁, n, 0)
+                max_node = SplitNode(net, l₁, n, 0, nothing)
             end
 
             offset += num_instable
@@ -105,7 +105,7 @@ function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropSta
             d = argmax(s_input)
             if s_input[d] > max_score
                 max_score = s_input[d]
-                max_node = SplitNode(0, 0, distance_indices[d], 0)
+                max_node = SplitNode(0, 0, distance_indices[d], 0, nothing)
             end
         end
     end

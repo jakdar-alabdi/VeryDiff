@@ -74,14 +74,16 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
             Zs = (Z.Z₁, Z.Z₂)
             N̂ = size(Z.∂Z.G, 2)
 
-            @timeit to "Collect Constraints" begin
-                for node in layer_split_nodes
-                    g = Zs[node.network].G[node.neuron, :]
-                    c = Zs[node.network].c[node.neuron]
-                    push!(P.split_constraints, SplitConstraint(node, g, c))
+            if NEURON_SPLITTING_APPROACH[] != VerticalSplitting
+                @timeit to "Collect Constraints" begin
+                    for node in layer_split_nodes
+                        g = Zs[node.network].G[node.neuron, :]
+                        c = Zs[node.network].c[node.neuron]
+                        push!(P.split_constraints, SplitConstraint(node, g, c))
+                    end
                 end
             end
-
+            
             if P.inter_contract
                 @timeit to "Inter-Contract Zono" begin
                     input_bounds = [-ones(N̂) ones(N̂)]
@@ -171,13 +173,27 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     upper₂ = @view bounds₂[:,2]
 
     if USE_NEURON_SPLITTING[]
-        for node in layer_split_nodes
-            if node.network == 1
-                lower₁[node.neuron] *= node.direction == -1
-                upper₁[node.neuron] *= node.direction == 1
-            else
-                lower₂[node.neuron] *= node.direction == -1
-                upper₂[node.neuron] *= node.direction == 1
+        lowers, uppers = [lower₁, lower₂], [upper₁, upper₂]
+        if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
+            for node in layer_split_nodes
+                (; network, neuron, direction, intersctions) = node
+                if isnothing(intersctions)
+                    node.intersections = (lowers[network][neuron], uppers[network][neuron]) ./ 2
+                end
+                l, u = lowers[network][neuron], uppers[network][neuron]
+                s₁, s₂ = intersctions
+                if direction == 1
+                    lowers[network][neuron] = max(l, s₁)
+                    uppers[network][neuron] = min(u, s₂)
+                else
+                    lowers[network][neuron] = ifelse(l >= s₁, 0.0, max(l, 2 * s₁))
+                    uppers[network][neuron] = ifelse(u >= s₂, 0.0, min(u, 2 * s₂))
+                end
+            end
+        else
+            for (;network, neuron, direction) in layer_split_nodes
+                lowers[network][neuron] *= direction == -1
+                uppers[network][neuron] *= direction == 1
             end
         end
 

@@ -335,8 +335,8 @@ end
 function split_neuron(node::SplitNode, task::VerificationTask, work_share::Float64, distance_bound::Float64)
     direction₁, direction₂ = -1, 1 # inactive, active
     branch₁, branch₂ = task.branch, deepcopy(task.branch)
-    push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₁))
-    push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₂))
+    push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₁, nothing))
+    push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₂, nothing))
     
     task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
     task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₂)
