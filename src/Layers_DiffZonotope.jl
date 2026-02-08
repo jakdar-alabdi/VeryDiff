@@ -72,8 +72,7 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
 
         if !isempty(layer_split_nodes)
             Zs = (Z.Z₁, Z.Z₂)
-            N̂ = size(Z.∂Z.G, 2)
-
+            
             if NEURON_SPLITTING_APPROACH[] != VerticalSplitting
                 @timeit to "Collect Constraints" begin
                     for node in layer_split_nodes
@@ -86,7 +85,11 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
             
             if P.inter_contract
                 @timeit to "Inter-Contract Zono" begin
+                    N̂ = size(Z.∂Z.G, 2)
                     input_bounds = [-ones(N̂) ones(N̂)]
+                    (;num_approx₁, num_approx₂) = Z
+                    input_dims₁ = vcat(1:input_dim, (input_dim+1):(input_dim+num_approx₁))
+                    input_dims₂ = vcat(1:input_dim, (input_dim+num_approx₁+1):(input_dim+num_approx₁+num_approx₂))
 
                     layer_constraints = SplitConstraint[]
                     @timeit to "Align Constraints" begin
@@ -97,11 +100,22 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                             push!(layer_constraints, SplitConstraint(node, g, c))
                         end
                     end
+                    
+                    @timeit to "Sort Constraints" begin
+                        sort_constraints!(layer_constraints, zeros(N̂))
+                    end
 
-                    sort_constraints!(layer_constraints, zeros(N̂))
                     for (;node, g, c) in layer_constraints
                         @timeit to "Contract Zono" begin
                             input_bounds = contract_zono(input_bounds, g, c, node.direction)
+
+                            if !isnothing(input_bounds)
+                                if node.network == 1
+                                    input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₁)
+                                else
+                                    input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₂)
+                                end
+                            end
                             
                             P.isempty_intersection |= isnothing(input_bounds)
                             if P.isempty_intersection
@@ -114,9 +128,9 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                         end
                     end
 
-                    if !all(isone.(abs.(input_bounds)))
+                    if any(x -> !isone(abs(x)), input_bounds)
                         @timeit to "Transform Zono" begin
-                            transform_offset_diff_zono!(input_bounds, Z)
+                            transform_offset_diff_zono!(input_bounds, Z; input_dims₁=input_dims₁, input_dims₂=input_dims₂)
                             if P.first_improvement
                                 P.first_improvement = false
                                 P.task = transform_verification_task(P.task, input_bounds)

@@ -56,12 +56,15 @@ function deepsplit_verify_network(ϵ::Float64)
         initial_δ_bound = Inf64
         final_δ_bound = Inf64
 
-        use_lp = NEURON_SPLITTING_APPROACH[] == LP
-        use_zono_contract = NEURON_SPLITTING_APPROACH[] == ZonoContraction
-        use_lp_zc = use_zono_contract && ZONO_CONTRACT_MODE[] == LPZonoContract
-        inter_contract = use_lp_zc || use_zono_contract && ZONO_CONTRACT_MODE[] == ZonoContractInter
-        pre_contract = use_zono_contract && (ZONO_CONTRACT_MODE[] == ZonoContract || ZONO_CONTRACT_MODE[] == ZonoContractPre)
-        post_contract = use_zono_contract && (ZONO_CONTRACT_MODE[] == ZonoContract || ZONO_CONTRACT_MODE[] == ZonoContractPost)
+        approach = NEURON_SPLITTING_APPROACH[]
+        contract = ZONO_CONTRACT_MODE[]
+        use_lp = approach == LP
+        use_zono_contract = approach == ZonoContraction
+        use_lp_zc = use_zono_contract && contract == LPZonoContract
+        input_zc = use_zono_contract && (contract == InputZonoContract || contract == InputZonoContractInter)
+        inter_contract = use_lp_zc || use_zono_contract && (contract == ZonoContractInter || contract == InputZonoContractInter)
+        pre_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPre || contract == InputZonoContract)
+        post_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPost)
 
         queue = Queue()
         push!(queue, (1.0, initial_task))
@@ -115,6 +118,11 @@ function deepsplit_verify_network(ϵ::Float64)
                         input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
                         N̂ = size(Zout.∂Z.G, 2)
                         input_bounds = [-ones(N̂) ones(N̂)]
+
+                        (;num_approx₁, num_approx₂) = Zout
+                        input_dims₁ = vcat(1:input_dim, (input_dim+1):(input_dim+num_approx₁))
+                        input_dims₂ = vcat(1:input_dim, (input_dim+num_approx₁+1):(input_dim+num_approx₁+num_approx₂))
+                        
                         bounds = zono_bounds(Zout.∂Z)
 
                         # Compute all output dimensions that still need to be proven
@@ -197,6 +205,15 @@ function deepsplit_verify_network(ϵ::Float64)
                                         for (;node, g, c) in prop_state.split_constraints
                                             @timeit to "Contract Zono" begin
                                                 input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                                                
+                                                if !isnothing(input_bounds)
+                                                    if node.network == 1
+                                                        input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₁)
+                                                    else
+                                                        input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₂)
+                                                    end
+                                                end
+
                                                 if isnothing(input_bounds)
                                                     empty_intersection = true
                                                     break
@@ -224,9 +241,9 @@ function deepsplit_verify_network(ϵ::Float64)
                                             end
                                         end
     
-                                        if !all(isone.(abs.(input_bounds)))
+                                        if any(x -> !isone(abs(x)), input_bounds) # any(x -> !isone(abs(x)), input_bounds)
                                             @timeit to "Transform Zono" begin
-                                                transform_offset_diff_zono!(input_bounds, Zout)
+                                                transform_offset_diff_zono!(input_bounds, Zout; input_dims₁=input_dims₁, input_dims₂=input_dims₂)
                                                 # final_bounds = maximum.(abs, zono_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
                                                 # println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
                                                 # println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
@@ -255,7 +272,6 @@ function deepsplit_verify_network(ϵ::Float64)
                                 # TODO implement vertical splitting
                                 throw(ErrorException("Vertical splitting not implemented yet :("))
                             end
-    
                         end
                         
                         task.branch.undetermined = mask
@@ -269,29 +285,30 @@ function deepsplit_verify_network(ϵ::Float64)
                                 distance_bound = min(distance_bound, task.distance_bound)
                                 final_δ_bound = distance_bound
 
-                                if (post_contract || inter_contract || use_lp_zc) && split_candidate.layer == 0
+                                if input_zc && split_candidate.layer == 0
                                     @timeit to "Split Input" begin
-                                        (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_candidate.neuron, N̂, prop_state.split_constraints, task, work_share, distance_bound)
+                                        (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_candidate.neuron, input_bounds, prop_state.split_constraints, task, work_share, distance_bound; input_dims₁=input_dims₁, input_dims₂=input_dims₂)
                                     end
                                 else
-                                    if use_zono_contract && !pre_contract
-                                        task = transform_verification_task(task, input_bounds)
-                                    end
-
-                                    (ws₁, task₁, direction₁), (ws₂, task₂, direction₂) = split_node(split_candidate, task, work_share, distance_bound)
-                                    
-                                    if pre_contract && split_candidate.layer > 0
-                                        @timeit to "Pre-Contract Zono" begin
-                                            offset = ifelse(split_candidate.network == 1, 0, Zout.num_approx₁)
-                                            Z = prop_state.intermediate_zonos[split_candidate.network][split_candidate.layer]
-                                            g = align_vector(Z.G[split_candidate.neuron, :], N̂, input_dim, offset)
-                                            c = Z.c[split_candidate.neuron]
-
-                                            input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
-    
-                                            task₁ = contract_to_verification_task(input_bounds₁, g, c, direction₁, task₁)
-                                            task₂ = contract_to_verification_task(input_bounds₂, g, c, direction₂, task₂)
+                                    if !pre_contract && any(x -> !isone(abs(x)), input_bounds)
+                                        @timeit to "Transform Input Zono" begin
+                                            task = transform_verification_task(task, input_bounds)
                                         end
+                                    end
+                                    (ws₁, task₁, direction₁), (ws₂, task₂, direction₂) = split_node(split_candidate, task, work_share, distance_bound)
+                                end
+
+                                if pre_contract && split_candidate.layer > 0
+                                    @timeit to "Pre-Contract Zono" begin
+                                        offset = ifelse(split_candidate.network == 1, 0, Zout.num_approx₁)
+                                        Z = prop_state.intermediate_zonos[split_candidate.network][split_candidate.layer]
+                                        g = align_vector(Z.G[split_candidate.neuron, :], N̂, input_dim, offset)
+                                        c = Z.c[split_candidate.neuron]
+
+                                        input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
+
+                                        task₁ = contract_to_verification_task(input_bounds₁, g, c, direction₁, task₁)
+                                        task₂ = contract_to_verification_task(input_bounds₂, g, c, direction₂, task₂)
                                     end
                                 end
                                 
@@ -344,19 +361,20 @@ function split_neuron(node::SplitNode, task::VerificationTask, work_share::Float
     return (work_share / 2.0, task₁, direction₁), (work_share / 2.0, task₂, direction₂)
 end
 
-function split_contract_zono(d::Int, N̂::Int, constraints::Vector{SplitConstraint}, task::VerificationTask, work_share::Float64, distance_bound::Float64)
+function split_contract_zono(d::Int, input_bounds::Matrix{Float64}, constraints::Vector{SplitConstraint}, task::VerificationTask, work_share::Float64, distance_bound::Float64; input_dims₁=nothing, input_dims₂=nothing)
     distance_d = findfirst(x -> x == d, task.distance_indices)
     @assert !isnothing(distance_d)
 
-    input_bounds₁, input_bounds₂ = [-ones(N̂) ones(N̂)], [-ones(N̂) ones(N̂)]
-    input_bounds₁[distance_d, 1] = 0
-    input_bounds₂[distance_d, 2] = 0
+    input_bounds₁, input_bounds₂ = input_bounds, deepcopy(input_bounds)
+    cutting_point = (input_bounds[distance_d, 1] + input_bounds[distance_d, 2]) / 2
+    input_bounds₁[distance_d, 1] = cutting_point
+    input_bounds₂[distance_d, 2] = cutting_point
 
     task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, task.branch)
     task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, task.branch)
 
-    task₁ = contract_all_to_verification_task(task₁, input_bounds₁, constraints)
-    task₂ = contract_all_to_verification_task(task₂, input_bounds₂, constraints)
+    task₁ = contract_all_to_verification_task(task₁, input_bounds₁, constraints; input_dims₁=input_dims₁, input_dims₂=input_dims₂)
+    task₂ = contract_all_to_verification_task(task₂, input_bounds₂, constraints; input_dims₁=input_dims₁, input_dims₂=input_dims₂)
 
     return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
 end

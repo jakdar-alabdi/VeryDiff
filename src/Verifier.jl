@@ -137,91 +137,105 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
     
     # @debug "[Thread $(threadid)] Initiating loop"
     @timeit to "Zonotope Loop" begin
-    loop_time = @elapsed begin
-    while !should_terminate
-        input_dim=1
-        try
-            work_share, verification_task = pop!(work_queue)
-            final_δ_bound = verification_task.distance_bound
-            Zin = to_diff_zono(verification_task)
-            input_dim = size(Zin.Z₁.G,2)
-            if k == 0
-                println("[Thread $(threadid)] Time to first task: $(round((time_ns()-starttime)/1e9;digits=2))s")
-            end
-            # @debug "[Thread $(threadid)] got work share $(work_share) running on $(Threads.threadid())"
-            #println("Processing task on thread $(threadid)")
-            total_zonos+=1
-            # Initial Pass
-            #prop_state.i = 1
-            @timeit to "Zonotope Propagate" begin
-            Zout = N(Zin, prop_state)
-            end
-            if first
-                println("Zono Bounds:")
-                bounds = zono_bounds(Zout.∂Z)
-                println(bounds[:,1])
-                println(bounds[:,2])
-                distance_bound = maximum(abs, bounds)
-                initial_δ_bound = distance_bound
-                final_δ_bound = distance_bound
-                first=false
-            end
-
-            # println(verification_task.distance_bound)
-
-            @timeit to "Property Check" begin
-            prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout, verification_task.verification_status)
-            end
-            global FIRST_ROUND = false
-            if !prop_satisfied
-                if !isnothing(cex)
-                    @assert all(zono_bounds(Zin.Z₁)[:,1] .<= cex[1] .&& cex[1] .<= zono_bounds(Zin.Z₂)[:,2])
-                    println("\nFound counterexample: $(cex)")
-                    should_terminate = true
-                    is_verified = UNSAFE
-                elseif !do_not_split
-                    @timeit to "Compute Split" begin
-                    splits += 1
-                    split_d = split_heuristic(Zin,Zout,heuristics_info,verification_task.distance_indices)
-                    Z1, Z2 = split_zono(split_d, verification_task,work_share,verification_status, distance_bound)
-                    Zin=nothing
-                    push!(work_queue, Z1)
-                    push!(work_queue, Z2)
-                    generated_zonos+=2
+        loop_time = @elapsed begin
+            try                
+                while !should_terminate
+                    input_dim=1
+                    try
+                        work_share, verification_task = pop!(work_queue)
+                        Zin = to_diff_zono(verification_task)
+                        input_dim = size(Zin.Z₁.G,2)
+                        if k == 0
+                            println("[Thread $(threadid)] Time to first task: $(round((time_ns()-starttime)/1e9;digits=2))s")
+                        end
+                        # @debug "[Thread $(threadid)] got work share $(work_share) running on $(Threads.threadid())"
+                        #println("Processing task on thread $(threadid)")
+                        total_zonos+=1
+                        # Initial Pass
+                        #prop_state.i = 1
+                        @timeit to "Zonotope Propagate" begin
+                        Zout = N(Zin, prop_state)
+                        end
+                        if first
+                            println("Zono Bounds:")
+                            bounds = zono_bounds(Zout.∂Z)
+                            println(bounds[:,1])
+                            println(bounds[:,2])
+                            distance_bound = maximum(abs, bounds)
+                            initial_δ_bound = distance_bound
+                            final_δ_bound = distance_bound
+                            first=false
+                        end
+    
+                        # println(verification_task.distance_bound)
+    
+                        @timeit to "Property Check" begin
+                        prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout, verification_task.verification_status)
+                        end
+                        global FIRST_ROUND = false
+                        if !prop_satisfied
+                            if !isnothing(cex)
+                                @assert all(zono_bounds(Zin.Z₁)[:,1] .<= cex[1] .&& cex[1] .<= zono_bounds(Zin.Z₂)[:,2])
+                                println("\nFound counterexample: $(cex)")
+                                should_terminate = true
+                                is_verified = UNSAFE
+                            elseif !do_not_split
+                                @timeit to "Compute Split" begin
+                                splits += 1
+                                split_d = split_heuristic(Zin,Zout,heuristics_info,verification_task.distance_indices)
+                                Z1, Z2 = split_zono(split_d, verification_task,work_share,verification_status, distance_bound)
+                                Zin=nothing
+                                push!(work_queue, Z1)
+                                push!(work_queue, Z2)
+                                generated_zonos+=2
+                                end
+                            end
+                        else
+                            total_work += work_share
+                        end
+                    finally
+                        # nothing right now
                     end
+                    if (time_ns()-starttime)/1e9 > timeout
+                        # _, next_task = VeryDiff.first(work_queue)
+                        # final_δ_bound = next_task.distance_bound
+                        println("\n\nTIMEOUT REACHED")
+                        println("UNKNOWN")
+                        should_terminate = true
+                        is_verified = UNKNOWN
+                    end
+                    # Even if we haven't done any work we may find a counterexample, but unfortunately
+                    # memory is bounded...
+                    # if length(work_queue) > 10000
+                    if length(work_queue) > 2500 && total_work < 1e-3 && input_dim > 100
+                        # println("10000 Zonotopes in task queue: NO MORE SPLITTING!")
+                        println("2500 Zonotopes in task queue: NO MORE SPLITTING!")
+                        println("This is to avoid memory overflows.")
+                        println("WARNING: FROM THIS POINT ONWARDS, WE ARE ONLY SEARCHING FOR COUNTEREXAMPLES!")
+                        do_not_split = true
+                    end
+                    should_terminate |= length(work_queue) == 0
+                    if !isempty(work_queue)
+                        _, next_task = VeryDiff.first(work_queue)
+                        final_δ_bound = next_task.distance_bound
+                    end
+                    k+=1
+                    if k%100 == 0
+                        println("[Thread $(threadid)] Processed $(total_zonos) zonotopes (Work Done: $(round(100*total_work;digits=5))%; Expected Zonos: $(total_zonos/total_work))")
+                    end
+                    #end
                 end
-            else
-                total_work += work_share
+            catch e
+                if e isa OutOfMemoryError
+                    empty!(queue)
+                    GC.gc()
+                    println("\nMEMOUT")
+                    return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
+                else
+                    rethrow(e)
+                end
             end
-        finally
-            # nothing right now
         end
-        if (time_ns()-starttime)/1e9 > timeout
-            _, next_task = VeryDiff.first(work_queue)
-            final_δ_bound = next_task.distance_bound
-            println("\n\nTIMEOUT REACHED")
-            println("UNKNOWN")
-            should_terminate = true
-            is_verified = UNKNOWN
-        end
-        # Even if we haven't done any work we may find a counterexample, but unfortunately
-        # memory is bounded...
-        # if length(work_queue) > 10000
-        if length(work_queue) > 2500 && total_work < 1e-3 && input_dim > 100
-            # println("10000 Zonotopes in task queue: NO MORE SPLITTING!")
-            println("2500 Zonotopes in task queue: NO MORE SPLITTING!")
-            println("This is to avoid memory overflows.")
-            println("WARNING: FROM THIS POINT ONWARDS, WE ARE ONLY SEARCHING FOR COUNTEREXAMPLES!")
-            do_not_split = true
-        end
-        should_terminate |= length(work_queue) == 0
-        k+=1
-        if k%100 == 0
-            println("[Thread $(threadid)] Processed $(total_zonos) zonotopes (Work Done: $(round(100*total_work;digits=5))%; Expected Zonos: $(total_zonos/total_work))")
-        end
-        #end
-    end
-    end
     end
     empty!(work_queue)
     if do_not_split
