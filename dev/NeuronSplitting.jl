@@ -63,8 +63,8 @@ function deepsplit_verify_network(ϵ::Float64)
         use_lp_zc = use_zono_contract && contract == LPZonoContract
         input_zc = use_zono_contract && (contract == InputZonoContract || contract == InputZonoContractInter)
         inter_contract = use_lp_zc || use_zono_contract && (contract == ZonoContractInter || contract == InputZonoContractInter)
-        pre_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPre || contract == InputZonoContract)
-        post_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPost)
+        post_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPost || contract == InputZonoContract)
+        pre_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPre)
 
         queue = Queue()
         push!(queue, (1.0, initial_task))
