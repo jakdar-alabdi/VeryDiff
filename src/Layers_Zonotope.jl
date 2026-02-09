@@ -110,21 +110,25 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
     λ = ifelse.(upper .<= 0.0, 0.0, ifelse.(lower .>= 0.0, 1.0, α))
 
     crossing = lower .< 0.0 .&& upper .> 0.0
+
     
     γ = 0.5 .* max.(-λ .* lower, 0.0, ((-).(1.0, λ)) .* upper)  # Computed offset (-λl/2)
+    
+    ĉ = λ .* Z.c .+ crossing .* γ
+    end
 
     if USE_NEURON_SPLITTING[]
         if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
             indices_mask = map(node -> node.network == network && node.layer == layer && node.direction == -1, P.task.branch.split_nodes)
             layer_split_nodes = @view P.task.branch.split_nodes[indices_mask]
-            
+            for (;neuron, bounds) in layer_split_nodes
+                s₁ = bounds[1, 2]
+                ĉ[neuron] = λ[neuron] * Z.c[neuron] - λ[neuron] * lower[neuron] + 0.5 * s₁
+                γ[neuron] = 0.5 * s₁
+            end
         end
         push!(P.instable_nodes[network], crossing)
     end
-
-    ĉ = λ .* Z.c .+ crossing .* γ
-    end
-
     
     @timeit to "Influence Matrix" begin
     if NEW_HEURISTIC

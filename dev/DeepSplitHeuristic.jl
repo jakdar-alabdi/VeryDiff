@@ -1,4 +1,4 @@
-function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
+function deepsplit_heuristic(Zout::DiffZonotope, split_nodes::Vector{SplitNode}, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
     input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
     
     max_score = -Inf64
@@ -12,36 +12,47 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
         s = [zeros(size(crossings[l])) for l in 1:L]
         s_input = zeros(input_dim)
         offset₁ = 0
-
+        
         for l₁ in L:-1:1
             Z₁ = intermediates[l₁]
             crossing₁ = crossings[l₁]
             num_instable₁ = count(crossing₁)
             s[l₁][crossing₁] .= sum(abs, generators(offset₁, num_instable₁), dims=1)[:]
             
+            
             offset₂ = 0
             for l₂ in (l₁ + 1):L
                 Z₂ = intermediates[l₂]
                 crossing₂ = crossings[l₂]
                 num_instable₂ = count(crossing₂)
-
+                
                 α = compute_relative_impact(Z₂, offset₂, num_instable₁, crossing₂)
                 s[l₁][crossing₁] .+= sum(α .* s[l₂], dims=1)[:]
-
+                
                 offset₂ += num_instable₂
             end
-
+            
             if DEEPSPLIT_INPUT_SPLITTING[]
                 bounds = zono_bounds(Z₁)
                 bounds_width = (bounds[:, 2] - bounds[:, 1])[crossing₁]
                 α = abs.(Z₁.G[crossing₁, 1:input_dim]) ./ bounds_width
                 s_input .+= sum(α .* s[l₁][crossing₁] .* INDIRECT_INPUT_MULTIPLIER[], dims=1)[:]
             end
-
-            n = argmax(s[l₁])
-            if s[l₁][n] > max_score
-                max_score = s[l₁][n]
-                max_node = SplitNode(net, l₁, n, 0, nothing)
+            
+            
+            if l₁ < L
+                # layer_split_nodes = filter(n -> n.network == net && n.layer == l₁, split_nodes)
+                # layer_split_nodes = map(n -> n.neuron, layer_split_nodes)
+                # layer_nodes = findall(1:size(crossing₁, 1) .∉ Ref(layer_split_nodes))
+                # if !isempty(layer_nodes)                    
+                #     n = argmax(n -> s[l₁][n], layer_nodes)
+                #     @assert isnothing(findfirst(i -> i == n, layer_split_nodes))
+                    n = argmax(s[l₁])
+                    if s[l₁][n] > max_score
+                        max_score = s[l₁][n]
+                        max_node = SplitNode(net, l₁, n, 0, nothing)
+                    end
+                # end
             end
 
             offset₁ += num_instable₁
@@ -59,7 +70,7 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
     return max_node
 end
 
-function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
+function deepsplit_heuristic_alternative(Zout::DiffZonotope, split_nodes::Vector{SplitNode}, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
     input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
 
     max_score = -Inf64

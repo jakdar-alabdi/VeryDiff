@@ -9,7 +9,10 @@ mutable struct SplitNode
     layer :: Int64
     neuron :: Int64
     direction :: Int64
-    intersections :: Union{Tuple{Float64, Float64}, Nothing}
+    # intersections :: Union{Tuple{Float64, Float64}, Nothing}
+    # bounds :: Union{Tuple{Float64, Float64}, Nothing}
+    # inner_bounds :: Union{Tuple{Tuple{Float64, Float64}, Tuple{Float64, Float64}}, Nothing}
+    bounds :: Union{Matrix{Float64}, Nothing}
 end
 
 mutable struct SplitConstraint

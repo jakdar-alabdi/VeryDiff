@@ -190,19 +190,27 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
         lowers, uppers = [lower₁, lower₂], [upper₁, upper₂]
         if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
             for node in layer_split_nodes
-                (; network, neuron, direction, intersctions) = node
-                if isnothing(intersctions)
-                    node.intersections = (lowers[network][neuron], uppers[network][neuron]) ./ 2
-                end
+                (;network, neuron) = node
                 l, u = lowers[network][neuron], uppers[network][neuron]
-                s₁, s₂ = intersctions
-                if direction == 1
-                    lowers[network][neuron] = max(l, s₁)
-                    uppers[network][neuron] = min(u, s₂)
+                if node.direction == 1
+                    if isnothing(node.bounds)
+                        node.bounds = [l u] ./ 2
+                    end
+                    l, u = max(l, node.bounds[1]), min(u, node.bounds[2])
+                    node.bounds = [l u]
                 else
-                    lowers[network][neuron] = ifelse(l >= s₁, 0.0, max(l, 2 * s₁))
-                    uppers[network][neuron] = ifelse(u >= s₂, 0.0, min(u, 2 * s₂))
+                    if isnothing(node.bounds)
+                        s₁, s₂ = (l, u) ./ 2
+                        node.bounds = [l s₁; s₂ u]
+                    end
+                    l₁, u₁ = node.bounds[1, 1], node.bounds[1, 2]
+                    l₂, u₂ = node.bounds[2, 1], node.bounds[2, 2]
+                    l = ifelse(l >= u₁, 0.0, max(l, l₁))
+                    u = ifelse(u <= l₂, 0.0, min(u, u₂))
+                    node.bounds = [l u₁; l₂ u]
                 end
+                lowers[network][neuron] = l
+                uppers[network][neuron] = u
             end
         else
             for (;network, neuron, direction) in layer_split_nodes

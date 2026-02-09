@@ -58,6 +58,7 @@ function deepsplit_verify_network(ϵ::Float64)
 
         approach = NEURON_SPLITTING_APPROACH[]
         contract = ZONO_CONTRACT_MODE[]
+        use_vertical_splitting = approach == VerticalSplitting
         use_lp = approach == LP
         use_zono_contract = approach == ZonoContraction
         use_lp_zc = use_zono_contract && contract == LPZonoContract
@@ -270,6 +271,7 @@ function deepsplit_verify_network(ϵ::Float64)
                                 end
                             else
                                 # TODO implement vertical splitting
+                                println("Test")
                                 throw(ErrorException("Vertical splitting not implemented yet :("))
                             end
                         end
@@ -279,7 +281,7 @@ function deepsplit_verify_network(ϵ::Float64)
                             @timeit to "Compute Split" begin
     
                                 @timeit to "DeepSplit Heuristic" begin
-                                    split_candidate = split_heuristic(Zout, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
+                                    split_candidate = split_heuristic(Zout, task.branch.split_nodes, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
                                 end
     
                                 distance_bound = min(distance_bound, task.distance_bound)
@@ -351,9 +353,34 @@ end
 
 function split_neuron(node::SplitNode, task::VerificationTask, work_share::Float64, distance_bound::Float64)
     direction₁, direction₂ = -1, 1 # inactive, active
+    bounds₁ = bounds₂ = nothing
+    (;network, layer, neuron) = node
+    if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
+        split_nodes = task.branch.split_nodes
+        n = findfirst(n -> (n.network, n.layer, n.neuron) == (network, layer, neuron), split_nodes)
+        if !isnothing(n)
+            node = split_nodes[n]
+            task.branch.split_nodes = vcat(split_nodes[1:n-1], split_nodes[n+1:end])
+
+            if node.direction == 1
+                l, u = bounds[1], bounds[2]
+                s₁, s₂ = (l, u) ./ 2
+                bounds₁ = [l s₁; s₂ u]
+                bounds₂ = [s₁ s₂]
+            else
+                direction₁ = direction₂ = -1
+                l₁, u₁ = node.bounds[1, 1], node.bounds[1, 2]
+                l₂, u₂ = node.bounds[2, 1], node.bounds[2, 1]
+                s₁, s₂ = (l₁ + u₁, l₂ + u₂) ./ 2
+                bounds₁ = [l₁ s₁; s₂ u₂]
+                bounds₂ = [s₁ u₁; l₂ s₂]
+            end
+        end
+    end
+    
     branch₁, branch₂ = task.branch, deepcopy(task.branch)
-    push!(branch₁.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₁, nothing))
-    push!(branch₂.split_nodes, SplitNode(node.network, node.layer, node.neuron, direction₂, nothing))
+    push!(branch₁.split_nodes, SplitNode(network, layer, neuron, direction₁, bounds₁))
+    push!(branch₂.split_nodes, SplitNode(network, layer, neuron, direction₂, bounds₂))
     
     task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₁)
     task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, branch₂)
