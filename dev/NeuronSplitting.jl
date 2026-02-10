@@ -107,6 +107,7 @@ function deepsplit_verify_network(ϵ::Float64)
                             println(bounds[:, 1])
                             println(bounds[:, 2])
                             initial_δ_bound = distance_bound
+                            final_δ_bound = distance_bound
                             first_task = false
                         end
                     end
@@ -196,59 +197,62 @@ function deepsplit_verify_network(ϵ::Float64)
                                         end
     
                                         empty_intersection = false
-                                        # input_bounds_old = zeros(N̂, 2)
-                                        # @timeit to "Fixpoint Contract" begin
-                                        #     first_round = true
-                                        #     iter_count = 0
-                                        #     initial_bounds, final_bounds = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
-                                        #     while !empty_intersection && input_bounds != input_bounds_old
-                                        #         input_bounds_old .= input_bounds
-                                        for (;node, g, c) in prop_state.split_constraints
-                                            @timeit to "Contract Zono" begin
-                                                input_bounds = contract_zono(input_bounds, g, c, node.direction)
-                                                
-                                                if !isnothing(input_bounds)
-                                                    if node.network == 1
-                                                        input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₁)
-                                                    else
-                                                        input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₂)
+                                        input_bounds_old = zeros(N̂, 2)
+                                        @timeit to "Fixpoint Contract" begin
+                                            first_round = true
+                                            iter_count = 0
+                                            initial_bounds, final_bounds = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
+                                            while !empty_intersection && input_bounds != input_bounds_old
+                                                input_bounds_old .= input_bounds
+                                                for (;node, g, c) in prop_state.split_constraints
+                                                    @timeit to "Contract Zono" begin
+                                                        input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                                                        
+                                                        # if !isnothing(input_bounds)
+                                                        #     if node.network == 1
+                                                        #         input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₁)
+                                                        #     else
+                                                        #         input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₂)
+                                                        #     end
+                                                        # end
+
+                                                        if isnothing(input_bounds)
+                                                            empty_intersection = true
+                                                            break
+                                                        end
                                                     end
                                                 end
-
-                                                if isnothing(input_bounds)
-                                                    empty_intersection = true
-                                                    break
+                                                if first_round && !empty_intersection
+                                                    first_round = false
+                                                    initial_bounds = (Zout.Z₁, Zout.Z₂, Zout.∂Z) |> Base.Fix1(map, Z -> maximum(abs, offset_zono_bounds(input_bounds, Z)))
+                                                    final_bounds = initial_bounds
                                                 end
+                                                iter_count += 1
                                             end
                                         end
-                                        #         if first_round && !empty_intersection
-                                        #             first_round = false
-                                        #             compute_bounds = Z -> offset_zono_bounds(input_bounds, Z)
-                                        #             initial_bounds = maximum.(abs, compute_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
-                                        #             final_bounds = initial_bounds
-                                        #         end
-                                        #         iter_count += 1
-                                        #     end
-                                        # end
+              
+                                        if iter_count > 1
+                                            final_bounds = (0, 0, 0)
+                                            if !empty_intersection
+                                                final_bounds = (Zout.Z₁, Zout.Z₂, Zout.∂Z) |> Base.Fix1(map, Z -> maximum(abs, offset_zono_bounds(input_bounds, Z)))
+                                            end
+                                        end
+
+                                        println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
+                                        println("Final   Bounds (NN₁, NN₂, ∂NN): $final_bounds")
+                                        println("Fixpoint Iterations: $iter_count")
+                                        println("Num Constraints: $(size(prop_state.split_constraints, 1))")
+                                        println("########################################################################################")
                                         
                                         if empty_intersection
                                             @timeit to "Empty Intersection" begin
-                                                # if iter_count > 1
-                                                #     println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
-                                                #     println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
-                                                #     println("Fixpoint Iterations: $iter_count")
-                                                # end
                                                 continue
                                             end
                                         end
     
-                                        if any(x -> !isone(abs(x)), input_bounds) # any(x -> !isone(abs(x)), input_bounds)
+                                        if any(x -> !isone(abs(x)), input_bounds)
                                             @timeit to "Transform Zono" begin
                                                 transform_offset_diff_zono!(input_bounds, Zout; input_dims₁=input_dims₁, input_dims₂=input_dims₂)
-                                                # final_bounds = maximum.(abs, zono_bounds.((Zout.Z₁, Zout.Z₂, Zout.∂Z)))
-                                                # println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
-                                                # println("Final Bounds (NN₁, NN₂, ∂NN): $final_bounds")
-                                                # println("Fixpoint Iterations: $iter_count")
                                             end
     
                                             @timeit to "Property Check" begin

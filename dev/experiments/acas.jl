@@ -75,5 +75,5 @@ function _run_acas_all(specs_csv_file::String, warmup_specs_csv_file::String, lo
 end
 
 function run_acas_all(eval_func, run_name::String)
-    _run_acas_all("$cur_dir/specs/acas-prune.csv", "$cur_dir/specs/acas-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
+    _run_acas_all("$cur_dir/specs/fixpoint-acas-prune.csv", "$cur_dir/specs/acas-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
 end

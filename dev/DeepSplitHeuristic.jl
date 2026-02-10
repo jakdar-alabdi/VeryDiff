@@ -40,18 +40,18 @@ function deepsplit_heuristic(Zout::DiffZonotope, split_nodes::Vector{SplitNode},
             end
             
             
-            if l₁ < L
+            if NEURON_SPLITTING_APPROACH[] != VerticalSplitting || l₁ < L
                 # layer_split_nodes = filter(n -> n.network == net && n.layer == l₁, split_nodes)
                 # layer_split_nodes = map(n -> n.neuron, layer_split_nodes)
                 # layer_nodes = findall(1:size(crossing₁, 1) .∉ Ref(layer_split_nodes))
-                # if !isempty(layer_nodes)                    
+                # if !isempty(layer_nodes)
                 #     n = argmax(n -> s[l₁][n], layer_nodes)
                 #     @assert isnothing(findfirst(i -> i == n, layer_split_nodes))
-                    n = argmax(s[l₁])
-                    if s[l₁][n] > max_score
-                        max_score = s[l₁][n]
-                        max_node = SplitNode(net, l₁, n, 0, nothing)
-                    end
+                n = argmax(s[l₁])
+                if s[l₁][n] > max_score
+                    max_score = s[l₁][n]
+                    max_node = SplitNode(net, l₁, n, 0, nothing)
+                end
                 # end
             end
 

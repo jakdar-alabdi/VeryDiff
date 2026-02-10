@@ -76,5 +76,5 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
 end
 
 function run_mnist_all(eval_func, run_name::String)
-    _run_mnist_all("$cur_dir/specs/mnist-prune.csv", "$cur_dir/specs/mnist-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
+    _run_mnist_all("$cur_dir/specs/fixpoint-mnist-prune.csv", "$cur_dir/specs/mnist-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
 end
