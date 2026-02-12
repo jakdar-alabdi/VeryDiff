@@ -1,0 +1,83 @@
+Parsing ACASXU_run2a_4_1_batch_2000.onnx...
+Found input X
+op: matmul, weight: (50, 5), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (5, 50), bias: nothing
+op: bias, weight: nothing, bias: (5,)
+Parsing ACASXU_run2a_4_1_batch_2000_pruned5.onnx...
+Found input X
+op: matmul, weight: (50, 5), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (50, 50), bias: nothing
+op: bias, weight: nothing, bias: (50,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (5, 50), bias: nothing
+op: bias, weight: nothing, bias: (5,)
+Using LP-DeepSplitUnbiased-Base-Input-DiffZono...
+Zono Bounds:
+[-11.18761933836764, -10.306719408246277, -11.994386303223665, -10.875540384067666, -14.464033194593572]
+[11.058080209762739, 10.177372912991732, 11.715998813686896, 11.071934748766619, 13.915219413696597]
+
+Initial δ-bound: 14.464033194593572
+Final δ-bound: 0.5138558194246365
+SAFE
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                195ms / 100.0%            117MiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1    195ms  100.0%   195ms    117MiB   99.9%   117MiB
+  Zonotope Loop                     1    194ms   99.9%   194ms    117MiB   99.9%   117MiB
+    Solve LP                       55    108ms   55.3%  1.96ms   37.6MiB   32.0%   700KiB
+    Zonotope Propagate            119   40.3ms   20.7%   339μs   56.2MiB   47.8%   483KiB
+      DiffZonotope_ReLUProp       714   22.9ms   11.8%  32.1μs   41.7MiB   35.5%  59.9KiB
+        Zonotope_ReLUProp       1.43k   7.27ms    3.7%  5.09μs   21.5MiB   18.3%  15.4KiB
+          Column Multiply       1.43k   1.89ms    1.0%  1.32μs   8.79MiB    7.5%  6.30KiB
+          Vectors               1.43k   1.66ms    0.9%  1.16μs   3.43MiB    2.9%  2.46KiB
+          Set Matrix            1.43k   1.44ms    0.7%  1.01μs    564KiB    0.5%     404B
+          Allocation            1.43k   1.26ms    0.6%   885ns   8.67MiB    7.4%  6.22KiB
+          Influence Matrix      1.43k   68.0μs    0.0%  47.6ns     0.00B    0.0%    0.00B
+          Bounds                1.43k   61.1μs    0.0%  42.8ns     0.00B    0.0%    0.00B
+        Collect Constraints       134   45.3μs    0.0%   338ns   24.6KiB    0.0%     188B
+      DiffZonotope_DenseProp      833   15.9ms    8.2%  19.1μs   14.1MiB   12.0%  17.3KiB
+        Zonotope_DenseProp      1.67k   6.34ms    3.3%  3.80μs   7.53MiB    6.4%  4.63KiB
+    Initialize LP-solver           55   35.9ms   18.5%   654μs   4.49MiB    3.8%  83.5KiB
+    Compute Split                  59   8.09ms    4.2%   137μs   14.6MiB   12.5%   254KiB
+      DeepSplit Heuristic          59   7.26ms    3.7%   123μs   14.5MiB   12.4%   252KiB
+      Split Input                  40    536μs    0.3%  13.4μs   98.8KiB    0.1%  2.47KiB
+      Split Neuron                 19    174μs    0.1%  9.18μs   18.6KiB    0.0%  0.98KiB
+    Property Check                119   2.07ms    1.1%  17.4μs   3.86MiB    3.3%  33.3KiB
+    Align Constraints              55   43.4μs    0.0%   790ns   79.9KiB    0.1%  1.45KiB
+Initialize                          1   91.4μs    0.0%  91.4μs    108KiB    0.1%   108KiB
+─────────────────────────────────────────────────────────────────────────────────────────
