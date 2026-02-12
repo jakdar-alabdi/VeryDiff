@@ -9,9 +9,6 @@ mutable struct SplitNode
     layer :: Int64
     neuron :: Int64
     direction :: Int64
-    # intersections :: Union{Tuple{Float64, Float64}, Nothing}
-    # bounds :: Union{Tuple{Float64, Float64}, Nothing}
-    # inner_bounds :: Union{Tuple{Tuple{Float64, Float64}, Tuple{Float64, Float64}}, Nothing}
     bounds :: Union{Matrix{Float64}, Nothing}
 end
 
@@ -53,7 +50,7 @@ end
 mutable struct PropState
     task :: VerificationTask
     inter_contract :: Bool
-    isempty_intersection :: Bool
+    is_unsatisfiable :: Bool
     first_improvement :: Bool
     split_constraints :: Vector{SplitConstraint}
     instable_nodes :: Tuple{Vector{BitVector}, Vector{BitVector}}

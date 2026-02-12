@@ -7,7 +7,7 @@ function (N::Network)(Z :: Zonotope, P :: PropState, network :: Int64)
 end
 
 function (L::Dense)(Z :: Zonotope, P :: PropState, network :: Int64, layer :: Int64)
-    if USE_NEURON_SPLITTING[] && P.inter_contract && P.isempty_intersection
+    if P.is_unsatisfiable
         return Z
     end
 
@@ -29,7 +29,7 @@ function get_slope(l,u, alpha)
 end
 
 function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; bounds = nothing)
-    if USE_NEURON_SPLITTING[] && P.inter_contract && P.isempty_intersection
+    if P.is_unsatisfiable
         return Z
     end
 
@@ -119,12 +119,26 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
 
     if USE_NEURON_SPLITTING[]
         if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
-            indices_mask = map(node -> node.network == network && node.layer == layer && node.direction == -1, P.task.branch.split_nodes)
+            indices_mask = map(node -> (node.network, node.layer, node.direction) == (network, layer, -1), P.task.branch.split_nodes)
             layer_split_nodes = @view P.task.branch.split_nodes[indices_mask]
+
+            # relaxtion = ifelse(VS_RELAXATION == VS_Relaxtion1, relaxtion1, relaxtion2)
+
             for (;neuron, bounds) in layer_split_nodes
-                s₁ = bounds[1, 2]
-                ĉ[neuron] = λ[neuron] * Z.c[neuron] - λ[neuron] * lower[neuron] + 0.5 * s₁
-                γ[neuron] = 0.5 * s₁
+                if crossing[neuron]
+                    @timeit to "Relax Upper Part" begin
+                        l̅, s₁ = bounds[1, 1], bounds[1, 2]
+                        s₂, u̅ = bounds[2, 1], bounds[2, 2]
+                        
+                        λ[neuron] = u̅ / (u̅ - l̅)
+                        γ[neuron] = 0.5 * λ[neuron] * (s₁ - l̅)
+                        ĉ[neuron] = λ[neuron] * (Z.c[neuron] - s₁) - γ[neuron]
+                        
+                        # λ[neuron] = s₂ / (s₂ - s₁)
+                        # γ[neuron] = 0.5 * λ[neuron] * (l̅ - s₁)
+                        # ĉ[neuron] = λ[neuron] * (Z.c[neuron] - s₁) - γ[neuron]
+                    end
+                end
             end
         end
         push!(P.instable_nodes[network], crossing)

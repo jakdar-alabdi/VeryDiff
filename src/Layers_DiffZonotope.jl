@@ -3,7 +3,7 @@ import VNNLib.NNLoader.Dense
 import VNNLib.NNLoader.ReLU
 
 function propagate_diff_layer(Ls :: Tuple{Dense,Dense,Dense}, Z::DiffZonotope, P::PropState, layer::Int64)
-    if USE_NEURON_SPLITTING[] && P.inter_contract && P.isempty_intersection
+    if P.is_unsatisfiable
         return Z
     end
 
@@ -53,7 +53,7 @@ function two_generator_bound(G::Matrix{Float64}, b, H::Matrix{Float64})
 end
 
 function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::PropState, layer::Int64)
-    if USE_NEURON_SPLITTING[] && P.inter_contract && P.isempty_intersection
+    if P.is_unsatisfiable
         return Z
     end
 
@@ -87,9 +87,6 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                 @timeit to "Inter-Contract Zono" begin
                     N̂ = size(Z.∂Z.G, 2)
                     input_bounds = [-ones(N̂) ones(N̂)]
-                    (;num_approx₁, num_approx₂) = Z
-                    input_dims₁ = vcat(1:input_dim, (input_dim+1):(input_dim+num_approx₁))
-                    input_dims₂ = vcat(1:input_dim, (input_dim+num_approx₁+1):(input_dim+num_approx₁+num_approx₂))
 
                     layer_constraints = SplitConstraint[]
                     @timeit to "Align Constraints" begin
@@ -108,29 +105,19 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                     for (;node, g, c) in layer_constraints
                         @timeit to "Contract Zono" begin
                             input_bounds = contract_zono(input_bounds, g, c, node.direction)
-
-                            if !isnothing(input_bounds)
-                                if node.network == 1
-                                    input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₁)
-                                else
-                                    input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₂)
-                                end
-                            end
                             
-                            P.isempty_intersection |= isnothing(input_bounds)
-                            if P.isempty_intersection
-                                @timeit to "Empty Intersection" begin
-                                    P.instable_nodes = (BitVector[], BitVector[])
-                                    P.intermediate_zonos = (Zonotope[], Zonotope[])
-                                    return Z
-                                end
+                            P.is_unsatisfiable |= isnothing(input_bounds)
+                            if P.is_unsatisfiable
+                                P.instable_nodes = (BitVector[], BitVector[])
+                                P.intermediate_zonos = (Zonotope[], Zonotope[])
+                                return Z
                             end
                         end
                     end
 
-                    if any(x -> !isone(abs(x)), input_bounds)
+                    if !is_unit_hypercube(input_bounds)
                         @timeit to "Transform Zono" begin
-                            transform_offset_diff_zono!(input_bounds, Z; input_dims₁=input_dims₁, input_dims₂=input_dims₂)
+                            transform_offset_diff_zono!(input_bounds, Z)
                             if P.first_improvement
                                 P.first_improvement = false
                                 P.task = transform_verification_task(P.task, input_bounds)
@@ -193,21 +180,32 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                 (;network, neuron) = node
                 l, u = lowers[network][neuron], uppers[network][neuron]
                 if node.direction == 1
-                    if isnothing(node.bounds)
-                        node.bounds = [l u] ./ 2
+                    @timeit to "Bounds Lower Part" begin
+                        if isnothing(node.bounds)
+                            node.bounds = [l u] ./ 2
+                        end
+                        l, u = max(l, node.bounds[1]), min(u, node.bounds[2])
+                        node.bounds = [l u]
+                        P.is_unsatisfiable |= l > u
                     end
-                    l, u = max(l, node.bounds[1]), min(u, node.bounds[2])
-                    node.bounds = [l u]
                 else
-                    if isnothing(node.bounds)
-                        s₁, s₂ = (l, u) ./ 2
-                        node.bounds = [l s₁; s₂ u]
+                    @timeit to "Bounds Upper Part" begin
+                        if isnothing(node.bounds)
+                            s₁, s₂ = (l, u) ./ 2
+                            node.bounds = [l s₁; s₂ u]
+                        end
+                        l₁, u₁ = node.bounds[1, 1], node.bounds[1, 2]
+                        l₂, u₂ = node.bounds[2, 1], node.bounds[2, 2]
+                        l = ifelse(l >= u₁, 0.0, max(l, l₁))
+                        u = ifelse(u <= l₂, 0.0, min(u, u₂))
+                        node.bounds = [l u₁; l₂ u]
+                        P.is_unsatisfiable |= l >= u₁ && u <= l₂
                     end
-                    l₁, u₁ = node.bounds[1, 1], node.bounds[1, 2]
-                    l₂, u₂ = node.bounds[2, 1], node.bounds[2, 2]
-                    l = ifelse(l >= u₁, 0.0, max(l, l₁))
-                    u = ifelse(u <= l₂, 0.0, min(u, u₂))
-                    node.bounds = [l u₁; l₂ u]
+                end
+                if P.is_unsatisfiable
+                    P.instable_nodes = (BitVector[], BitVector[])
+                    P.intermediate_zonos = (Zonotope[], Zonotope[])
+                    return Z
                 end
                 lowers[network][neuron] = l
                 uppers[network][neuron] = u

@@ -99,7 +99,7 @@ end
 function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, direction::Int64, task::VerificationTask)
     input_bounds = contract_zono(input_bounds, g, c, direction)
     if !isnothing(input_bounds)
-        if any(x -> !isone(abs(x)), input_bounds)
+        if !is_unit_hypercube(input_bounds)
             return transform_verification_task(task, input_bounds)
         end
         return task
@@ -107,24 +107,11 @@ function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{
     return nothing
 end
 
-function contract_all_to_verification_task(task::VerificationTask, input_bounds::Matrix{Float64}, constraints::Vector{SplitConstraint}; input_dims₁=nothing, input_dims₂=nothing)
-    if isnothing(input_dims₁)
-        input_dims₁ = 1:size(input_bounds, 1)
-    end
-    if isnothing(input_dims₂)
-        input_dims₂ = input_dims₁
-    end
-
+function contract_all_to_verification_task(task::VerificationTask, input_bounds::Matrix{Float64}, constraints::Vector{SplitConstraint})
     for (;node, g, c) in constraints
         @timeit to "Contract Input Zono" begin
             input_bounds = contract_zono(input_bounds, g, c, node.direction)
             if !isnothing(input_bounds)
-                if node.network == 1
-                    input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₁)
-                else
-                    input_bounds = contract_zono(input_bounds, g, c, node.direction; focus_dims=input_dims₂)
-                end
-            else
                 break
             end
         end
@@ -154,4 +141,8 @@ end
 function sort_constraints!(constraints::Vector{SplitConstraint}, x̂::Vector{Float64})
     sort!(constraints, by=constraint -> geometric_distance(x̂, constraint.g, constraint.c))
     return constraints
+end
+
+function is_unit_hypercube(box::Matrix{Float64})
+    return size(box, 2) == 2 && !any(x -> !isone(abs(x)), box)
 end
