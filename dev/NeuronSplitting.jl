@@ -2,7 +2,7 @@ function deepsplit_verify_network(N₁::Network, N₂::Network, Zin::Zonotope, �
     return deepsplit_verify_network(N₁, N₂, zono_bounds(Zin), ϵ)
 end
 
-function deepsplit_verify_network(N₁::Network, N₂::Network, bounds, epsilon::Float64; timeout=Inf64)
+function deepsplit_verify_network(N₁::Network, N₂::Network, bounds, epsilon::Float64; timeout=typemax(Int64), fuzz_testing=nothing)
     try
         reset_timer!(to)
         @timeit to "Initialize" begin
@@ -29,7 +29,7 @@ function deepsplit_verify_network(N₁::Network, N₂::Network, bounds, epsilon:
         end
     
         @timeit to "Verify" begin
-            status, cex, δ_bounds = deepsplit_verify_network(epsilon)(N, N₁, N₂, initial_task, split_heuristic; timeout=timeout)
+            status, cex, δ_bounds = deepsplit_verify_network(epsilon; fuzz_testing=fuzz_testing)(N, N₁, N₂, initial_task, split_heuristic; timeout=timeout)
             if !isnothing(cex)
                 println("\nFound counterexample: $cex")
             end
@@ -47,10 +47,10 @@ function deepsplit_verify_network(N₁::Network, N₂::Network, bounds, epsilon:
     end
 end
 
-function deepsplit_verify_network(ϵ::Float64)
+function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
     property_check = get_epsilon_property(ϵ)
     
-    return (N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VerificationTask, split_heuristic; timeout=Inf64) -> begin
+    return (N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VerificationTask, split_heuristic; timeout=typemax(Int64)) -> begin
         start_time = time_ns()
         first_task = true
         initial_δ_bound = Inf64
@@ -319,18 +319,9 @@ function deepsplit_verify_network(ϵ::Float64)
                         end
 
                         # Tests empirically whether the bounds computed by LP are valid
-                        if distance_bound_testing
+                        if !isnothing(fuzz_testing)
                             @timeit to "Random Test" begin
-                                δ = distance_bound
-                                if !isempty(queue)
-                                    _, next_task = first(queue)
-                                    δ = max(next_task.distance_bound, distance_bound)
-                                end
-                                for _ in 1:100
-                                    x = Zin.Z₁.G * rand(Float64, input_dim) + Zin.Z₁.c
-                                    sample_distance = get_sample_distance(N₁, N₂, x)
-                                    @assert sample_distance <= δ "Input x = $x has a difference distance of $sample_distance which is not within the $δ-bound, seems like a bug."
-                                end
+                                fuzz_testing(distance_bound, queue)
                             end
                         end
                     end
