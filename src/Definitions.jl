@@ -48,17 +48,16 @@ mutable struct DiffZonotope
 end
 
 mutable struct PropState
-    task :: VerificationTask
-    inter_contract :: Bool
     is_unsatisfiable :: Bool
-    first_improvement :: Bool
+    input_bounds :: Matrix{Float64}
+    split_nodes :: Vector{SplitNode}
     split_constraints :: Vector{SplitConstraint}
     instable_nodes :: Tuple{Vector{BitVector}, Vector{BitVector}}
     intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
     relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
     input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
-    function PropState(task::VerificationTask, contract=false)
-        return new(task, contract, false, false, SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
+    function PropState()
+        return new(false, zeros(0, 0), SplitNode[], SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
     end
 end
 

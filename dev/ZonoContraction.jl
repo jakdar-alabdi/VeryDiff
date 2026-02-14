@@ -1,13 +1,9 @@
-function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, d::Int64; focus_dims=nothing)
+function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, d::Int64)
     n = size(bounds, 1)
     # @assert d == 1 || d == -1 "Unspecified direction"
-    if isnothing(focus_dims)
-        focus_dims = 1:n
-    end
 
-    l = @view bounds[focus_dims, 1]
-    u = @view bounds[focus_dims, 2]
-    g = @view g[focus_dims]
+    l = @view bounds[:, 1]
+    u = @view bounds[:, 2]
     
     # With (g, c, d) we impose a linear constraint on the input space
     # Depending on the given direction d (i.e., d = −1 or d = 1 for inactive or active ReLU-phase) 
@@ -26,7 +22,7 @@ function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, 
     end
 
     # For each input dimension i we attempt to increase lᵢ and decrease uᵢ
-    for i in 1:size(focus_dims, 1)
+    for i in 1:n
         if g[i] != 0.0
             # x = (1 / g[i]) * (c - g[1:i-1]'v[1:i-1] - g[i+1:end]'v[i+1:end])
             x = (c - (s - g[i] * v[i])) / g[i] # ⇔ x = (1 / g[i]) (c - g[1:i-1]ᵀv[1:i-1] - g[i+1:]ᵀv[i+1:])
@@ -111,7 +107,7 @@ function contract_all_to_verification_task(task::VerificationTask, input_bounds:
     for (;node, g, c) in constraints
         @timeit to "Contract Input Zono" begin
             input_bounds = contract_zono(input_bounds, g, c, node.direction)
-            if !isnothing(input_bounds)
+            if isnothing(input_bounds)
                 break
             end
         end

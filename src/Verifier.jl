@@ -50,7 +50,7 @@ function verify_network(
 
     #Config
     initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z_original, nothing, 1.0, Branch())
-    prop_state = PropState(initial_task)
+    prop_state = PropState()
     num_threads = Threads.nthreads()
     println("Running with $(num_threads) threads")
     #single_threaded = num_threads == 1

@@ -2,10 +2,13 @@ using VeryDiff
 using LinearAlgebra
 using Random
 
-Random.seed!(1234)
+Random.seed!(101042)
 
-function fuzz_testing(N₁::Network, N₂::Network, Zin::Zonotope)
-    return (distance_bound::Float64, queue::VeryDiff.Queue) -> begin
+COUNT_FUZZ_TESTING = 0
+
+function fuzz_testing(N₁::Network, N₂::Network)
+    return (Zin::Zonotope, distance_bound::Float64, queue::VeryDiff.Queue) -> begin
+        global COUNT_FUZZ_TESTING += 1
         δ = distance_bound
         input_dim = size(Zin.Z₁.G, 2)
         if !isempty(queue)
@@ -34,7 +37,7 @@ function create_random_nets()
     input_dim = rand(1:50)
     output_dim = 10
     cur_dim = input_dim
-    L = rand(2:10)
+    L = rand(2:3)
     networks = Tuple{Network, Network, Int, Int}[]
     for i in 1:L
         if i == L
@@ -66,8 +69,9 @@ function create_random_nets()
             W₂ = W₂ .* zero_one_rows2 .+ (1 .- zero_one_rows2) .* simple_rows
             b₂ = b₂ .* zero_one_rows2
         else
-            W₂ = W₁ + 1e-1 * randn(Float64, (new_dim, cur_dim))
-            b₂ = b₁ + 1e-1 * randn(Float64, new_dim)
+            Δ = rand() * 1e-1
+            W₂ = W₁ + Δ * randn(Float64, (new_dim, cur_dim))
+            b₂ = b₁ + Δ * randn(Float64, new_dim)
         end
 
         push!(layers₁, Dense(W₁, b₁))
@@ -84,6 +88,7 @@ function create_random_nets()
 end
 
 function run_tests()
+    global COUNT_FUZZ_TESTING = 0
     VeryDiff.set_neuron_splitting_config((true, false, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.VerticalSplitting)
     println("\nUsing $(VeryDiff.get_config())...\n")
 
@@ -97,12 +102,12 @@ function run_tests()
         println("[FUZZER] NET COUNT: $(net_count)")
 
         for (N₁, N₂, input_dim, output_dim) in networks
-            range = rand([0.1, 4])
+            range = rand([0.1, 1.0, 2.0, 2.5, 3.0, 4.0])
             offset = rand(input_dim)
-            Zin = Zonotope(Matrix(range * I, input_dim, input_dim), offset, nothing)
-            ϵ = rand(0:10) * 1.0
-            status, δ_bounds = deepsplit_verify_network(N₁, N₂, zono_bounds(Zin), ϵ; fuzz_testing=fuzz_testing(N₁, N₂, Zin))
+            bounds = [(offset .- range) (offset .+ range)]
+            ϵ = rand() * 10.0
+            status, δ_bounds = deepsplit_verify_network(N₁, N₂, bounds, ϵ; fuzz_testing=fuzz_testing(N₁, N₂))
         end
     end
+    println("[FUZZER] TESTING COUNT: $(COUNT_FUZZ_TESTING)")
 end
-

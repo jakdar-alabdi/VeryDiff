@@ -2,7 +2,7 @@ function deepsplit_verify_network(N₁::Network, N₂::Network, Zin::Zonotope, �
     return deepsplit_verify_network(N₁, N₂, zono_bounds(Zin), ϵ)
 end
 
-function deepsplit_verify_network(N₁::Network, N₂::Network, bounds, epsilon::Float64; timeout=typemax(Int64), fuzz_testing=nothing)
+function deepsplit_verify_network(N₁::Network, N₂::Network, bounds, epsilon::Float64; timeout=Inf, fuzz_testing=nothing)
     try
         reset_timer!(to)
         @timeit to "Initialize" begin
@@ -50,7 +50,7 @@ end
 function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
     property_check = get_epsilon_property(ϵ)
     
-    return (N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VerificationTask, split_heuristic; timeout=typemax(Int64)) -> begin
+    return (N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VerificationTask, split_heuristic; timeout=Inf) -> begin
         start_time = time_ns()
         first_task = true
         initial_δ_bound = Inf64
@@ -62,12 +62,9 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
         use_lp = approach == LP
         use_zono_contract = approach == ZonoContraction
         use_lp_zc = use_zono_contract && contract == LPZonoContract
-        input_zc = use_zono_contract && (contract == InputZonoContract || contract == InputZonoContractInter)
         inter_contract = use_lp_zc || use_zono_contract && (contract == ZonoContractInter || contract == InputZonoContractInter)
         post_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPost || contract == InputZonoContract)
         pre_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPre)
-
-        distance_bound_testing = false
 
         queue = Queue()
         push!(queue, (1.0, initial_task))
@@ -79,7 +76,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                     final_δ_bound = task.distance_bound
                     
                     # @timeit to "Resource Check" begin
-                    if !check_resources(start_time, timeout, 0.1)
+                    if !check_resources(start_time; timeout=timeout)
                         empty!(queue)
                         GC.gc()
                         return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
@@ -88,8 +85,10 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
     
                     @timeit to "Zonotope Propagate" begin
                         Zin = to_diff_zono(task)
-                        prop_state = PropState(task, inter_contract)
-                        prop_state.first_improvement = true
+                        input_dim = size(Zin.Z₁.G, 2)
+                        prop_state = PropState()
+                        prop_state.split_nodes = task.branch.split_nodes
+                        prop_state.input_bounds = [-ones(input_dim) ones(input_dim)]
                         Zout = N(Zin, prop_state)
                         if prop_state.is_unsatisfiable
                             @timeit to "Unsatisfiable" begin
@@ -101,10 +100,6 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                     @timeit to "Property Check" begin
                         prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing)
 
-                        if prop_state.inter_contract
-                            task = prop_state.task
-                        end
-                        
                         if first_task
                             println("Zono Bounds:")
                             bounds = zono_bounds(Zout.∂Z)
@@ -120,8 +115,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                         if !isnothing(cex)
                             return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
                         end
-                        
-                        input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
+
                         N̂ = size(Zout.∂Z.G, 2)
                         input_bounds = [-ones(N̂) ones(N̂)]
                                                 
@@ -200,6 +194,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                         @timeit to "Fixpoint Contract" begin
                                             first_round = true
                                             iter_count = 0
+                                            pre_contract_bounds = (Zout.Z₁, Zout.Z₂, Zout.∂Z) |> Base.Fix1(map, Z -> maximum(abs, zono_bounds(Z)))
                                             initial_bounds, final_bounds = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
                                             while !empty_intersection && input_bounds != input_bounds_old
                                                 input_bounds_old .= input_bounds
@@ -229,8 +224,9 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                             end
                                         end
 
-                                        println("Initial Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
-                                        println("Final   Bounds (NN₁, NN₂, ∂NN): $final_bounds")
+                                        println("Initial         Bounds (NN₁, NN₂, ∂NN): $pre_contract_bounds")
+                                        println("First-Contract  Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
+                                        println("Final-Contract  Bounds (NN₁, NN₂, ∂NN): $final_bounds")
                                         println("Fixpoint Iterations: $iter_count")
                                         println("Num Constraints: $(size(prop_state.split_constraints, 1))")
                                         println("########################################################################################")
@@ -282,12 +278,16 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                 distance_bound = min(distance_bound, task.distance_bound)
                                 final_δ_bound = distance_bound
 
-                                if input_zc && split_candidate.layer == 0
+                                if inter_contract
+                                    input_bounds[1:size(prop_state.input_bounds, 1), :] .= prop_state.input_bounds
+                                end
+
+                                if NEURON_SPLITTING_APPROACH[] == ZonoContraction && split_candidate.layer == 0
                                     @timeit to "Split Input" begin
                                         (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_candidate.neuron, input_bounds, prop_state.split_constraints, task, work_share, distance_bound)
                                     end
                                 else
-                                    if !pre_contract && any(x -> !isone(abs(x)), input_bounds)
+                                    if !pre_contract && !is_unit_hypercube(input_bounds)
                                         @timeit to "Transform Input Zono" begin
                                             task = transform_verification_task(task, input_bounds)
                                         end
@@ -321,7 +321,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                         # Tests empirically whether the bounds computed by LP are valid
                         if !isnothing(fuzz_testing)
                             @timeit to "Random Test" begin
-                                fuzz_testing(distance_bound, queue)
+                                fuzz_testing(Zin.Z₁, distance_bound, queue)
                             end
                         end
                     end
@@ -419,7 +419,7 @@ function align_vector(g::Vector{Float64}, len::Int64, offset₁::Int64, offset�
     return ĝ
 end
 
-function check_resources(start_time::UInt64, timeout::Int64, mem_min::Float64)
+function check_resources(start_time::UInt64; timeout=Inf)
     timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
     
     if timeout_reached

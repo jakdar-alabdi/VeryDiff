@@ -47,11 +47,11 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
             timeout = parse(Int64, string(spec[5]))
 
             net_name = replace(basename(nn_file₂), ".onnx" => "", "mnist_relu_" => "")
-            out_dir = joinpath(log_dir, run_name, "mnist-$epsilon", net_name)
+            out_dir = joinpath(log_dir, run_name, "mnist-$epsilon-global_4-5", net_name)
             mkpath(out_dir)
             spec_file_name = replace(basename(spec_file), ".vnnlib" => "")
             log_file_name = joinpath(out_dir, "$spec_file_name.log")
-            csv_file_name = joinpath(log_dir, run_name, "mnist-$epsilon", "results.csv")
+            csv_file_name = joinpath(log_dir, run_name, "mnist-$epsilon-global_4-5", "results.csv")
             
             println("\nNN₁: $(basename(nn_file₁))")
             println("NN₂: $(basename(nn_file₂))")
@@ -76,5 +76,5 @@ function _run_mnist_all(specs_csv_file::String, warmup_specs_csv_file::String, l
 end
 
 function run_mnist_all(eval_func, run_name::String)
-    _run_mnist_all("$cur_dir/specs/fixpoint-mnist-prune.csv", "$cur_dir/specs/mnist-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
+    _run_mnist_all("$cur_dir/specs/mnist-prune-global_4-5.csv", "$cur_dir/specs/mnist-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
 end

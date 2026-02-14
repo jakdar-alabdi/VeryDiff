@@ -19,7 +19,6 @@ function deepsplit_heuristic(Zout::DiffZonotope, split_nodes::Vector{SplitNode},
             num_instable₁ = count(crossing₁)
             s[l₁][crossing₁] .= sum(abs, generators(offset₁, num_instable₁), dims=1)[:]
             
-            
             offset₂ = 0
             for l₂ in (l₁ + 1):L
                 Z₂ = intermediates[l₂]
@@ -39,20 +38,12 @@ function deepsplit_heuristic(Zout::DiffZonotope, split_nodes::Vector{SplitNode},
                 s_input .+= sum(α .* s[l₁][crossing₁] .* INDIRECT_INPUT_MULTIPLIER[], dims=1)[:]
             end
             
-            
             if NEURON_SPLITTING_APPROACH[] != VerticalSplitting || l₁ < L
-                # layer_split_nodes = filter(n -> n.network == net && n.layer == l₁, split_nodes)
-                # layer_split_nodes = map(n -> n.neuron, layer_split_nodes)
-                # layer_nodes = findall(1:size(crossing₁, 1) .∉ Ref(layer_split_nodes))
-                # if !isempty(layer_nodes)
-                #     n = argmax(n -> s[l₁][n], layer_nodes)
-                #     @assert isnothing(findfirst(i -> i == n, layer_split_nodes))
                 n = argmax(s[l₁])
                 if s[l₁][n] > max_score
                     max_score = s[l₁][n]
                     max_node = SplitNode(net, l₁, n, 0, nothing)
                 end
-                # end
             end
 
             offset₁ += num_instable₁
@@ -157,7 +148,7 @@ function get_generators(Z::DiffZonotope, network::Int64, undetermined::BitVector
     end
 
     return (offset::Int64, num::Int64) -> begin
-        return @view Z̃.G[undetermined, end - offset - net_offset - num + 1 : end - net_offset - offset]
-        # return @view Z̃.G[:, end - offset - net_offset - num + 1 : end - net_offset - offset]
+        # return @view Z̃.G[undetermined, end - offset - net_offset - num + 1 : end - net_offset - offset]
+        return @view Z̃.G[:, end - offset - net_offset - num + 1 : end - net_offset - offset]
     end
 end

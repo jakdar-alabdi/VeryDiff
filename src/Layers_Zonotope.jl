@@ -39,13 +39,13 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
         if isnothing(bounds)
             if USE_NEURON_SPLITTING[]
                 # Get split nodes corresponding to this network and this layer
-                indices_mask = map(node -> node.network == network && node.layer == layer, P.task.branch.split_nodes)
-                layer_split_nodes = @view P.task.branch.split_nodes[indices_mask]
+                indices_mask = map(node -> node.network == network && node.layer == layer, P.split_nodes)
+                layer_split_nodes = @view P.split_nodes[indices_mask]
 
                 if !isempty(layer_split_nodes)
                     N̂ = size(Z.G, 2)
 
-                    if P.inter_contract
+                    if NEURON_SPLITTING_APPROACH[] == ZonoContractInter
                         @timeit to "Inter-Contract Zono" begin
                             layer_constraints = SplitConstraint[]
                             @timeit to "Collect Constraints" begin
@@ -58,24 +58,28 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
                             
                             sort_constraints!(layer_constraints, zeros(N̂))
                             input_bounds = [-ones(N̂) ones(N̂)]
+                            num_new_gens = N̂ - size(P.input_bounds, 1)
+                            prop_input_bounds = vcat(P.input_bounds, [-ones(num_new_gens) ones(num_new_gens)])
                             
                             for (;node, g, c) in layer_constraints
                                 @timeit to "Contract Zono" begin
                                     input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                                    prop_input_bounds = contract_zono(prop_input_bounds, g, c, node.direction)
                                     
-                                    P.isempty_intersection |= isnothing(input_bounds)
-                                    if P.isempty_intersection
-                                        P.instable_nodes = (BitVector[], BitVector[])
-                                        P.intermediate_zonos = (Zonotope[], Zonotope[])
-                                        return Z
+                                    P.is_unsatisfiable |= isnothing(input_bounds) || isnothing(prop_input_bounds)
+                                    if P.is_unsatisfiable
+                                        @timeit to "Empty Intersection" begin
+                                            return Z
+                                        end
                                     end
                                 end
                             end
+                            
+                            P.input_bounds = prop_input_bounds
 
-                            if !all(isone.(abs.(input_bounds)))
+                            if !is_unit_hypercube(input_bounds)
                                 @timeit to "Transform Zono" begin
                                     transform_offset_zono!(input_bounds, Z)
-                                    transform_verification_task!(P.task, input_bounds)
                                 end
                             end
                         end
@@ -119,10 +123,8 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
 
     if USE_NEURON_SPLITTING[]
         if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
-            indices_mask = map(node -> (node.network, node.layer, node.direction) == (network, layer, -1), P.task.branch.split_nodes)
-            layer_split_nodes = @view P.task.branch.split_nodes[indices_mask]
-
-            # relaxtion = ifelse(VS_RELAXATION == VS_Relaxtion1, relaxtion1, relaxtion2)
+            indices_mask = map(node -> (node.network, node.layer, node.direction) == (network, layer, -1), P.split_nodes)
+            layer_split_nodes = @view P.split_nodes[indices_mask]
 
             for (;neuron, bounds) in layer_split_nodes
                 if crossing[neuron]
@@ -131,8 +133,9 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
                         s₂, u̅ = bounds[2, 1], bounds[2, 2]
                         
                         λ[neuron] = u̅ / (u̅ - l̅)
-                        γ[neuron] = 0.5 * λ[neuron] * (s₁ - l̅)
-                        ĉ[neuron] = λ[neuron] * (Z.c[neuron] - s₁) - γ[neuron]
+                        μ = max(s₁, l̅ / u̅ * s₂) # = max(s₁, -λ⁻¹(1-λ)s₂)
+                        γ[neuron] = 0.5 * λ[neuron] * (μ - l̅)
+                        ĉ[neuron] = λ[neuron] * (Z.c[neuron] - μ) - γ[neuron]
                         
                         # λ[neuron] = s₂ / (s₂ - s₁)
                         # γ[neuron] = 0.5 * λ[neuron] * (l̅ - s₁)
