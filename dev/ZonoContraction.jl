@@ -140,5 +140,7 @@ function sort_constraints!(constraints::Vector{SplitConstraint}, x̂::Vector{Flo
 end
 
 function is_unit_hypercube(box::Matrix{Float64})
-    return size(box, 2) == 2 && !any(x -> !isone(abs(x)), box)
+    lower = @view box[:, 1]
+    upper = @view box[:, 2]
+    return all(x -> isone(-x), lower) && all(x -> isone(x), upper)
 end
