@@ -82,8 +82,10 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                     end
                 end
             end
-            
-            if NEURON_SPLITTING_APPROACH[] == ZonoContraction && ZONO_CONTRACT_MODE[] == ZonoContractInter
+
+	    contract = NEURON_SPLITTING_APPROACH[] == ZonoContraction && (ZONO_CONTRACT_MODE[] == ZonoContractInter || ZONO_CONTRACT_MODE[] == LPZonoContract)
+           
+            if contract
                 @timeit to "Inter-Contract Zono" begin
                     N̂ = size(Z.∂Z.G, 2)
                     input_bounds = [-ones(N̂) ones(N̂)]
