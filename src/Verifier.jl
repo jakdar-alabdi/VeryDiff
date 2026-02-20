@@ -50,7 +50,7 @@ function verify_network(
 
     #Config
     initial_task = VerificationTask(mid, distance, non_zero_indices, ∂Z_original, nothing, 1.0, Branch())
-    prop_state = PropState()
+    prop_state = PropState(initial_task)
     num_threads = Threads.nthreads()
     println("Running with $(num_threads) threads")
     #single_threaded = num_threads == 1
@@ -115,7 +115,7 @@ end
 function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_threads, property_check, split_heuristic ;timeout=Inf)
     # @debug "Worker initiated on thread $(threadid)"
     starttime = time_ns()
-    prop_state = deepcopy(prop_state)
+    # prop_state = deepcopy(prop_state)
     k = 0
     total_zonos=0
     generated_zonos = 0
@@ -154,6 +154,7 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
                         # Initial Pass
                         #prop_state.i = 1
                         @timeit to "Zonotope Propagate" begin
+                        prop_state = PropState(verification_task)
                         Zout = N(Zin, prop_state)
                         end
                         if first

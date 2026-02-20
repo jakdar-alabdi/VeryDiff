@@ -86,9 +86,9 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                     @timeit to "Zonotope Propagate" begin
                         Zin = to_diff_zono(task)
                         input_dim = size(Zin.Z₁.G, 2)
-                        prop_state = PropState()
+                        prop_state = PropState(task)
+                        prop_state.inter_contract = inter_contract
                         prop_state.split_nodes = task.branch.split_nodes
-                        prop_state.input_bounds = [-ones(input_dim) ones(input_dim)]
                         Zout = N(Zin, prop_state)
                         if prop_state.is_unsatisfiable
                             @timeit to "Unsatisfiable" begin
@@ -133,7 +133,108 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                 end
                             end
                             
-                            if use_lp || use_lp_zc
+                            if post_contract
+                                @timeit to "Post-Contract Zono" begin
+                                    
+                                    @timeit to "Sort Constraints" begin
+                                        sort_constraints!(prop_state.split_constraints, zeros(N̂))
+                                    end
+                                    
+                                    empty_intersection = false
+                                    # input_bounds_old = zeros(N̂, 2)
+                                    # @timeit to "Fixpoint Contract" begin
+                                        #     first_round = true
+                                        #     iter_count = 0
+                                        #     pre_contract_bounds = (Zout.Z₁, Zout.Z₂, Zout.∂Z) |> Base.Fix1(map, Z -> maximum(abs, zono_bounds(Z)))
+                                        #     initial_bounds = final_bounds = pre_contract_bounds
+                                        #     while !empty_intersection && input_bounds != input_bounds_old
+                                        #         input_bounds_old .= input_bounds
+                                    for (;node, g, c) in prop_state.split_constraints
+                                        @timeit to "Contract Zono" begin
+                                            input_bounds = contract_zono(input_bounds, g, c, node.direction)
+                                            
+                                            if isnothing(input_bounds)
+                                                empty_intersection = true
+                                                break
+                                            end
+                                        end
+                                    end
+                                    #         if first_round
+                                    #             first_round = false
+                                    #             if empty_intersection
+                                    #                 initial_bounds = (0.0, 0.0, 0.0)
+                                    #             elseif !is_unit_hypercube(input_bounds)
+                                    #                 Z = transform_offset_diff_zono!(input_bounds, deepcopy(Zout))
+                                    #                 initial_bounds = (Z.Z₁, Z.Z₂, Z.∂Z) |> Base.Fix1(map, Z -> maximum(abs, zono_bounds(Z)))
+                                    #             end
+                                    #             final_bounds = initial_bounds
+                                    #         end
+                                    #         iter_count += 1
+                                    #     end
+                                    # end
+                                    
+                                    # if iter_count > 1
+                                    #     if empty_intersection
+                                    #         final_bounds = (0.0, 0.0, 0.0)
+                                    #     elseif !is_unit_hypercube(input_bounds)
+                                    #         Z = transform_offset_diff_zono!(input_bounds, deepcopy(Zout))
+                                    #         final_bounds = (Z.Z₁, Z.Z₂, Z.∂Z) |> Base.Fix1(map, Z -> maximum(abs, zono_bounds(Z)))
+                                    #     end
+                                    # end
+                                    
+                                    # println("Initial         Bounds (NN₁, NN₂, ∂NN): $pre_contract_bounds")
+                                    # println("First-Contract  Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
+                                    # println("Final-Contract  Bounds (NN₁, NN₂, ∂NN): $final_bounds")
+                                    # println("Fixpoint Iterations: $iter_count")
+                                    # println("Num Constraints: $(size(prop_state.split_constraints, 1))")
+                                    # println("########################################################################################")
+                                    
+                                    if empty_intersection
+                                        @timeit to "Empty Intersection" begin
+                                            continue
+                                        end
+                                    end
+                                    
+                                    if !is_unit_hypercube(input_bounds)
+                                        @timeit to "Transform Zono" begin
+                                            Zout = transform_offset_diff_zono!(input_bounds, Zout)
+                                        end
+
+                                        @timeit to "Property Check" begin
+                                            prop_satisfied, cex, _, _, _ = property_check(N₁, N₂, Zin, Zout, nothing)
+        
+                                            if !prop_satisfied
+                                                if !isnothing(cex)
+                                                    return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
+                                                end
+        
+                                                bounds = zono_bounds(Zout.∂Z)
+                                                distance_bound = min(distance_bound, maximum(abs, bounds))
+                                                mask .&= abs.(bounds) .> ϵ
+                                            else
+                                                continue
+                                            end
+                                        end
+                                       
+                                        if prop_state.num_instables == 0
+                                            @timeit to "Transform Constraints" begin
+                                                lower = @view input_bounds[:, 1]
+                                                upper = @view input_bounds[:, 2]
+    
+                                                α = (upper - lower) ./ 2
+                                                β = (upper + lower) ./ 2
+    
+                                                for constraint in prop_state.split_constraints
+                                                    constraint.c += constraint.g' * β
+                                                    constraint.g .*= α
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                             
+                            if use_lp || use_lp_zc || use_zono_contract && prop_state.num_instables == 0
     
                                 @timeit to "Initialize LP-solver" begin
                                     # Initialize the LP solver
@@ -148,7 +249,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                         @constraint(model, node.direction * (g'x + c) >= 0.0)
                                     end
                                 end
-            
+
                                 @timeit to "Solve LP" begin
                                     lp_distance_bound = 0.0
         
@@ -162,6 +263,15 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                             if is_solved_and_feasible(model)
                                                 cex_input = Zin.Z₁.G * value.(x)[1:input_dim] + Zin.Z₁.c
                                                 sample_distance = get_sample_distance(N₁, N₂, cex_input)
+
+                                                # if prop_state.num_instables == 0 && any(mask)
+                                                #     println("Crossing: $(prop_state.instable_nodes)")
+                                                #     println("Constraints: $(prop_state.split_constraints)")
+                                                #     println("cex_input: $cex_input")
+                                                #     println("sample_distance: $sample_distance")
+                                                #     println("LP value: $(abs(objective_value(model)))")
+                                                # end
+
                                                 if sample_distance > ϵ
                                                     @timeit to "LP Solution" begin
                                                         return UNSAFE, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), (initial_δ_bound, final_δ_bound)
@@ -172,7 +282,14 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                             if has_values(model)
                                                 δ = abs(objective_value(model))
                                                 mask[i, j] &= δ > ϵ
+                                                if prop_state.num_instables == 0
+                                                   println("i: $i, j: $j, mask: $(mask[i, j]), LP value: $(δ)")
+                                                end
                                                 lp_distance_bound = max(lp_distance_bound, δ)
+                                            end
+
+                                            if prop_state.num_instables == 0
+                                                println("Termination Status: $(termination_status(model))")
                                             end
             
                                             mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
@@ -180,114 +297,30 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                     end
                                 end
 
+                                # if prop_state.num_instables == 0
+                                #     println("Zono Bounds: $(zono_bounds(Zout.∂Z))")
+                                #     println("Mask: $(mask)")
+                                #     println("Exact!")
+                                # end
+
+                                @assert !(prop_state.num_instables == 0 && any(mask))
+
                                 distance_bound = min(distance_bound, lp_distance_bound)
-                                
-                            elseif use_zono_contract
-                                if post_contract
-                                    @timeit to "Post-Contract Zono" begin
-                                        @timeit to "Sort Constraints" begin
-                                            sort_constraints!(prop_state.split_constraints, zeros(N̂))
-                                        end
-    
-                                        empty_intersection = false
-                                        input_bounds_old = zeros(N̂, 2)
-                                        @timeit to "Fixpoint Contract" begin
-                                            first_round = true
-                                            iter_count = 0
-                                            pre_contract_bounds = (Zout.Z₁, Zout.Z₂, Zout.∂Z) |> Base.Fix1(map, Z -> maximum(abs, zono_bounds(Z)))
-                                            initial_bounds = final_bounds = pre_contract_bounds
-                                            while !empty_intersection && input_bounds != input_bounds_old
-                                                input_bounds_old .= input_bounds
-                                                for (;node, g, c) in prop_state.split_constraints
-                                                    @timeit to "Contract Zono" begin
-                                                        input_bounds = contract_zono(input_bounds, g, c, node.direction)
-
-                                                        if isnothing(input_bounds)
-                                                            empty_intersection = true
-                                                            break
-                                                        end
-                                                    end
-                                                end
-                                                if first_round
-                                                    first_round = false
-                                                    if empty_intersection
-                                                        initial_bounds = (0.0, 0.0, 0.0)
-                                                    elseif !is_unit_hypercube(input_bounds)
-                                                        Z = transform_offset_diff_zono!(input_bounds, deepcopy(Zout))
-                                                        initial_bounds = (Z.Z₁, Z.Z₂, Z.∂Z) |> Base.Fix1(map, Z -> maximum(abs, zono_bounds(Z)))
-                                                    end
-                                                    final_bounds = initial_bounds
-                                                end
-                                                iter_count += 1
-                                            end
-                                        end
-              
-                                        if iter_count > 1
-                                            if empty_intersection
-                                                final_bounds = (0.0, 0.0, 0.0)
-                                            elseif !is_unit_hypercube(input_bounds)
-                                                Z = transform_offset_diff_zono!(input_bounds, deepcopy(Zout))
-                                                final_bounds = (Z.Z₁, Z.Z₂, Z.∂Z) |> Base.Fix1(map, Z -> maximum(abs, zono_bounds(Z)))
-                                            end
-                                        end
-
-                                        println("Initial         Bounds (NN₁, NN₂, ∂NN): $pre_contract_bounds")
-                                        println("First-Contract  Bounds (NN₁, NN₂, ∂NN): $initial_bounds")
-                                        println("Final-Contract  Bounds (NN₁, NN₂, ∂NN): $final_bounds")
-                                        println("Fixpoint Iterations: $iter_count")
-                                        println("Num Constraints: $(size(prop_state.split_constraints, 1))")
-                                        println("########################################################################################")
-                                        
-                                        if empty_intersection
-                                            @timeit to "Empty Intersection" begin
-                                                continue
-                                            end
-                                        end
-    
-                                        if !is_unit_hypercube(input_bounds)
-                                            @timeit to "Transform Zono" begin
-                                                transform_offset_diff_zono!(input_bounds, Zout)
-                                            end
-    
-                                            @timeit to "Property Check" begin
-                                                prop_satisfied, cex, _, _, _ = property_check(N₁, N₂, Zin, Zout, nothing)
-            
-                                                if !prop_satisfied
-                                                    if !isnothing(cex)
-                                                        return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
-                                                    end
-            
-                                                    bounds = zono_bounds(Zout.∂Z)
-                                                    distance_bound = min(distance_bound, maximum(abs, bounds))
-                                                    mask .&= abs.(bounds) .> ϵ
-                                                else
-                                                    continue
-                                                end
-                                            end
-                                        end
-                                    end
-                                end
-                            else
-                                # TODO implement vertical splitting
-                                println("Test")
-                                throw(ErrorException("Vertical splitting not implemented yet :("))
                             end
                         end
                         
                         task.branch.undetermined = mask
                         if any(task.branch.undetermined)
+                            @assert prop_state.num_instables > 0 || isempty(prop_state.split_nodes)
+
                             @timeit to "Compute Split" begin
     
                                 @timeit to "DeepSplit Heuristic" begin
-                                    split_candidate = split_heuristic(Zout, task.branch.split_nodes, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
+                                    split_candidate = split_heuristic(Zout, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
                                 end
     
                                 distance_bound = min(distance_bound, task.distance_bound)
                                 final_δ_bound = distance_bound
-
-                                if inter_contract
-                                    input_bounds[1:size(prop_state.input_bounds, 1), :] .= prop_state.input_bounds
-                                end
 
                                 if NEURON_SPLITTING_APPROACH[] == ZonoContraction && split_candidate.layer == 0
                                     @timeit to "Split Input" begin
@@ -328,7 +361,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                         # Tests empirically whether the bounds computed by LP are valid
                         if !isnothing(fuzz_testing)
                             @timeit to "Random Test" begin
-                                fuzz_testing(Zin.Z₁, distance_bound, queue)
+                                fuzz_testing(N₁, N₂, task, distance_bound, queue)
                             end
                         end
                     end
@@ -410,11 +443,8 @@ function split_contract_zono(d::Int, input_bounds::Matrix{Float64}, constraints:
     input_bounds₁[distance_d, 1] = cutting_point
     input_bounds₂[distance_d, 2] = cutting_point
 
-    task₁ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, task.branch)
-    task₂ = VerificationTask(task.middle, task.distance, task.distance_indices, task.∂Z, task.verification_status, distance_bound, task.branch)
-
-    task₁ = contract_all_to_verification_task(task₁, input_bounds₁, constraints)
-    task₂ = contract_all_to_verification_task(task₂, input_bounds₂, constraints)
+    task₁ = contract_all_to_verification_task(task, input_bounds₁, constraints, distance_bound)
+    task₂ = contract_all_to_verification_task(task, input_bounds₂, constraints, distance_bound)
 
     return (work_share / 2.0, task₁), (work_share / 2.0, task₂)
 end

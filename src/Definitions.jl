@@ -5,35 +5,35 @@ mutable struct Zonotope
 end
 
 mutable struct SplitNode
-    network :: Int64
-    layer :: Int64
-    neuron :: Int64
-    direction :: Int64
-    bounds :: Union{Matrix{Float64}, Nothing}
+    network::Int64
+    layer::Int64
+    neuron::Int64
+    direction::Int64
+    bounds::Union{Matrix{Float64},Nothing}
 end
 
 mutable struct SplitConstraint
-    node :: SplitNode
-    g :: Vector{Float64}
-    c :: Float64
+    node::SplitNode
+    g::Vector{Float64}
+    c::Float64
 end
 
 mutable struct Branch
-    split_nodes :: Vector{SplitNode}
-    undetermined :: BitMatrix
+    split_nodes::Vector{SplitNode}
+    undetermined::BitMatrix
     function Branch(split_nodes=SplitNode[], undetermined=trues(1, 2))
         new(split_nodes, undetermined)
     end
 end
 
 struct VerificationTask
-    middle :: Vector{Float64}
-    distance :: Vector{Float64}
-    distance_indices :: Vector{Int}
+    middle::Vector{Float64}
+    distance::Vector{Float64}
+    distance_indices::Vector{Int}
     ∂Z::Zonotope
     verification_status
-    distance_bound :: Float64
-    branch :: Branch
+    distance_bound::Float64
+    branch::Branch
 end
 
 # Z₂ = Z₁ - ∂Z
@@ -42,22 +42,25 @@ mutable struct DiffZonotope
     Z₁::Zonotope
     Z₂::Zonotope
     ∂Z::Zonotope
-    num_approx₁ :: Int
-    num_approx₂ :: Int
-    ∂num_approx :: Int
+    num_approx₁::Int
+    num_approx₂::Int
+    ∂num_approx::Int
 end
 
 mutable struct PropState
-    is_unsatisfiable :: Bool
-    input_bounds :: Matrix{Float64}
-    split_nodes :: Vector{SplitNode}
-    split_constraints :: Vector{SplitConstraint}
-    instable_nodes :: Tuple{Vector{BitVector}, Vector{BitVector}}
-    intermediate_zonos :: Tuple{Vector{Zonotope}, Vector{Zonotope}}
-    relative_impactes :: Tuple{Vector{Vector{Matrix{Float64}}}, Vector{Vector{Matrix{Float64}}}}
-    input_relative_impactes :: Tuple{Vector{Matrix{Float64}}, Vector{Matrix{Float64}}}
-    function PropState()
-        return new(false, zeros(0, 0), SplitNode[], SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
+    task::VerificationTask
+    num_instables::Int64
+    is_unsatisfiable::Bool
+    inter_contract::Bool
+    copied_task::Bool
+    split_nodes::Vector{SplitNode}
+    split_constraints::Vector{SplitConstraint}
+    instable_nodes::Tuple{Vector{BitVector},Vector{BitVector}}
+    intermediate_zonos::Tuple{Vector{Zonotope},Vector{Zonotope}}
+    relative_impactes::Tuple{Vector{Vector{Matrix{Float64}}},Vector{Vector{Matrix{Float64}}}}
+    input_relative_impactes::Tuple{Vector{Matrix{Float64}},Vector{Matrix{Float64}}}
+    function PropState(task::VerificationTask)
+        return new(task, 0, false, false, false, SplitNode[], SplitConstraint[], (BitVector[], BitVector[]), (Zonotope[], Zonotope[]), (Vector{Matrix{Float64}}[], Vector{Matrix{Float64}}[]), (Matrix{Float64}[], Matrix{Float64}[]))
     end
 end
 

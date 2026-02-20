@@ -114,7 +114,7 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
     λ = ifelse.(upper .<= 0.0, 0.0, ifelse.(lower .>= 0.0, 1.0, α))
 
     crossing = lower .< 0.0 .&& upper .> 0.0
-
+    P.num_instables += count(crossing)
     
     γ = 0.5 .* max.(-λ .* lower, 0.0, ((-).(1.0, λ)) .* upper)  # Computed offset (-λl/2)
     

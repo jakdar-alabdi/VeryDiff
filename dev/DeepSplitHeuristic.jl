@@ -1,4 +1,4 @@
-function deepsplit_heuristic(Zout::DiffZonotope, split_nodes::Vector{SplitNode}, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
+function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
     input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
     
     max_score = -Inf64
@@ -39,7 +39,7 @@ function deepsplit_heuristic(Zout::DiffZonotope, split_nodes::Vector{SplitNode},
             end
             
             if NEURON_SPLITTING_APPROACH[] != VerticalSplitting || l₁ < L
-                n = argmax(s[l₁])
+                n = argmax(i -> ifelse(crossing₁[i], s[l₁][i], -Inf), 1:size(crossing₁, 1))
                 if s[l₁][n] > max_score
                     max_score = s[l₁][n]
                     max_node = SplitNode(net, l₁, n, 0, nothing)
@@ -58,10 +58,11 @@ function deepsplit_heuristic(Zout::DiffZonotope, split_nodes::Vector{SplitNode},
         end
     end
 
+    # println("Score: $max_score")
     return max_node
 end
 
-function deepsplit_heuristic_alternative(Zout::DiffZonotope, split_nodes::Vector{SplitNode}, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
+function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
     input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
 
     max_score = -Inf64

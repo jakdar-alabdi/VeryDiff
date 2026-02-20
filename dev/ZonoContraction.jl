@@ -103,7 +103,7 @@ function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{
     return nothing
 end
 
-function contract_all_to_verification_task(task::VerificationTask, input_bounds::Matrix{Float64}, constraints::Vector{SplitConstraint})
+function contract_all_to_verification_task(task::VerificationTask, input_bounds::Matrix{Float64}, constraints::Vector{SplitConstraint}, distance_bound::Float64)
     for (;node, g, c) in constraints
         @timeit to "Contract Input Zono" begin
             input_bounds = contract_zono(input_bounds, g, c, node.direction)
@@ -114,7 +114,13 @@ function contract_all_to_verification_task(task::VerificationTask, input_bounds:
     end
     if !isnothing(input_bounds)
         @timeit to "Transform Input Zono" begin
-            return transform_verification_task(task, input_bounds)
+            mid = deepcopy(task.middle)
+            dist = deepcopy(task.distance)
+            branch = deepcopy(task.branch)
+            status = deepcopy(task.verification_status)
+            ∂Z = deepcopy(task.∂Z)
+            task = VerificationTask(mid, dist, task.distance_indices, ∂Z, status, distance_bound, branch)
+            return transform_verification_task!(task, input_bounds)
         end
     end
     @timeit to "Empty Intersection" begin

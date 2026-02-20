@@ -71,27 +71,13 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
         layer_split_nodes = @view P.split_nodes[indices_mask]
 
         if !isempty(layer_split_nodes)
-            Zs = (Z.Z₁, Z.Z₂)
-            
-            if NEURON_SPLITTING_APPROACH[] != VerticalSplitting
-                @timeit to "Collect Constraints" begin
-                    for node in layer_split_nodes
-                        g = Zs[node.network].G[node.neuron, :]
-                        c = Zs[node.network].c[node.neuron]
-                        push!(P.split_constraints, SplitConstraint(node, g, c))
-                    end
-                end
-            end
 
-	    contract = NEURON_SPLITTING_APPROACH[] == ZonoContraction && (ZONO_CONTRACT_MODE[] == ZonoContractInter || ZONO_CONTRACT_MODE[] == LPZonoContract)
-           
-            if contract
+            if P.inter_contract
                 @timeit to "Inter-Contract Zono" begin
                     N̂ = size(Z.∂Z.G, 2)
                     input_bounds = [-ones(N̂) ones(N̂)]
-                    prop_input_bounds = [-ones(N̂) ones(N̂)]
-                    prop_input_bounds[1:size(P.input_bounds, 1), :] .= P.input_bounds
 
+                    Zs = (Z.Z₁, Z.Z₂)
                     layer_constraints = SplitConstraint[]
                     @timeit to "Align Constraints" begin
                         for node in layer_split_nodes
@@ -109,9 +95,8 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                     for (;node, g, c) in layer_constraints
                         @timeit to "Contract Zono" begin
                             input_bounds = contract_zono(input_bounds, g, c, node.direction)
-                            prop_input_bounds = contract_zono(prop_input_bounds, g, c, node.direction)
                             
-                            P.is_unsatisfiable |= isnothing(input_bounds) || isnothing(prop_input_bounds)
+                            P.is_unsatisfiable |= isnothing(input_bounds)
                             if P.is_unsatisfiable
                                 @timeit to "Empty Intersection" begin
                                     return Z
@@ -120,12 +105,27 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                         end
                     end
 
-                    P.input_bounds = prop_input_bounds
-
                     if !is_unit_hypercube(input_bounds)
                         @timeit to "Transform Zono" begin
-                            transform_offset_diff_zono!(input_bounds, Z)
+                            Z = transform_offset_diff_zono!(input_bounds, Z)
+                            if P.copied_task
+                                P.task = transform_verification_task!(P.task, input_bounds)
+                            else
+                                P.task = transform_verification_task(P.task, input_bounds)
+                                P.copied_task = true
+                            end
                         end
+                    end
+                end
+            end
+
+            if NEURON_SPLITTING_APPROACH[] != VerticalSplitting
+                Zs = (Z.Z₁, Z.Z₂)
+                @timeit to "Collect Constraints" begin
+                    for node in layer_split_nodes
+                        g = Zs[node.network].G[node.neuron, :]
+                        c = Zs[node.network].c[node.neuron]
+                        push!(P.split_constraints, SplitConstraint(node, g, c))
                     end
                 end
             end

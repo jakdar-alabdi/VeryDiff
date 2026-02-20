@@ -46,11 +46,12 @@ function _run_acas_all(specs_csv_file::String, warmup_specs_csv_file::String, lo
             timeout = parse(Int64, string(spec[5]))
 
             net_name = replace(basename(nn_file₂), ".onnx" => "", "ACASXU_run2a_" => "", "batch_2000_" => "")
-            out_dir = joinpath(log_dir, run_name, "acas-$epsilon", net_name)
+            acas_name = "acas-$epsilon-$timeout"
+            out_dir = joinpath(log_dir, run_name, acas_name, net_name)
             mkpath(out_dir)
             spec_file_name = replace(basename(spec_file), ".vnnlib" => "")
             log_file_name = joinpath(out_dir, "$spec_file_name.log")
-            csv_file_name = joinpath(log_dir, run_name, "acas-$epsilon", "results.csv")
+            csv_file_name = joinpath(log_dir, run_name, acas_name, "results.csv")
             
             println("\nNN₁: $(basename(nn_file₁))")
             println("NN₂: $(basename(nn_file₂))")
