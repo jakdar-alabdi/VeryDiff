@@ -83,11 +83,13 @@ function (L::ReLU)(Z::Zonotope, P::PropState, network::Int64, layer::Int64; boun
                                 end
                             end
                         end
-                    else
+                    end
+                    
+                    if NEURON_SPLITTING_APPROACH[] != VerticalSplitting
                         @timeit to "Collect Constraints" begin
                             for node in layer_split_nodes
-                                g = zonos[node.network].G[node.neuron, :]
-                                c = zonos[node.network].c[node.neuron]
+                                g = Z.G[node.neuron, :]
+                                c = Z.c[node.neuron]
                                 push!(P.split_constraints, SplitConstraint(node, g, c))
                             end
                         end

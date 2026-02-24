@@ -175,7 +175,8 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     upper₂ = @view bounds₂[:,2]
 
     if USE_NEURON_SPLITTING[]
-        lowers, uppers = [lower₁, lower₂], [upper₁, upper₂]
+        lowers, uppers = (lower₁, lower₂), (upper₁, upper₂)
+
         if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
             for node in layer_split_nodes
                 (;network, neuron) = node
@@ -197,8 +198,8 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                         end
                         l̅, s₁ = node.bounds[1, 1], node.bounds[1, 2]
                         s₂, u̅ = node.bounds[2, 1], node.bounds[2, 2]
-                        l = ifelse(l >= s₁, 0.0, max(l, l̅))
-                        u = ifelse(u <= s₂, 0.0, min(u, u̅))
+                        l = ifelse(l >= s₁, s₂, max(l, l̅))
+                        u = ifelse(u <= s₂, s₁, min(u, u̅))
                         node.bounds = [l s₁; s₂ u]
                         P.is_unsatisfiable |= l >= s₁ && u <= s₂
                     end

@@ -90,6 +90,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                         prop_state.inter_contract = inter_contract
                         prop_state.split_nodes = task.branch.split_nodes
                         Zout = N(Zin, prop_state)
+                        println("Num Instable: $(prop_state.num_instables)")
                         if prop_state.is_unsatisfiable
                             @timeit to "Unsatisfiable" begin
                                 continue
@@ -117,13 +118,15 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                         end
 
                         N̂ = size(Zout.∂Z.G, 2)
+                        @assert !(prop_state.num_instables == 0 && N̂ != input_dim)
+                        
                         input_bounds = [-ones(N̂) ones(N̂)]
-                                                
+
                         # Compute all output dimensions that still need to be proven
                         bounds = zono_bounds(Zout.∂Z)
                         mask = abs.(bounds) .> ϵ .&& task.branch.undetermined
     
-                        if !isempty(prop_state.split_constraints)
+                        if !isempty(prop_state.split_constraints) || prop_state.num_instables == 0
     
                             # Append zeros to the constraints vectors so that the match the output dimension
                             @timeit to "Align Constraints" begin
@@ -234,7 +237,9 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                 end
                             end
                              
-                            if use_lp || use_lp_zc || use_zono_contract && prop_state.num_instables == 0
+                            if use_lp || use_lp_zc || prop_state.num_instables == 0
+
+                                # println("DiffZono: $(Zout.∂Z.G[:, end])")
     
                                 @timeit to "Initialize LP-solver" begin
                                     # Initialize the LP solver
@@ -242,11 +247,11 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                     set_time_limit_sec(model, 10)
                                     
                                     # Add input variables
-                                    @variable(model, -1 <= x[1:N̂] <= 1)
-            
+                                    @variable(model, -1.0 <= x[1:N̂] <= 1.0)
+
                                     # Add split constraints
                                     for (;node, g, c) in prop_state.split_constraints
-                                        @constraint(model, node.direction * (g'x + c) >= 0.0)
+                                        @constraint(model, node.direction * (g' * x + c) >= 0.0)
                                     end
                                 end
 
@@ -256,21 +261,22 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                     # For each unproven output dimension we solve an LP for corresponding lower and upper bound
                                     for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
                                         for (j, σ) in [(1, -1), (2, 1)][mask[i, :]]
-            
+
                                             @objective(model, Max, σ * (Zout.∂Z.G[i, :]' * x + Zout.∂Z.c[i]))
                                             optimize!(model)
-            
+                                            
                                             if is_solved_and_feasible(model)
-                                                cex_input = Zin.Z₁.G * value.(x)[1:input_dim] + Zin.Z₁.c
+                                                cex_input = Zin.Z₁.G * value.(x[1:input_dim]) + Zin.Z₁.c
                                                 sample_distance = get_sample_distance(N₁, N₂, cex_input)
 
-                                                # if prop_state.num_instables == 0 && any(mask)
-                                                #     println("Crossing: $(prop_state.instable_nodes)")
-                                                #     println("Constraints: $(prop_state.split_constraints)")
-                                                #     println("cex_input: $cex_input")
-                                                #     println("sample_distance: $sample_distance")
-                                                #     println("LP value: $(abs(objective_value(model)))")
-                                                # end
+                                                if prop_state.num_instables == 0 && any(mask)
+                                                    println("[LP Solution] x = $(value.(x[1:input_dim]))")
+                                                    println("y := Zin(x) = $cex_input")
+                                                    println("N₁(y) - N₂(y) = $(N₁(cex_input) - N₂(cex_input))")
+                                                    println("maxᵢ |N₁(y)ᵢ - N₂(y)ᵢ| = $sample_distance")
+                                                    println("∂Z(x) = $(Zout.∂Z.G * value.(x) + Zout.∂Z.c)")
+                                                    println("∂Z(x)ᵢ = $((Zout.∂Z.G * value.(x) + Zout.∂Z.c)[i])")
+                                                end
 
                                                 if sample_distance > ϵ
                                                     @timeit to "LP Solution" begin
@@ -290,6 +296,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
 
                                             if prop_state.num_instables == 0
                                                 println("Termination Status: $(termination_status(model))")
+                                                # println(solution_summary(model))
                                             end
             
                                             mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
@@ -297,11 +304,11 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                     end
                                 end
 
-                                # if prop_state.num_instables == 0
-                                #     println("Zono Bounds: $(zono_bounds(Zout.∂Z))")
-                                #     println("Mask: $(mask)")
-                                #     println("Exact!")
-                                # end
+                                if prop_state.num_instables == 0
+                                    println("Constraints: $(prop_state.split_constraints)")
+                                    # println("Zono Bounds: $(zono_bounds(Zout.∂Z))")
+                                    println("Exact!")
+                                end
 
                                 @assert !(prop_state.num_instables == 0 && any(mask))
 
@@ -311,7 +318,7 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                         
                         task.branch.undetermined = mask
                         if any(task.branch.undetermined)
-                            @assert prop_state.num_instables > 0 || isempty(prop_state.split_nodes)
+                            @assert prop_state.num_instables > 0
 
                             @timeit to "Compute Split" begin
     
