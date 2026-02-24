@@ -135,6 +135,79 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                     constraint.g = align_vector(constraint.g, N̂, input_dim, offset)
                                 end
                             end
+
+                            if use_lp || use_lp_zc || prop_state.num_instables == 0    
+                                @timeit to "Initialize LP-solver" begin
+                                    # Initialize the LP solver
+                                    model = Model(() -> Gurobi.Optimizer(GRB_ENV[]))
+                                    set_time_limit_sec(model, 10)
+                                    
+                                    # Add input variables
+                                    @variable(model, -1.0 <= x[1:N̂] <= 1.0)
+
+                                    # Add split constraints
+                                    for (;node, g, c) in prop_state.split_constraints
+                                        @constraint(model, node.direction * (g' * x + c) >= 0.0)
+                                    end
+                                end
+
+                                @timeit to "Solve LP" begin
+                                    lp_distance_bound = 0.0
+        
+                                    # For each unproven output dimension we solve an LP for corresponding lower and upper bound
+                                    for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
+                                        for (j, σ) in [(1, -1), (2, 1)][mask[i, :]]
+
+                                            @objective(model, Max, σ * (Zout.∂Z.G[i, :]' * x + Zout.∂Z.c[i]))
+                                            optimize!(model)
+                                            
+                                            if is_solved_and_feasible(model)
+                                                cex_input = Zin.Z₁.G * value.(x[1:input_dim]) + Zin.Z₁.c
+                                                sample_distance = get_sample_distance(N₁, N₂, cex_input)
+
+                                                if prop_state.num_instables == 0 && any(mask)
+                                                    println("[LP Solution] x = $(value.(x[1:input_dim]))")
+                                                    println("y := Zin(x) = $cex_input")
+                                                    println("N₁(y) - N₂(y) = $(N₁(cex_input) - N₂(cex_input))")
+                                                    println("maxᵢ |N₁(y)ᵢ - N₂(y)ᵢ| = $sample_distance")
+                                                    println("∂Z(x) = $(Zout.∂Z.G * value.(x) + Zout.∂Z.c)")
+                                                    println("∂Z(x)_$(i) = $((Zout.∂Z.G * value.(x) + Zout.∂Z.c)[i])")
+                                                end
+
+                                                if sample_distance > ϵ
+                                                    @timeit to "LP Solution" begin
+                                                        return UNSAFE, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), (initial_δ_bound, final_δ_bound)
+                                                    end
+                                                end
+                                            end
+            
+                                            if has_values(model)
+                                                δ = abs(objective_value(model))
+                                                mask[i, j] &= δ > ϵ
+                                                if prop_state.num_instables == 0
+                                                   println("i: $i, j: $j, mask: $(mask[i, j]), LP value: $(δ)")
+                                                end
+                                                lp_distance_bound = max(lp_distance_bound, δ)
+                                            end
+
+                                            if prop_state.num_instables == 0
+                                                println("Termination Status: $(termination_status(model))")
+                                            end
+            
+                                            mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
+                                        end
+                                    end
+                                end
+
+                                if prop_state.num_instables == 0
+                                    println("Constraints: $(prop_state.split_constraints)")
+                                    println("Exact!")
+                                end
+
+                                @assert !(prop_state.num_instables == 0 && any(mask))
+
+                                distance_bound = min(distance_bound, lp_distance_bound)
+                            end
                             
                             if post_contract
                                 @timeit to "Post-Contract Zono" begin
@@ -218,101 +291,8 @@ function deepsplit_verify_network(ϵ::Float64; fuzz_testing=nothing)
                                                 continue
                                             end
                                         end
-                                       
-                                        if prop_state.num_instables == 0
-                                            @timeit to "Transform Constraints" begin
-                                                lower = @view input_bounds[:, 1]
-                                                upper = @view input_bounds[:, 2]
-    
-                                                α = (upper - lower) ./ 2
-                                                β = (upper + lower) ./ 2
-    
-                                                for constraint in prop_state.split_constraints
-                                                    constraint.c += constraint.g' * β
-                                                    constraint.g .*= α
-                                                end
-                                            end
-                                        end
                                     end
                                 end
-                            end
-                             
-                            if use_lp || use_lp_zc || prop_state.num_instables == 0
-
-                                # println("DiffZono: $(Zout.∂Z.G[:, end])")
-    
-                                @timeit to "Initialize LP-solver" begin
-                                    # Initialize the LP solver
-                                    model = Model(() -> Gurobi.Optimizer(GRB_ENV[]))
-                                    set_time_limit_sec(model, 10)
-                                    
-                                    # Add input variables
-                                    @variable(model, -1.0 <= x[1:N̂] <= 1.0)
-
-                                    # Add split constraints
-                                    for (;node, g, c) in prop_state.split_constraints
-                                        @constraint(model, node.direction * (g' * x + c) >= 0.0)
-                                    end
-                                end
-
-                                @timeit to "Solve LP" begin
-                                    lp_distance_bound = 0.0
-        
-                                    # For each unproven output dimension we solve an LP for corresponding lower and upper bound
-                                    for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
-                                        for (j, σ) in [(1, -1), (2, 1)][mask[i, :]]
-
-                                            @objective(model, Max, σ * (Zout.∂Z.G[i, :]' * x + Zout.∂Z.c[i]))
-                                            optimize!(model)
-                                            
-                                            if is_solved_and_feasible(model)
-                                                cex_input = Zin.Z₁.G * value.(x[1:input_dim]) + Zin.Z₁.c
-                                                sample_distance = get_sample_distance(N₁, N₂, cex_input)
-
-                                                if prop_state.num_instables == 0 && any(mask)
-                                                    println("[LP Solution] x = $(value.(x[1:input_dim]))")
-                                                    println("y := Zin(x) = $cex_input")
-                                                    println("N₁(y) - N₂(y) = $(N₁(cex_input) - N₂(cex_input))")
-                                                    println("maxᵢ |N₁(y)ᵢ - N₂(y)ᵢ| = $sample_distance")
-                                                    println("∂Z(x) = $(Zout.∂Z.G * value.(x) + Zout.∂Z.c)")
-                                                    println("∂Z(x)ᵢ = $((Zout.∂Z.G * value.(x) + Zout.∂Z.c)[i])")
-                                                end
-
-                                                if sample_distance > ϵ
-                                                    @timeit to "LP Solution" begin
-                                                        return UNSAFE, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), (initial_δ_bound, final_δ_bound)
-                                                    end
-                                                end
-                                            end
-            
-                                            if has_values(model)
-                                                δ = abs(objective_value(model))
-                                                mask[i, j] &= δ > ϵ
-                                                if prop_state.num_instables == 0
-                                                   println("i: $i, j: $j, mask: $(mask[i, j]), LP value: $(δ)")
-                                                end
-                                                lp_distance_bound = max(lp_distance_bound, δ)
-                                            end
-
-                                            if prop_state.num_instables == 0
-                                                println("Termination Status: $(termination_status(model))")
-                                                # println(solution_summary(model))
-                                            end
-            
-                                            mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
-                                        end
-                                    end
-                                end
-
-                                if prop_state.num_instables == 0
-                                    println("Constraints: $(prop_state.split_constraints)")
-                                    # println("Zono Bounds: $(zono_bounds(Zout.∂Z))")
-                                    println("Exact!")
-                                end
-
-                                @assert !(prop_state.num_instables == 0 && any(mask))
-
-                                distance_bound = min(distance_bound, lp_distance_bound)
                             end
                         end
                         
