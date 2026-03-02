@@ -7,7 +7,7 @@ function get_sample_distance(N1, N2, vector, focus_dim=nothing)
 end
 
 function get_epsilon_property(epsilon;focus_dim=nothing)
-    return (N1, N2, Zin, Zout, verification_status) -> begin
+    return (N1, N2, Zin, Zout, verification_status; mask=nothing) -> begin
         #TODO: Use verification status to ignore proven epsilons
         out_bounds = zono_bounds(Zout.∂Z)
         input_dim = size(Zin.Z₁.G,2)
@@ -37,6 +37,9 @@ function get_epsilon_property(epsilon;focus_dim=nothing)
                 return false, (cex_input, (N1(cex_input),N2(cex_input),sample_distance)), nothing, nothing, distance_bound
             end
 
+            if !isnothing(mask)
+                mask .&= abs.(out_bounds) .> epsilon
+            end
 
             return false, nothing, (out_bounds, epsilon, focus_dim), nothing, distance_bound
         else
@@ -83,7 +86,7 @@ function get_top1_property(;delta=zero(Float64),naive=false)
     else
         dist=0.0
     end
-    return (N1, N2, Zin, Zout, verification_status) -> begin
+    return (N1, N2, Zin, Zout, verification_status; constraints=SplitConstraint[]) -> begin
         global FIRST_ROUND
         global TOP1_FOUND_CONCRETE_DELTA
         if FIRST_ROUND
@@ -159,6 +162,11 @@ function get_top1_property(;delta=zero(Float64),naive=false)
             set_time_limit_sec(model, 10)
             var_num = size(Zin.Z₁.G,2) + Zout.num_approx₁ + Zout.num_approx₂ + Zout.∂num_approx
             @variable(model,-1.0 <= x[1:var_num] <= 1.0)
+            
+            # Add split constraints
+            for (;node, g, c) in constraints
+                @constraint(model, node.direction * (g' * x + c) >= 0.0)
+            end
             
             # Additional (but not that helpful) constraints
             #@constraint(model,G2*x .<= c2)

@@ -62,7 +62,7 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
     (;network, layer, neuron) = max_node
     @assert layer == 0 || prop_state.instable_nodes[network][layer][neuron]
     
-    println("Score: $max_score")
+    # println("Score: $max_score")
 
     return max_node
 end

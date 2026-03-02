@@ -92,16 +92,12 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                         sort_constraints!(layer_constraints, zeros(N̂))
                     end
 
-                    for (;node, g, c) in layer_constraints
-                        @timeit to "Contract Zono" begin
-                            input_bounds = contract_zono(input_bounds, g, c, node.direction)
-                            
-                            P.is_unsatisfiable |= isnothing(input_bounds)
-                            if P.is_unsatisfiable
-                                @timeit to "Empty Intersection" begin
-                                    return Z
-                                end
-                            end
+                    @timeit to "Contract Zono All" begin
+                        input_bounds = contract_zono_all!(input_bounds, layer_constraints)
+
+                        if isnothing(input_bounds)
+                            P.is_unsatisfiable = true
+                            return Z
                         end
                     end
 

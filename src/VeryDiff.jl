@@ -108,6 +108,7 @@ include("Cli.jl")
 include("../dev/NeuronSplitting.jl")
 include("../dev/ZonoContraction.jl")
 include("../dev/DeepSplitHeuristic.jl")
+include("../dev/Properties.jl")
 # include("../util.jl")
 
 include("../dev/experiments/acas.jl")

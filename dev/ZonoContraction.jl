@@ -37,6 +37,16 @@ function contract_zono(bounds::Matrix{Float64}, g::Vector{Float64}, c::Float64, 
     return bounds
 end
 
+function contract_zono_all!(bounds::Matrix{Float64}, constraints::Vector{SplitConstraint})
+    for (;node, g, c) in constraints
+        bounds = contract_zono(bounds, g, c, node.direction)
+        if isnothing(bounds)
+            break
+        end
+    end
+    return bounds
+end
+
 function transform_offset_zono!(bounds::Matrix{Float64}, Z::Zonotope; focus_dims=nothing)
     if isnothing(focus_dims)
         focus_dims = 1:size(Z.G, 2)
@@ -103,21 +113,16 @@ function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{
     return nothing
 end
 
-function contract_all_to_verification_task(task::VerificationTask, input_bounds::Matrix{Float64}, constraints::Vector{SplitConstraint}, distance_bound::Float64)
-    for (;node, g, c) in constraints
-        @timeit to "Contract Input Zono" begin
-            input_bounds = contract_zono(input_bounds, g, c, node.direction)
-            if isnothing(input_bounds)
-                break
-            end
-        end
+function contract_all_to_verification_task(task::VerificationTask, input_bounds::Matrix{Float64}, constraints::Vector{SplitConstraint}, verification_status, distance_bound::Float64)
+    @timeit to "Contract Input Zono" begin
+        input_bounds = contract_zono_all!(input_bounds, constraints)
     end
     if !isnothing(input_bounds)
         @timeit to "Transform Input Zono" begin
             mid = deepcopy(task.middle)
             dist = deepcopy(task.distance)
             branch = deepcopy(task.branch)
-            status = deepcopy(task.verification_status)
+            status = deepcopy(verification_status)
             ∂Z = deepcopy(task.∂Z)
             task = VerificationTask(mid, dist, task.distance_indices, ∂Z, status, distance_bound, branch)
             return transform_verification_task!(task, input_bounds)
