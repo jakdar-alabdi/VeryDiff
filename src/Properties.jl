@@ -249,8 +249,8 @@ function get_top1_property(;delta=zero(Float64),naive=false)
                     if softmax_N1[argmax_N1] >= delta
                         println("[TOP-1] required confidence ($(softmax_N1[argmax_N1])≥$delta) is feasible for index $argmax_N1")
                         TOP1_FOUND_CONCRETE_DELTA=true
-                    else
-                        println("[TOP-1] did not find required confidence yet.")
+                    # else
+                        # println("[TOP-1] did not find required confidence yet.")
                     end
                 end
                 any_feasible = true

@@ -88,7 +88,7 @@ function deepsplit_epsilon(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiase
         property_check = get_epsilon_property_with_neuron_splitting(epsilon)
         println("Using $(VeryDiff.get_config())...")
         for (bounds, _, _, _) in f
-            status, δ_bounds = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=10)
+            status, δ_bounds = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
             net_name = replace(basename(nn_file₂), ".onnx" => "")
             spec_name = replace(basename(spec_file), ".vnnlib" => "")
             if save
