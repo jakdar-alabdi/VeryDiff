@@ -63,6 +63,21 @@ function transform_offset_zono!(bounds::Matrix{Float64}, Z::Zonotope; focus_dims
     return Z
 end
 
+function transform_constraints!(bounds::Matrix{Float64}, constraints::Vector{SplitConstraint})
+    lower = @view bounds[:, 1]
+    upper = @view bounds[:, 2]
+
+    α = (upper - lower) ./ 2
+    β = (upper + lower) ./ 2
+
+    for constraint in constraints
+        constraint.c += constraint.g' * β
+        constraint.g .*= α
+    end
+
+    return constraints
+end
+
 function transform_offset_zono(bounds::Matrix{Float64}, Z::Zonotope; focus_dims=nothing)
     return transform_offset_zono!(bounds, Zonotope(deepcopy(Z.G), deepcopy(Z.c), Z.influence); focus_dims=focus_dims)
 end
@@ -106,7 +121,9 @@ function contract_to_verification_task(input_bounds::Matrix{Float64}, g::Vector{
     input_bounds = contract_zono(input_bounds, g, c, direction)
     if !isnothing(input_bounds)
         if !is_unit_hypercube(input_bounds)
-            return transform_verification_task(task, input_bounds)
+            @timeit "Transform Input Zono" begin
+                return transform_verification_task(task, input_bounds)
+            end
         end
         return task
     end

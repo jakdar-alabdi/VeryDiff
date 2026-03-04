@@ -157,9 +157,7 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
         constraints = prop_state.split_constraints
         input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
         N̂ = size(Zout.∂Z.G, 2)
-    
-        mask = task.branch.undetermined
-        num_instables = prop_state.num_instables
+        
         input_bounds = nothing
 
         # Append zeros to the constraints vectors so that the match the output dimension
@@ -170,11 +168,8 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
             end
         end
         
-        lp_constraints = SplitConstraint[]
-        if !isempty(constraints)            
-            if use_lp || use_lp_zc || num_instables == 0
-                lp_constraints = constraints
-            elseif post_contract
+        if !isempty(constraints)
+            if post_contract
                 @timeit to "Post-Contract Zono" begin
     
                     @timeit to "Sort Constraints" begin
@@ -195,12 +190,15 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
                         @timeit to "Transform Zono" begin
                             Zout = transform_offset_diff_zono!(input_bounds, Zout)
                         end
+                        @timeit to "Transform Constraints" begin
+                            constraints = transform_constraints!(input_bounds, constraints)
+                        end
                     end
                 end
             end
         end
         
-        prop_satisfied, cex, _, verification_status, distance_bound = property_check(N₁, N₂, Zin, Zout, task.verification_status; constraints=lp_constraints)
+        prop_satisfied, cex, _, verification_status, distance_bound = property_check(N₁, N₂, Zin, Zout, task.verification_status; constraints=constraints)
 
         @assert !(prop_state.num_instables == 0 && N̂ != input_dim)
 

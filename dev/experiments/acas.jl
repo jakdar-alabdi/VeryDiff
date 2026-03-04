@@ -1,7 +1,7 @@
 cur_dir = @__DIR__
 benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 
-function _run_acas_all(specs_csv_file::String, warmup_specs_csv_file::String, log_dir::String, run_name::String, eval_func)
+function _run_acas_all_epsilon(specs_csv_file::String, warmup_specs_csv_file::String, log_dir::String, run_name::String, eval_func)
     
     println("Configuration: $run_name")
     println("\nWarmup...")
@@ -75,6 +75,6 @@ function _run_acas_all(specs_csv_file::String, warmup_specs_csv_file::String, lo
     end
 end
 
-function run_acas_all(eval_func, run_name::String)
-    _run_acas_all("$cur_dir/specs/fixpoint-acas-prune.csv", "$cur_dir/specs/acas-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
+function run_acas_all_epsilon(eval_func, run_name::String)
+    _run_acas_all_epsilon("$cur_dir/specs/acas-prune-0.05.csv", "$cur_dir/specs/acas-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
 end

@@ -71,7 +71,7 @@ function verydiff_top1(nn_file₁::String, nn_file₂::String, spec_file::String
     VeryDiff.NEW_HEURISTIC = true
     println("Using $(VeryDiff.get_config())...")
     for (bounds, _, _, _) in f
-        status, δ_bounds = verify_network(N₁, N₂, bounds, property_check, top1_configure_split_heuristic; timeout=timeout)
+        status, δ_bounds = verify_network(N₁, N₂, bounds, property_check, top1_configure_split_heuristic(1); timeout=timeout)
         net_name = replace(basename(nn_file₂), ".onnx" => "")
         spec_name = replace(basename(spec_file), ".vnnlib" => "")
         if save
@@ -117,10 +117,27 @@ function deepsplit_top1(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, 
 end
 
 function run_experiments()
-    println("\nRunning MNIST all...")
+    # println("\nRunning LHC all...")
+    # run_lhc_all_top1(deepsplit_top1((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Base")
+    # run_lhc_all_top1(deepsplit_top1((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Input-DiffZono")
+    
+    # run_lhc_all_top1(deepsplit_top1((true, false, false, false); mode=DeepSplitUnbiased, approach=LP, contract=LPZonoContract), "DeepSplit-DU-Base")
+    # run_lhc_all_top1(deepsplit_top1((true, false, true, true); mode=DeepSplitUnbiased, approach=LP, contract=LPZonoContract), "DeepSplit-DU-Input-DiffZono")
+    
+    # run_lhc_all_top1(verydiff_top1, "VeryDiff")
+    
+    println("\nRunning ACAS all...")
 
-    # run_mnist_all_epsilon(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Base")
-    # run_mnist_all_epsilon(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Input-DiffZono")
+    run_acas_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Base")
+    run_acas_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Input-DiffZono")
+
+    run_acas_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Base")
+    run_acas_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Input-DiffZono")
+    
+    run_acas_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Base")
+    run_acas_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Input-DiffZono")
+
+    println("\nRunning MNIST all...")
 
     run_mnist_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Base")
     run_mnist_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Input-DiffZono")
@@ -128,74 +145,6 @@ function run_experiments()
     run_mnist_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Base")
     run_mnist_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Input-DiffZono")
     
-    run_mnist_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Base")
-    run_mnist_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Input-DiffZono")
-    
-    # run_mnist_all_epsilon(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Base")
-    # run_mnist_all_epsilon(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Input-DiffZono")
-        
-    run_mnist_all_epsilon(verydiff_epsilon, "VeryDiff")
-
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "FP-ZonoContract-DU-Input-DiffZono")
-    # run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "FP-ZonoContract-DU-Base")
-
-    # run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "FP-ZonoContract-DU-Input-DiffZono")
-    # run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "FP-ZonoContract-DU-Base")
-
-    # println("\nRunning ACAS all...")
-
-    # run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Base")
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Input-DiffZono")
-
-    #run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Base")
-    #run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Input-DiffZono")
-
-    #run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Base")
-    #run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Input-DiffZono")
-    
-    # run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Base")
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Input-DiffZono")
-    
-    # run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Base")
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Input-DiffZono")
-    
-    # run_acas_all(verydiff, "VeryDiff")
-
-    # println("\nRunning MNIST all...")
-
-    # run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Base")
-    # run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Input-DiffZono")
-
-    #run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Base")
-    #run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Input-DiffZono")
-
-    #run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Base")
-    #run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Input-DiffZono")
-    
-    # run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Base")
-    # run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Input-DiffZono")
-    
-    # run_mnist_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Base")
-    # run_mnist_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Input-DiffZono")
-        
-    # run_mnist_all(verydiff, "VeryDiff")
-    
-    # println("\nRunning ACAS all...")
-    
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=InputZonoContract), "InputZonoContract-DU-Input-DiffZono")
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=InputZonoContractInter), "InputZonoContractInter-DU-Input-DiffZono")
-    
-    # run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Base")
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Input-DiffZono")
-
-    # run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Base")
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractPost), "ZonoContractPost-DU-Input-DiffZono")
-    
-    # run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Base")
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Input-DiffZono")
-    
-    # run_acas_all(deepsplit((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Base")
-    # run_acas_all(deepsplit((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Input-DiffZono")
-    
-    # run_mnist_all(verydiff, "VeryDiff")
+    run_mnist_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Base")
+    run_mnist_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Input-DiffZono")
 end

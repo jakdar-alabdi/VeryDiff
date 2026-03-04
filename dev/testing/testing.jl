@@ -38,7 +38,7 @@ function verydiff_top1()
         VeryDiff.NEW_HEURISTIC = true
         println("\nUsing $(VeryDiff.get_config()) as verifier\n")
         for (bounds, _, _, _) in f
-            status, δ_bounds = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout)
+            status, δ_bounds = verify_network(N₁, N₂, bounds, property_check, top1_configure_split_heuristic(1); timeout=timeout)
             net_name = replace(basename(nn_file₂), ".onnx" => "")
             spec_name = replace(basename(spec_file), ".vnnlib" => "")
             if save
@@ -84,7 +84,7 @@ function deepsplit_top1(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, 
     end
 end
 
-function run_tests(benchmarks_dir::String, specs_csv_file::String, run_name::String, eval_func)
+function run_tests_epsilon(benchmarks_dir::String, specs_csv_file::String, run_name::String, eval_func)
     open(specs_csv_file, "r") do f
         while !eof(f)
             spec = split(readline(f), ",")
@@ -100,14 +100,31 @@ function run_tests(benchmarks_dir::String, specs_csv_file::String, run_name::Str
     end
 end
 
+function run_tests_top1(benchmarks_dir::String, specs_csv_file::String, run_name::String, eval_func)
+    open(specs_csv_file, "r") do f
+        while !eof(f)
+            spec = split(readline(f), ",")
+            if !isempty(spec)
+                nn_file₁ = "$benchmarks_dir/$(spec[1])"
+                nn_file₂ = "$benchmarks_dir/$(spec[2])"
+                spec_file = "$benchmarks_dir/$(spec[3])"
+                delta = parse(Float64, string(spec[4]))
+                timeout = parse(Int64, string(spec[5]))
+                eval_func(nn_file₁, nn_file₂, spec_file, delta, timeout, ""; save=false)
+            end
+        end
+    end
+end
+
 cur_dir = @__DIR__
 benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 acas_csv_dir = joinpath(cur_dir, "acas-prune.csv")
 mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
+lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 
 
-verifier = deepsplit_top1((true, false, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.LPZonoContract)
-# verifier = verydiff
+verifier = deepsplit_top1((true, false, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.LP, contract=VeryDiff.ZonoContractPre)
+verifier = verydiff_top1()
 
-run_tests(benchmarks_dir, acas_csv_dir, "", verifier)
+run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
 # run_tests(benchmarks_dir, mnist_csv_dir, "", verifier)

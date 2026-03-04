@@ -113,6 +113,7 @@ include("../dev/Properties.jl")
 
 include("../dev/experiments/acas.jl")
 include("../dev/experiments/mnist.jl")
+include("../dev/experiments/lhc.jl")
 include("../dev/experiments/run.jl")
 
 export Network,GeminiNetwork,Layer,Dense,ReLU,WrappedReLU
