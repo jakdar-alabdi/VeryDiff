@@ -14,7 +14,6 @@ function _run_lhc_all_top1(specs_csv_file::String, warmup_specs_csv_file::String
             spec_file = "$benchmarks_dir/$(spec[3])"
             delta = parse(Float64, string(spec[4]))
             timeout = parse(Int64, string(spec[5]))
-            timeout = 30
 
             println("\nNN₁: $(basename(nn_file₁))")
             println("NN₂: $(basename(nn_file₂))")
@@ -45,7 +44,6 @@ function _run_lhc_all_top1(specs_csv_file::String, warmup_specs_csv_file::String
             nn_file₂ = "$benchmarks_dir/$(spec[2])"
             spec_file = "$benchmarks_dir/$(spec[3])"
             timeout = parse(Int64, string(spec[end]))
-            timeout = 30
 
             for delta in spec[4:end-1]
                 delta = parse(Float64, string(delta))
