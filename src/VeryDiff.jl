@@ -128,6 +128,6 @@ export run_cmd
 export deepsplit_verify_network
 export contract_zono, geometric_distance, transform_offset_zono
 export deepsplit_heuristic
-export run_experiments
+export run_experiments_pool4, run_experiments_pool5
 
 end # module AlphaZono
