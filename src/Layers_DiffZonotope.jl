@@ -114,17 +114,6 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                     end
                 end
             end
-
-            if NEURON_SPLITTING_APPROACH[] != VerticalSplitting
-                Zs = (Z.Z₁, Z.Z₂)
-                @timeit to "Collect Constraints" begin
-                    for node in layer_split_nodes
-                        g = Zs[node.network].G[node.neuron, :]
-                        c = Zs[node.network].c[node.neuron]
-                        push!(P.split_constraints, SplitConstraint(node, g, c))
-                    end
-                end
-            end
         end
     end
 
@@ -171,7 +160,8 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     upper₂ = @view bounds₂[:,2]
 
     if USE_NEURON_SPLITTING[]
-        lowers, uppers = (lower₁, lower₂), (upper₁, upper₂)
+        lowers = (lower₁, lower₂)
+        uppers = (upper₁, upper₂)
 
         if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
             for node in layer_split_nodes
@@ -207,9 +197,16 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
                 uppers[network][neuron] = u
             end
         else
-            for (;network, neuron, direction) in layer_split_nodes
-                lowers[network][neuron] *= direction == -1
-                uppers[network][neuron] *= direction == 1
+            Zs = (Z.Z₁, Z.Z₂)
+            @timeit to "Set ReLU Phase" begin
+                for node in layer_split_nodes
+                    (;network, neuron, direction) = node
+                    lowers[network][neuron] *= direction == -1
+                    uppers[network][neuron] *= direction == 1
+                    g = Zs[network].G[neuron, :]
+                    c = Zs[network].c[neuron]
+                    push!(P.split_constraints, SplitConstraint(node, g, c))
+                end
             end
         end
 

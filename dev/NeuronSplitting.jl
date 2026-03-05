@@ -53,6 +53,8 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
         first_task = true
         initial_δ_bound = Inf64
         final_δ_bound = Inf64
+        global FIRST_ROUND = true
+        global TOP1_FOUND_CONCRETE_DELTA = false
 
         approach = NEURON_SPLITTING_APPROACH[]
         contract = ZONO_CONTRACT_MODE[]
@@ -87,6 +89,7 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                         prop_state.split_nodes = task.branch.split_nodes
                         Zout = N(Zin, prop_state)
                         task = prop_state.task
+                        N̂ = size(Zout.∂Z.G, 2)
                         if prop_state.is_unsatisfiable
                             @timeit to "Unsatisfiable" begin
                                 continue
@@ -101,11 +104,19 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                             task.branch.undetermined = trues(size(bounds))
                             first_task = false
                         end
+                    end
 
+                    # Append zeros to the constraints vectors so that their dimension match the output dimension
+                    @timeit to "Align Constraints" begin
+                        for constraint in prop_state.split_constraints
+                            offset = ifelse(constraint.node.network == 1, 0, Zout.num_approx₁)
+                            constraint.g = align_vector(constraint.g, N̂, input_dim, offset)
+                        end
                     end
                     
                     @timeit to "Property Check" begin
                         prop_satisfied, cex, _, verification_status, distance_bound, input_bounds = property_check(N₁, N₂, Zin, Zout, task, prop_state)
+                        global FIRST_ROUND = false
                     end
                     
                     if !prop_satisfied
@@ -113,23 +124,24 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                             return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
                         end
 
-                        N̂ = size(Zout.∂Z.G, 2)
+                        if prop_state.num_instables == 0
+                            println("Constraints: $(prop_state.split_constraints)")
+                            println("Split Nodes: $(prop_state.split_nodes)")
+                            println("Crossings: $(prop_state.instable_nodes)")
+                        end
 
-                        @assert !(prop_state.num_instables == 0 && N̂ != input_dim)
                         @assert prop_state.num_instables > 0
 
                         @timeit to "Compute Split" begin
 
                             @timeit to "DeepSplit Heuristic" begin
-                                mask = task.branch.undetermined
-                                split_candidate = split_heuristic(Zout, prop_state, task.distance_indices, mask[:, 1] .|| mask[:, 2])
-                                (;network, layer, neuron) = split_candidate
-                                @assert isnothing(findfirst(node -> (network, layer, neuron) == (node.network, node.layer, node.neuron), prop_state.split_nodes))
+                                split_candidate = split_heuristic(Zout, prop_state, task.distance_indices)
+                                # (;network, layer, neuron) = split_candidate
+                                # @assert isnothing(findfirst(node -> (network, layer, neuron) == (node.network, node.layer, node.neuron), prop_state.split_nodes))
                             end
 
                             distance_bound = min(distance_bound, task.distance_bound)
                             final_δ_bound = distance_bound
-                            unit_input_bounds = isnothing(input_bounds) || is_unit_hypercube(input_bounds)
 
                             if use_zono_contract && split_candidate.layer == 0
                                 @timeit to "Split Input" begin
@@ -139,9 +151,27 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                                     (ws₁, task₁), (ws₂, task₂) = split_contract_zono(split_candidate.neuron, input_bounds, prop_state.split_constraints, task, work_share, verification_status, distance_bound)
                                 end
                             else
-                                if !unit_input_bounds && !pre_contract
-                                    @timeit to "Transform Input Zono" begin
-                                        task = transform_verification_task(task, input_bounds)
+                                if use_zono_contract && !isempty(prop_state.split_constraints)
+                                    @timeit to "Input Zono Contract" begin
+                                        if isnothing(input_bounds)
+                                            input_bounds = [-ones(N̂) ones(N̂)]
+                                        end
+
+                                        @timeit to "Contract Zono All" begin
+                                            input_bounds = contract_zono_all!(input_bounds, prop_state.split_constraints)
+                                        end
+                                        
+                                        if isnothing(input_bounds)
+                                            @timeit to "Unsatisfiable" begin
+                                                continue
+                                            end
+                                        end
+
+                                        if !is_unit_hypercube(input_bounds)
+                                            @timeit to "Transform Input Zono" begin
+                                                task = transform_verification_task(task, input_bounds)
+                                            end
+                                        end
                                     end
                                 end
                                 (ws₁, task₁, direction₁), (ws₂, task₂, direction₂) = split_node(split_candidate, task, work_share, verification_status, distance_bound)
@@ -182,6 +212,7 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                     end
                 end
             catch e
+                show(VeryDiff.to)
                 if e isa OutOfMemoryError
                     empty!(queue)
                     GC.gc()

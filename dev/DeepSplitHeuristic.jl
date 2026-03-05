@@ -1,10 +1,10 @@
-function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
+function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int})
     input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
     
     max_score = -Inf
     max_node = nothing
     for net in 1:2
-        generators = get_generators(Zout, net, undetermined)
+        generators = get_generators(Zout, net)
         intermediates = prop_state.intermediate_zonos[net]
         crossings = prop_state.instable_nodes[net]
         L = size(crossings, 1)
@@ -67,13 +67,13 @@ function deepsplit_heuristic(Zout::DiffZonotope, prop_state::PropState, distance
     return max_node
 end
 
-function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int}, undetermined::BitVector)
+function deepsplit_heuristic_alternative(Zout::DiffZonotope, prop_state::PropState, distance_indices::Vector{Int})
     input_dim = size(Zout.Z₁, 2) - Zout.num_approx₁
 
     max_score = -Inf64
     max_node = nothing
     for net in 1:2
-        generators = get_generators(Zout, net, undetermined)
+        generators = get_generators(Zout, net)
         crossings = prop_state.instable_nodes[net]
         L = size(crossings, 1)
         relative_impactes = prop_state.relative_impactes[net]
@@ -144,7 +144,7 @@ function compute_relative_impact(Z::Zonotope, offset::Int64, num::Int64, crossin
     end
 end
 
-function get_generators(Z::DiffZonotope, network::Int64, undetermined::BitVector)
+function get_generators(Z::DiffZonotope, network::Int64)
     if DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS[]
         Z̃ = Z.∂Z
         net_offset = Z.∂num_approx + ifelse(network == 1, Z.num_approx₂, 0)

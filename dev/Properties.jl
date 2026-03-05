@@ -25,14 +25,6 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
 
         @assert !(prop_state.num_instables == 0 && N̂ != input_dim)
 
-        # Append zeros to the constraints vectors so that the match the output dimension
-        @timeit to "Align Constraints" begin
-            for constraint in constraints
-                offset = ifelse(constraint.node.network == 1, 0, Zout.num_approx₁)
-                constraint.g = align_vector(constraint.g, N̂, input_dim, offset)
-            end
-        end
-
         if use_lp || use_lp_zc || num_instables == 0
             
             @timeit to "Initialize LP-solver" begin
@@ -130,26 +122,17 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
 
     approach = NEURON_SPLITTING_APPROACH[]
     contract = ZONO_CONTRACT_MODE[]
-    use_lp = approach == LP
     use_zono_contract = approach == ZonoContraction
-    use_lp_zc = use_zono_contract && contract == LPZonoContract
     post_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPost)
 
     return (N₁::Network, N₂::Network, Zin::DiffZonotope, Zout::DiffZonotope, task::VerificationTask, prop_state::PropState) -> begin
 
+        @assert FIRST_ROUND || !isnothing(task.verification_status)
         constraints = prop_state.split_constraints
         input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
         N̂ = size(Zout.∂Z.G, 2)
         
         input_bounds = nothing
-
-        # Append zeros to the constraints vectors so that the match the output dimension
-        @timeit to "Align Constraints" begin
-            for constraint in constraints
-                offset = ifelse(constraint.node.network == 1, 0, Zout.num_approx₁)
-                constraint.g = align_vector(constraint.g, N̂, input_dim, offset)
-            end
-        end
         
         if !isempty(constraints)
             if post_contract
@@ -181,10 +164,8 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
             end
         end
         
-        prop_satisfied, cex, _, verification_status, distance_bound = property_check(N₁, N₂, Zin, Zout, task.verification_status; constraints=constraints)
-
         @assert !(prop_state.num_instables == 0 && N̂ != input_dim)
 
-        return prop_satisfied, cex, nothing, verification_status, distance_bound, input_bounds
+        return property_check(N₁, N₂, Zin, Zout, task.verification_status; constraints=constraints)..., input_bounds
     end
 end

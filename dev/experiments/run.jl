@@ -69,6 +69,8 @@ function verydiff_top1(nn_file₁::String, nn_file₂::String, spec_file::String
     property_check = get_top1_property(;delta=delta)
     set_neuron_splitting_config((false, false, false, false))
     VeryDiff.NEW_HEURISTIC = true
+    global FIRST_ROUND = true
+    global TOP1_FOUND_CONCRETE_DELTA = false
     println("Using $(VeryDiff.get_config())...")
     for (bounds, _, _, _) in f
         status, δ_bounds = verify_network(N₁, N₂, bounds, property_check, top1_configure_split_heuristic(1); timeout=timeout)
@@ -105,6 +107,8 @@ function deepsplit_top1(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, 
         set_neuron_splitting_config(config; mode=mode, approach=approach, contract=contract)
         property_check = get_top1_property_with_neuron_splitting(delta)
         println("Using $(VeryDiff.get_config())...")
+        global FIRST_ROUND = true
+        global TOP1_FOUND_CONCRETE_DELTA = false
         for (bounds, _, _, _) in f
             status, δ_bounds = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
             net_name = replace(basename(nn_file₂), ".onnx" => "")

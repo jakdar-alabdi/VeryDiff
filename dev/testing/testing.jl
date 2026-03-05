@@ -108,9 +108,11 @@ function run_tests_top1(benchmarks_dir::String, specs_csv_file::String, run_name
                 nn_file₁ = "$benchmarks_dir/$(spec[1])"
                 nn_file₂ = "$benchmarks_dir/$(spec[2])"
                 spec_file = "$benchmarks_dir/$(spec[3])"
-                delta = parse(Float64, string(spec[4]))
-                timeout = parse(Int64, string(spec[5]))
-                eval_func(nn_file₁, nn_file₂, spec_file, delta, timeout, ""; save=false)
+                timeout = parse(Int64, string(spec[end]))
+                for delta in spec[4:end-1]
+                    delta = parse(Float64, string(delta))
+                    eval_func(nn_file₁, nn_file₂, spec_file, delta, timeout, ""; save=false)
+                end
             end
         end
     end
@@ -123,8 +125,8 @@ mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
 lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 
 
-verifier = deepsplit_top1((true, false, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.LP, contract=VeryDiff.ZonoContractPre)
-verifier = verydiff_top1()
+verifier = deepsplit_top1((true, false, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.LP, contract=VeryDiff.LPZonoContract)
+# verifier = verydiff_top1()
 
 run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
 # run_tests(benchmarks_dir, mnist_csv_dir, "", verifier)
