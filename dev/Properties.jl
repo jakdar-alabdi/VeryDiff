@@ -8,6 +8,8 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
     use_lp_zc = use_zono_contract && contract == LPZonoContract
     post_contract = use_zono_contract && (contract == ZonoContract || contract == ZonoContractPost)
 
+    EQUIVALENCE_PROPERTY[] = EpsilonEquivalence
+
     return (N₁::Network, N₂::Network, Zin::DiffZonotope, Zout::DiffZonotope, task::VerificationTask, prop_state::PropState) -> begin
         
         mask = task.branch.undetermined
@@ -120,6 +122,8 @@ end
 function get_top1_property_with_neuron_splitting(delta::Float64)
     property_check = get_top1_property(;delta=delta)
 
+    EQUIVALENCE_PROPERTY[] = DeltaTop1Equivalence
+
     approach = NEURON_SPLITTING_APPROACH[]
     contract = ZONO_CONTRACT_MODE[]
     use_zono_contract = approach == ZonoContraction
@@ -127,7 +131,6 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
 
     return (N₁::Network, N₂::Network, Zin::DiffZonotope, Zout::DiffZonotope, task::VerificationTask, prop_state::PropState) -> begin
 
-        @assert FIRST_ROUND || !isnothing(task.verification_status)
         constraints = prop_state.split_constraints
         input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
         N̂ = size(Zout.∂Z.G, 2)
@@ -164,8 +167,37 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
             end
         end
         
-        @assert !(prop_state.num_instables == 0 && N̂ != input_dim)
+        prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N₁, N₂, Zin, Zout, task.verification_status; constraints=constraints)
 
-        return property_check(N₁, N₂, Zin, Zout, task.verification_status; constraints=constraints)..., input_bounds
+        if prop_state.num_instables == 0
+            if !prop_satisfied && isnothing(cex)
+                for _ in 1:1000
+                    @timeit to "Cex Search" begin
+                        x = rand(Float64, input_dim)
+                        input = Zin.Z₁.G * x + Zin.Z₁.c
+                        y₁ = N₁(input)
+                        y₂ = N₂(input)
+
+                        argmax_N₁ = argmax(y₁)
+                        argmax_N₂ = argmax(y₂)
+
+                        if argmax_N₁ != argmax_N₂
+                            softmax_N₁ = exp.(y₁) / sum(exp.(y₁))
+                            if iszero(delta) || softmax_N₁[argmax_N₁] >= delta
+                                println("Found cex")
+                                second_most = sort(softmax_N₁, rev=true)[2]
+                                println("N1: $(softmax_N₁[argmax_N₁]) (vs. $second_most)")
+                                softmax_N₂ = exp.(y₂)/sum(exp.(y₂))
+                                println("N2: $(softmax_N₂[argmax_N₂])")
+                                println("N1 Probability: $(softmax_N₁[argmax_N₁]) >= $delta")
+                                return false, (input, (argmax_N₁, argmax_N₂)), nothing, nothing, distance_bound, input_bounds
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        return prop_satisfied, cex, heuristics_info, verification_status, distance_bound, input_bounds
     end
 end

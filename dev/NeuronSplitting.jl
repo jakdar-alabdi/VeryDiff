@@ -124,10 +124,11 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                             return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
                         end
 
-                        if prop_state.num_instables == 0
-                            println("Constraints: $(prop_state.split_constraints)")
-                            println("Split Nodes: $(prop_state.split_nodes)")
-                            println("Crossings: $(prop_state.instable_nodes)")
+                        @assert EQUIVALENCE_PROPERTY[] == DeltaTop1Equivalence
+                        if prop_state.num_instables == 0                            
+                            if EQUIVALENCE_PROPERTY[] == DeltaTop1Equivalence
+                                return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
+                            end
                         end
 
                         @assert prop_state.num_instables > 0

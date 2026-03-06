@@ -14,6 +14,9 @@ USE_GUROBI = true
 
 USE_DIFFZONO = true
 
+@enum EquivalenceProperty EpsilonEquivalence DeltaTop1Equivalence
+global const EQUIVALENCE_PROPERTY = Ref{EquivalenceProperty}(EpsilonEquivalence)
+
 """If true, neuron splitting is utilized to refine the bounds of the output Zonotopes"""
 global const USE_NEURON_SPLITTING = Ref{Bool}(false)
 
@@ -41,7 +44,8 @@ global const DEEPSPLIT_HEURISTIC_MODE = Ref{DeepSplitHeuristicMode}(ZonoBiased)
 @enum ZonoContractMode ZonoContract ZonoContractPre ZonoContractPost ZonoContractInter LPZonoContract
 global const ZONO_CONTRACT_MODE = Ref{ZonoContractMode}(ZonoContract)
 
-function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool, Bool}; mode=ZonoBiased, approach=LP, contract=ZonoContract)
+function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool, Bool}; prop=EpsilonEquivalence, mode=ZonoBiased, approach=LP, contract=ZonoContract)
+    global EQUIVALENCE_PROPERTY[] = prop
     global USE_NEURON_SPLITTING[] = config[1]
     global DEEPSPLIT_HUERISTIC_ALTERNATIVE[] = config[2]
     global DEEPSPLIT_HUERISTIC_USE_DIFF_GENERATORS[] = config[3]
