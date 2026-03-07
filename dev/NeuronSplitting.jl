@@ -74,6 +74,7 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                 while !isempty(queue)
                     work_share, task = pop!(queue)
                     final_δ_bound = task.distance_bound
+                    distance_bound = task.distance_bound
                     
                     if !check_resources(start_time; timeout=timeout)
                         empty!(queue)
@@ -100,7 +101,7 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                             bounds = zono_bounds(Zout.∂Z)
                             println(bounds[:, 1])
                             println(bounds[:, 2])
-                            initial_δ_bound = final_δ_bound = maximum(abs, bounds)
+                            distance_bound = initial_δ_bound = final_δ_bound = maximum(abs, bounds)
                             task.branch.undetermined = trues(size(bounds))
                             first_task = false
                         end
@@ -115,7 +116,8 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                     end
                     
                     @timeit to "Property Check" begin
-                        prop_satisfied, cex, _, verification_status, distance_bound, input_bounds = property_check(N₁, N₂, Zin, Zout, task, prop_state)
+                        prop_satisfied, cex, _, verification_status, p_distance_bound, input_bounds = property_check(N₁, N₂, Zin, Zout, task, prop_state)
+                        distance_bound = min(distance_bound, p_distance_bound)
                         global FIRST_ROUND = false
                     end
                     
@@ -141,7 +143,6 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                                 # @assert isnothing(findfirst(node -> (network, layer, neuron) == (node.network, node.layer, node.neuron), prop_state.split_nodes))
                             end
 
-                            distance_bound = min(distance_bound, task.distance_bound)
                             final_δ_bound = distance_bound
 
                             if use_zono_contract && split_candidate.layer == 0

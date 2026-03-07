@@ -134,6 +134,7 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
         constraints = prop_state.split_constraints
         input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
         N̂ = size(Zout.∂Z.G, 2)
+        distance_bound = maximum(abs, zono_bounds(Zout.∂Z))
         
         input_bounds = nothing
         
@@ -167,7 +168,8 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
             end
         end
         
-        prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N₁, N₂, Zin, Zout, task.verification_status; constraints=constraints)
+        prop_satisfied, cex, heuristics_info, verification_status, p_distance_bound = property_check(N₁, N₂, Zin, Zout, task.verification_status; constraints=constraints)
+        distance_bound = min(distance_bound, p_distance_bound)
 
         if prop_state.num_instables == 0
             if !prop_satisfied && isnothing(cex)
