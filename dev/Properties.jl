@@ -25,8 +25,6 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
         input_dim = size(Zout.Z₁.G, 2) - Zout.num_approx₁
         N̂ = size(Zout.∂Z.G, 2)
 
-        @assert !(prop_state.num_instables == 0 && N̂ != input_dim)
-
         if use_lp || use_lp_zc || num_instables == 0
             
             @timeit to "Initialize LP-solver" begin
@@ -57,6 +55,15 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
                             cex_input = Zin.Z₁.G * value.(x[1:input_dim]) + Zin.Z₁.c
                             sample_distance = get_sample_distance(N₁, N₂, cex_input)
 
+                            # if num_instables == 0 && any(mask)
+                            #     println("[LP Solution] x = $(value.(x[1:input_dim]))")
+                            #     println("y := Zin(x) = $cex_input")
+                            #     println("N₁(y) - N₂(y) = $(N₁(cex_input) - N₂(cex_input))")
+                            #     println("maxᵢ |N₁(y)ᵢ - N₂(y)ᵢ| = $sample_distance")
+                            #     println("∂Z(x) = $(Zout.∂Z.G * value.(x) + Zout.∂Z.c)")
+                            #     println("∂Z(x)_$(i) = $((Zout.∂Z.G * value.(x) + Zout.∂Z.c)[i])")
+                            # end
+
                             if sample_distance > epsilon
                                 @timeit to "LP Found Cex" begin
                                     distance_bound = min(distance_bound, lp_distance_bound)
@@ -68,19 +75,29 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
                         if has_values(model)
                             δ = abs(objective_value(model))
                             mask[i, j] &= δ > epsilon
+                            # if num_instables == 0
+                            #     println("i: $i, j: $j, mask: $(mask[i, j]), LP value: $(δ)")
+                            # end
                             lp_distance_bound = max(lp_distance_bound, δ)
                         end
 
-                        if prop_state.num_instables == 0
-                            println("Termination Status: $(termination_status(model))")
-                        end
+                        # if num_instables == 0
+                        #     println("Termination Status: $(termination_status(model))")
+                        # end
                         
                         mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
                     end
                 end
             end
 
-            @assert !(prop_state.num_instables == 0 && any(mask))
+            # if num_instables == 0 && any(mask)
+            #     println("\nConstraint: $(prop_state.split_constraints)")
+            #     println("\nSplit Nodes: $(prop_state.split_nodes)")
+            #     println("\nInput Zono Bounds: $(zono_bounds(Zin.Z₁))")
+            #     println("\nOutput Zono Bounds: $(zono_bounds(Zout.∂Z))")
+            # end
+
+            @assert !(num_instables == 0 && any(mask))
 
             distance_bound = min(distance_bound, lp_distance_bound)
 
@@ -162,6 +179,7 @@ function get_top1_property_with_neuron_splitting(delta::Float64)
                         end
                         @timeit to "Transform Constraints" begin
                             constraints = transform_constraints!(input_bounds, constraints)
+                            input_bounds = nothing
                         end
                     end
                 end

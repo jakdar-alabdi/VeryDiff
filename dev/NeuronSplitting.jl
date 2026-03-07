@@ -126,8 +126,7 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                             return UNSAFE, cex, (initial_δ_bound, final_δ_bound)
                         end
 
-                        @assert EQUIVALENCE_PROPERTY[] == DeltaTop1Equivalence
-                        if prop_state.num_instables == 0                            
+                        if prop_state.num_instables == 0
                             if EQUIVALENCE_PROPERTY[] == DeltaTop1Equivalence
                                 return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
                             end
@@ -214,6 +213,8 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                     end
                 end
             catch e
+                println("\nInitial δ-bound: $(initial_δ_bound)")
+                println("Final δ-bound: $(final_δ_bound)")
                 show(VeryDiff.to)
                 if e isa OutOfMemoryError
                     empty!(queue)
