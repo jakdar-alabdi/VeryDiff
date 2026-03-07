@@ -140,6 +140,9 @@ function run_experiments_pool4()
     run_mnist_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Base")
     run_mnist_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=LPZonoContract), "LP-ZC-DU-Input-DiffZono")
 
+    run_mnist_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Base")
+    run_mnist_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Input-DiffZono")
+
     # run_mnist_all_epsilon(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Base")
     # run_mnist_all_epsilon(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContractInter), "ZonoContractInter-DU-Input-DiffZono")
 
