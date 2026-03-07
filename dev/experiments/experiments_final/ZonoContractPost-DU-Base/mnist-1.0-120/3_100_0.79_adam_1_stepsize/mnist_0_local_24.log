@@ -1,0 +1,69 @@
+Parsing mnist_relu_3_100.onnx...
+Found input X
+op: matmul, weight: (100, 784), bias: nothing
+op: bias, weight: nothing, bias: (100,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (100, 100), bias: nothing
+op: bias, weight: nothing, bias: (100,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (10, 100), bias: nothing
+op: bias, weight: nothing, bias: (10,)
+op: relu, weight: nothing, bias: nothing
+op: matmul, weight: (10, 10), bias: nothing
+op: bias, weight: nothing, bias: (10,)
+Parsing mnist_relu_3_100_0.79_adam_1_stepsize.onnx...
+Found input X
+op: gemm, weight: (100, 784), bias: (100,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (100, 100), bias: (100,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (10, 100), bias: (10,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (10, 10), bias: (10,)
+Using ZonoContraction-DeepSplitUnbiased-ZonoContractPost-Base...
+Zono Bounds:
+[-2.258130018061887, -2.1369429197503, -2.3459374322555693, -2.2788159460110244, -2.5497422365669324, -2.6475663601800763, -0.0006048641381308393, -2.288820533565879, -2.1424274619219816, -2.391875571453723]
+[2.1105530152419223, 2.102777912040939, 2.2362516067795415, 2.2693513817385695, 2.5500858155252324, 2.499806305863923, 0.0010481612014239898, 2.409381399773193, 2.1388443005351836, 2.38504313630506]
+
+TIMEOUT REACHED
+
+Initial δ-bound: 2.6475663601800763
+Final δ-bound: 2.6475663601800763
+UNKNOWN
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                 120s / 100.0%            149GiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1     120s  100.0%    120s    149GiB  100.0%   149GiB
+  Zonotope Loop                     1     120s  100.0%    120s    149GiB  100.0%   149GiB
+    Zonotope Propagate          63.9k    77.9s   64.7%  1.22ms   98.0GiB   65.7%  1.57MiB
+      DiffZonotope_DenseProp     255k    50.1s   41.6%   196μs   10.6GiB    7.1%  43.6KiB
+        Zonotope_DenseProp       511k    23.1s   19.2%  45.3μs   6.53GiB    4.4%  13.4KiB
+      DiffZonotope_ReLUProp      192k    15.3s   12.7%  79.7μs   31.3GiB   21.0%   172KiB
+        Zonotope_ReLUProp        383k    6.09s    5.1%  15.9μs   17.5GiB   11.7%  47.8KiB
+          Column Multiply        383k    2.43s    2.0%  6.34μs   8.04GiB    5.4%  22.0KiB
+          Allocation             383k    2.02s    1.7%  5.28μs   8.01GiB    5.4%  21.9KiB
+          Set Matrix             383k    667ms    0.6%  1.74μs    181MiB    0.1%     495B
+          Vectors                383k    629ms    0.5%  1.64μs   1.23GiB    0.8%  3.36KiB
+          Influence Matrix       383k   20.6ms    0.0%  53.7ns     0.00B    0.0%    0.00B
+          Bounds                 383k   16.4ms    0.0%  42.9ns     0.00B    0.0%    0.00B
+        Set ReLU Phase           192k    839ms    0.7%  4.38μs   2.81GiB    1.9%  15.4KiB
+    Property Check              63.9k    26.3s   21.9%   412μs   21.3GiB   14.3%   350KiB
+      Post-Contract Zono        63.3k    18.3s   15.2%   290μs   17.3GiB   11.6%   287KiB
+        Sort Constraints        63.3k    8.19s    6.8%   129μs    130MiB    0.1%  2.10KiB
+        Contract Zono All       63.3k    5.73s    4.8%  90.6μs   14.5GiB    9.7%   240KiB
+        Transform Zono          37.6k    262ms    0.2%  6.98μs    332MiB    0.2%  9.04KiB
+        Unsatisfiable           21.6k   2.43ms    0.0%   113ns     0.00B    0.0%    0.00B
+    Compute Split               41.7k    13.3s   11.0%   319μs   19.7GiB   13.2%   496KiB
+      Input Zono Contract       41.7k    8.16s    6.8%   196μs   15.5GiB   10.4%   389KiB
+        Transform Input Zono    28.7k    4.08s    3.4%   142μs   5.46GiB    3.7%   200KiB
+        Contract Zono All       41.7k    4.04s    3.4%  96.8μs   10.0GiB    6.7%   252KiB
+        Unsatisfiable           8.90k   1.46ms    0.0%   164ns     0.00B    0.0%    0.00B
+      DeepSplit Heuristic       41.7k    2.97s    2.5%  71.3μs   3.16GiB    2.1%  79.4KiB
+      Split Neuron              32.8k    2.09s    1.7%  63.6μs   1.09GiB    0.7%  34.9KiB
+    Align Constraints           63.9k    2.40s    2.0%  37.5μs   10.0GiB    6.7%   164KiB
+Initialize                          1    241μs    0.0%   241μs    869KiB    0.0%   869KiB
+─────────────────────────────────────────────────────────────────────────────────────────

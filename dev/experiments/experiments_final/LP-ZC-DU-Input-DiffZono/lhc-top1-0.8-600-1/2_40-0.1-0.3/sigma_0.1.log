@@ -1,0 +1,64 @@
+Parsing 2_40-0.1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (40, 16), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (40, 40), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 40), bias: (5,)
+Parsing 2_40-0.1-0.3.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (40, 16), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (40, 40), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 40), bias: (5,)
+Using ZonoContraction-DeepSplitUnbiased-LPZonoContract-Base-Input-DiffZono...
+Zono Bounds:
+[-22.90289355138262, -25.65111091453931, -24.699256412362935, -25.826984757752584, -24.532512939882587]
+[14.410924072577147, 15.220782349786909, 17.619784859370668, 29.864093473581896, 14.934329412131719]
+[TOP-1] required confidence (0.9552358744118279≥0.8) is feasible for index 2
+Found cex
+N1: 0.8454722912562511 (vs. 0.1542600171176459)
+N2: 0.757124416505613
+N1 Probability: 0.8454722912562511 >= 0.8
+
+Found counterexample: ([0.1, 0.1, -0.013038150951753584, 0.1, 0.1, -0.1, -0.1, 0.1, -0.1, 0.1, -0.1, -0.1, -0.1, 0.1, 0.05000000000000001, 0.1], (3, 2))
+
+Initial δ-bound: 29.864093473581896
+Final δ-bound: 22.114453327953704
+UNSAFE
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                162ms / 100.0%           33.3MiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1    162ms  100.0%   162ms   33.3MiB   99.9%  33.3MiB
+  Zonotope Loop                     1    161ms  100.0%   161ms   33.3MiB   99.9%  33.3MiB
+    Property Check                 12    158ms   97.7%  13.2ms   28.6MiB   85.7%  2.38MiB
+    Zonotope Propagate             12   2.48ms    1.5%   206μs   3.46MiB   10.4%   295KiB
+      DiffZonotope_ReLUProp        24   1.51ms    0.9%  63.1μs   2.52MiB    7.6%   108KiB
+        Zonotope_ReLUProp          48    568μs    0.4%  11.8μs   1.41MiB    4.2%  30.1KiB
+          Allocation               48    175μs    0.1%  3.64μs    652KiB    1.9%  13.6KiB
+          Column Multiply          48    168μs    0.1%  3.51μs    656KiB    1.9%  13.7KiB
+          Set Matrix               48    103μs    0.1%  2.15μs   33.2KiB    0.1%     709B
+          Vectors                  48   63.5μs    0.0%  1.32μs   98.2KiB    0.3%  2.05KiB
+          Influence Matrix         48   4.86μs    0.0%   101ns     0.00B    0.0%    0.00B
+          Bounds                   48   2.40μs    0.0%  49.9ns     0.00B    0.0%    0.00B
+        Set ReLU Phase             24   15.5μs    0.0%   647ns     0.00B    0.0%    0.00B
+      DiffZonotope_DenseProp       36    769μs    0.5%  21.4μs    873KiB    2.6%  24.2KiB
+        Zonotope_DenseProp         72    280μs    0.2%  3.90μs    477KiB    1.4%  6.63KiB
+    Compute Split                  11   1.10ms    0.7%   100μs   1.26MiB    3.8%   117KiB
+      DeepSplit Heuristic          11    810μs    0.5%  73.6μs   1.08MiB    3.2%   101KiB
+      Split Input                   8    223μs    0.1%  27.9μs    168KiB    0.5%  21.0KiB
+        Transform Input Zono       16    152μs    0.1%  9.49μs   97.4KiB    0.3%  6.09KiB
+        Contract Input Zono        16   1.10μs    0.0%  69.1ns     0.00B    0.0%    0.00B
+      Split Neuron                  3   43.5μs    0.0%  14.5μs   4.78KiB    0.0%  1.59KiB
+    Align Constraints              12   6.90μs    0.0%   575ns     0.00B    0.0%    0.00B
+Initialize                          1   23.8μs    0.0%  23.8μs   24.2KiB    0.1%  24.2KiB
+─────────────────────────────────────────────────────────────────────────────────────────

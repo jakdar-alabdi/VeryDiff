@@ -1,0 +1,69 @@
+Parsing 2_20-0.1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (20, 16), bias: (20,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (20, 20), bias: (20,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 20), bias: (5,)
+Parsing 2_20-0.1-0.1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (20, 16), bias: (20,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (20, 20), bias: (20,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 20), bias: (5,)
+Using ZonoContraction-DeepSplitUnbiased-LPZonoContract-Base-Input-DiffZono...
+Zono Bounds:
+[-24.36399530325958, -62.287993786541776, -55.67743056575707, -117.5627328783345, -95.84331981317126]
+[27.949921603866706, 68.45283052450291, 68.14771824156472, 103.10840836690839, 98.53246277445007]
+[TOP-1] required confidence (0.9999045018171357≥0.999) is feasible for index 2
+Found cex
+N1: 0.9998471136432512 (vs. 0.00015288635665119035)
+N2: 0.7995111625273825
+N1 Probability: 0.9998471136432512 >= 0.999
+
+Found counterexample: ([-0.5, -0.5, 0.317631359652181, 0.05491499508814377, 0.5, -0.5, 0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.461535401845916, -0.5], (2, 4))
+
+Initial δ-bound: 117.5627328783345
+Final δ-bound: 156.2392681310765
+UNSAFE
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:               65.1ms / 100.0%           10.0MiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1   65.1ms  100.0%  65.1ms   9.94MiB   99.9%  9.94MiB
+  Zonotope Loop                     1   65.1ms   99.9%  65.1ms   9.93MiB   99.8%  9.93MiB
+    Property Check                  4   64.1ms   98.5%  16.0ms   9.02MiB   90.6%  2.26MiB
+    Zonotope Propagate              4    594μs    0.9%   149μs    684KiB    6.7%   171KiB
+      DiffZonotope_ReLUProp         8    348μs    0.5%  43.6μs    480KiB    4.7%  60.1KiB
+        Zonotope_ReLUProp          16    145μs    0.2%  9.08μs    259KiB    2.5%  16.2KiB
+          Allocation               16   37.8μs    0.1%  2.36μs    112KiB    1.1%  7.02KiB
+          Column Multiply          16   37.4μs    0.1%  2.34μs    114KiB    1.1%  7.11KiB
+          Set Matrix               16   32.6μs    0.0%  2.03μs   11.3KiB    0.1%     725B
+          Vectors                  16   16.3μs    0.0%  1.02μs   19.0KiB    0.2%  1.19KiB
+          Influence Matrix         16   1.52μs    0.0%  95.0ns     0.00B    0.0%    0.00B
+          Bounds                   16   1.03μs    0.0%  64.6ns     0.00B    0.0%    0.00B
+        Inter-Contract Zono         1   25.4μs    0.0%  25.4μs   12.6KiB    0.1%  12.6KiB
+          Transform Zono            1   19.3μs    0.0%  19.3μs   8.93KiB    0.1%  8.93KiB
+          Contract Zono All         1   1.58μs    0.0%  1.58μs      384B    0.0%     384B
+          Align Constraints         1   1.20μs    0.0%  1.20μs      688B    0.0%     688B
+          Sort Constraints          1    263ns    0.0%   263ns      192B    0.0%     192B
+        Set ReLU Phase              8   1.65μs    0.0%   207ns      272B    0.0%    34.0B
+      DiffZonotope_DenseProp       12    155μs    0.2%  13.0μs    172KiB    1.7%  14.3KiB
+        Zonotope_DenseProp         24   53.2μs    0.1%  2.22μs   91.9KiB    0.9%  3.83KiB
+    Compute Split                   3    303μs    0.5%   101μs    245KiB    2.4%  81.7KiB
+      DeepSplit Heuristic           3    236μs    0.4%  78.6μs    219KiB    2.1%  73.0KiB
+      Split Input                   1   31.9μs    0.0%  31.9μs   21.0KiB    0.2%  21.0KiB
+        Transform Input Zono        2   21.5μs    0.0%  10.8μs   11.4KiB    0.1%  5.71KiB
+        Contract Input Zono         2    162ns    0.0%  81.0ns     0.00B    0.0%    0.00B
+      Split Neuron                  2   24.4μs    0.0%  12.2μs   2.44KiB    0.0%  1.22KiB
+    Align Constraints               4    748ns    0.0%   187ns   1.31KiB    0.0%     336B
+Initialize                          1   15.7μs    0.0%  15.7μs   11.3KiB    0.1%  11.3KiB
+─────────────────────────────────────────────────────────────────────────────────────────
