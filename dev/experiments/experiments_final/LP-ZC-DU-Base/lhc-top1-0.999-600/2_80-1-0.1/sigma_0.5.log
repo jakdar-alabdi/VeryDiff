@@ -1,0 +1,104 @@
+Parsing 2_80-1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (40, 16), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (40, 40), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 40), bias: (5,)
+Parsing 2_80-1-0.1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (40, 16), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (40, 40), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 40), bias: (5,)
+Using ZonoContraction-DeepSplitUnbiased-LPZonoContract-Base...
+Zono Bounds:
+[-69.07134794639869, -125.47425371717578, -80.04946962097752, -125.3303106605982, -105.37751880048233]
+[68.07364625180155, 117.22779042828289, 77.9877081300002, 105.59552741079378, 95.5361730163504]
+[TOP-1] required confidence (0.9991833514237312≥0.999) is feasible for index 4
+
+Initial δ-bound: 125.47425371717578
+Final δ-bound: 125.47425371717578
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                 291s /   0.0%           75.9GiB /   0.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Initialize                          1   17.6μs  100.0%  17.6μs   24.2KiB  100.0%  24.2KiB
+Verify                              0   0.00ns    0.0%    NaNh     0.00B    0.0%        -
+  Zonotope Loop                     0   0.00ns    0.0%    NaNh     0.00B    0.0%        -
+    Property Check              12.1k     285s  1621720309.6%  23.5ms   69.0GiB  298648662.6%  5.84MiB
+    Zonotope Propagate          12.1k    4.43s  25204336.0%   366μs   4.80GiB  20781543.5%   416KiB
+      DiffZonotope_ReLUProp     24.2k    3.18s  18081527.6%   131μs   3.83GiB  16567612.7%   166KiB
+        Zonotope_ReLUProp       48.4k    1.15s  6526524.1%  23.7μs   1.70GiB  7360827.7%  36.9KiB
+          Column Multiply       48.4k    485ms  2759281.7%  10.0μs    801MiB  3385174.6%  16.9KiB
+          Allocation            48.4k    386ms  2197242.4%  7.97μs    797MiB  3368008.5%  16.9KiB
+          Set Matrix            48.4k    140ms  795632.3%  2.89μs   44.5MiB  187846.6%     963B
+          Vectors               48.4k   75.9ms  431819.6%  1.57μs   96.8MiB  408865.2%  2.05KiB
+          Influence Matrix      48.4k   3.96ms  22508.0%  81.7ns     0.00B    0.0%    0.00B
+          Bounds                48.4k   3.70ms  21074.9%  76.5ns     0.00B    0.0%    0.00B
+        Inter-Contract Zono     24.1k    681ms  3872652.2%  28.2μs    682MiB  2882534.3%  29.0KiB
+          Transform Zono        6.12k    266ms  1516129.3%  43.5μs    117MiB  493664.8%  19.5KiB
+          Sort Constraints      24.1k    168ms  956039.3%  6.97μs   14.0MiB  58949.1%     607B
+          Contract Zono All     24.1k    102ms  579872.6%  4.23μs    187MiB  788639.1%  7.93KiB
+          Align Constraints     24.1k    101ms  573318.7%  4.18μs    317MiB  1337668.4%  13.4KiB
+        Set ReLU Phase          24.2k   43.0ms  244577.9%  1.78μs    119MiB  503596.8%  5.04KiB
+      DiffZonotope_DenseProp    36.3k    1.02s  5786636.8%  28.0μs    921MiB  3890871.1%  26.0KiB
+        Zonotope_DenseProp      72.6k    330ms  1877671.7%  4.54μs    494MiB  2086507.9%  6.96KiB
+    Compute Split               6.35k    1.21s  6881054.7%   190μs   1.22GiB  5270074.9%   201KiB
+      Input Zono Contract       6.35k    517ms  2941190.2%  81.4μs    805MiB  3398278.4%   130KiB
+        Contract Zono All       6.35k    386ms  2199361.6%  60.9μs    725MiB  3063151.5%   117KiB
+        Transform Input Zono    2.18k    108ms  613436.8%  49.4μs   31.7MiB  133951.3%  14.9KiB
+      DeepSplit Heuristic       6.35k    455ms  2591538.0%  71.7μs    377MiB  1593345.7%  60.8KiB
+      Split Neuron              6.35k    214ms  1215995.8%  33.7μs   63.5MiB  268089.2%  10.2KiB
+    Align Constraints           12.1k    305ms  1734097.1%  25.2μs    813MiB  3432578.3%  68.7KiB
+─────────────────────────────────────────────────────────────────────────────────────────Caught an exception:
+AssertionError: model_status != MOI.INFEASIBLE
+Stacktrace:
+  [1] (::VeryDiff.var"#35#36"{VeryDiff.var"#37#38"{Float64, Bool}})(N1::Network, N2::Network, Zin::DiffZonotope, Zout::DiffZonotope, verification_status::Dict{Tuple{Int64, Int64}, Bool}; constraints::Vector{VeryDiff.SplitConstraint})
+    @ VeryDiff ~/VeryDiff/src/Properties.jl:291
+  [2] (::VeryDiff.var"#get_top1_property_with_neuron_splitting##0#get_top1_property_with_neuron_splitting##1"{Float64, Bool, VeryDiff.var"#35#36"{VeryDiff.var"#37#38"{Float64, Bool}}})(N₁::Network, N₂::Network, Zin::DiffZonotope, Zout::DiffZonotope, task::VeryDiff.VerificationTask, prop_state::PropState)
+    @ VeryDiff ~/VeryDiff/dev/Properties.jl:189
+  [3] (::VeryDiff.var"#52#53"{VeryDiff.var"#54#55"{Nothing, VeryDiff.var"#get_top1_property_with_neuron_splitting##0#get_top1_property_with_neuron_splitting##1"{Float64, Bool, VeryDiff.var"#35#36"{VeryDiff.var"#37#38"{Float64, Bool}}}}})(N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VeryDiff.VerificationTask, split_heuristic::typeof(deepsplit_heuristic); timeout::Int64)
+    @ VeryDiff ~/VeryDiff/dev/NeuronSplitting.jl:119
+  [4] deepsplit_verify_network(N₁::Network, N₂::Network, bounds::Matrix{Float64}, property_check::Function; timeout::Int64, fuzz_testing::Nothing)
+    @ VeryDiff ~/VeryDiff/dev/NeuronSplitting.jl:32
+  [5] deepsplit_verify_network
+    @ ~/VeryDiff/dev/NeuronSplitting.jl:5 [inlined]
+  [6] (::VeryDiff.var"#101#102"{VeryDiff.var"#103#104"{VeryDiff.DeepSplitHeuristicMode, VeryDiff.NeuronSplittingApproach, VeryDiff.ZonoContractMode, NTuple{4, Bool}}})(nn_file₁::String, nn_file₂::String, spec_file::String, delta::Float64, timeout::Int64, result_out_dir::String; save::Bool)
+    @ VeryDiff ~/VeryDiff/dev/experiments/run.jl:113
+  [7] #101
+    @ ~/VeryDiff/dev/experiments/run.jl:104 [inlined]
+  [8] (::VeryDiff.var"#_run_lhc_all_top1##4#_run_lhc_all_top1##5"{Int64, String, String, String, Base.PipeEndpoint, Base.PipeEndpoint, String, VeryDiff.var"#101#102"{VeryDiff.var"#103#104"{VeryDiff.DeepSplitHeuristicMode, VeryDiff.NeuronSplittingApproach, VeryDiff.ZonoContractMode, NTuple{4, Bool}}}})(f::IOStream)
+    @ VeryDiff ~/VeryDiff/dev/experiments/lhc.jl:70
+  [9] open(::VeryDiff.var"#_run_lhc_all_top1##4#_run_lhc_all_top1##5"{Int64, String, String, String, Base.PipeEndpoint, Base.PipeEndpoint, String, VeryDiff.var"#101#102"{VeryDiff.var"#103#104"{VeryDiff.DeepSplitHeuristicMode, VeryDiff.NeuronSplittingApproach, VeryDiff.ZonoContractMode, NTuple{4, Bool}}}}, ::String, ::Vararg{String}; kwargs::@Kwargs{})
+    @ Base ./io.jl:410
+ [10] open(::Function, ::String, ::String)
+    @ Base ./io.jl:407
+ [11] (::VeryDiff.var"#_run_lhc_all_top1##2#_run_lhc_all_top1##3"{String, String, VeryDiff.var"#101#102"{VeryDiff.var"#103#104"{VeryDiff.DeepSplitHeuristicMode, VeryDiff.NeuronSplittingApproach, VeryDiff.ZonoContractMode, NTuple{4, Bool}}}})(f::IOStream)
+    @ VeryDiff ~/VeryDiff/dev/experiments/lhc.jl:65
+ [12] open(::VeryDiff.var"#_run_lhc_all_top1##2#_run_lhc_all_top1##3"{String, String, VeryDiff.var"#101#102"{VeryDiff.var"#103#104"{VeryDiff.DeepSplitHeuristicMode, VeryDiff.NeuronSplittingApproach, VeryDiff.ZonoContractMode, NTuple{4, Bool}}}}, ::String, ::Vararg{String}; kwargs::@Kwargs{})
+    @ Base ./io.jl:410
+ [13] open
+    @ ./io.jl:407 [inlined]
+ [14] _run_lhc_all_top1(specs_csv_file::String, warmup_specs_csv_file::String, log_dir::String, run_name::String, eval_func::VeryDiff.var"#101#102"{VeryDiff.var"#103#104"{VeryDiff.DeepSplitHeuristicMode, VeryDiff.NeuronSplittingApproach, VeryDiff.ZonoContractMode, NTuple{4, Bool}}})
+    @ VeryDiff ~/VeryDiff/dev/experiments/lhc.jl:39
+ [15] run_lhc_all_top1(eval_func::Function, run_name::String)
+    @ VeryDiff ~/VeryDiff/dev/experiments/lhc.jl:83
+ [16] run_experiments_pool5()
+    @ VeryDiff ~/VeryDiff/dev/experiments/run.jl:158
+ [17] top-level scope
+    @ ~/VeryDiff/run_all_experiments_pool5.jl:5
+ [18] include(mod::Module, _path::String)
+    @ Base ./Base.jl:306
+ [19] exec_options(opts::Base.JLOptions)
+    @ Base ./client.jl:317
+ [20] _start()
+    @ Base ./client.jl:550

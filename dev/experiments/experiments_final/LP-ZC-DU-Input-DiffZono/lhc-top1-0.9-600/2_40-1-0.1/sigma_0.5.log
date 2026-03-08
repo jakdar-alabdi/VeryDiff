@@ -1,0 +1,63 @@
+Parsing 2_40-1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (40, 16), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (40, 40), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 40), bias: (5,)
+Parsing 2_40-1-0.1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (40, 16), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (40, 40), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 40), bias: (5,)
+Using ZonoContraction-DeepSplitUnbiased-LPZonoContract-Base-Input-DiffZono...
+Zono Bounds:
+[-69.33273144260637, -125.9977327298814, -76.6912504503912, -123.1643013274052, -108.98097989627789]
+[69.4717686473489, 115.95995296076474, 76.63806987371844, 102.65175616490497, 96.48550364025559]
+[TOP-1] required confidence (0.9999999367867325≥0.9) is feasible for index 2
+Found cex
+N1: 0.9167683818256548 (vs. 0.04339588961528312)
+N2: 0.6880104808119382
+N1 Probability: 0.9167683818256548 >= 0.9
+
+Found counterexample: ([0.5, 0.5, 0.5, 0.0, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.0, -0.5], (3, 2))
+
+Initial δ-bound: 125.9977327298814
+Final δ-bound: 116.42441416321076
+UNSAFE
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:               85.9ms / 100.0%           19.5MiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1   85.9ms  100.0%  85.9ms   19.5MiB   99.9%  19.5MiB
+  Zonotope Loop                     1   85.9ms   99.9%  85.9ms   19.5MiB   99.8%  19.5MiB
+    Property Check                  4   84.6ms   98.4%  21.1ms   17.0MiB   87.3%  4.26MiB
+    Zonotope Propagate              4    919μs    1.1%   230μs   1.81MiB    9.3%   464KiB
+      DiffZonotope_ReLUProp         8    508μs    0.6%  63.5μs   1.35MiB    6.9%   173KiB
+        Zonotope_ReLUProp          16    236μs    0.3%  14.7μs    789KiB    4.0%  49.3KiB
+          Column Multiply          16   81.7μs    0.1%  5.11μs    368KiB    1.8%  23.0KiB
+          Set Matrix               16   78.0μs    0.1%  4.87μs   19.5KiB    0.1%  1.22KiB
+          Allocation               16   27.6μs    0.0%  1.73μs    366KiB    1.8%  22.9KiB
+          Vectors                  16   25.1μs    0.0%  1.57μs   32.8KiB    0.2%  2.05KiB
+          Influence Matrix         16   1.39μs    0.0%  87.0ns     0.00B    0.0%    0.00B
+          Bounds                   16   1.18μs    0.0%  73.5ns     0.00B    0.0%    0.00B
+        Set ReLU Phase              8    991ns    0.0%   124ns     0.00B    0.0%    0.00B
+      DiffZonotope_DenseProp       12    337μs    0.4%  28.1μs    444KiB    2.2%  37.0KiB
+        Zonotope_DenseProp         24    122μs    0.1%  5.09μs    221KiB    1.1%  9.19KiB
+    Compute Split                   3    373μs    0.4%   124μs    634KiB    3.2%   211KiB
+      DeepSplit Heuristic           3    272μs    0.3%  90.5μs    552KiB    2.8%   184KiB
+      Split Input                   3   95.6μs    0.1%  31.9μs   80.0KiB    0.4%  26.7KiB
+        Transform Input Zono        6   62.8μs    0.1%  10.5μs   34.3KiB    0.2%  5.71KiB
+        Contract Input Zono         6    502ns    0.0%  83.7ns     0.00B    0.0%    0.00B
+    Align Constraints               4    579ns    0.0%   145ns     0.00B    0.0%    0.00B
+Initialize                          1   16.9μs    0.0%  16.9μs   24.2KiB    0.1%  24.2KiB
+─────────────────────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,64 @@
+Parsing 2_80-1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (40, 16), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (40, 40), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 40), bias: (5,)
+Parsing 2_80-1-0.3.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (40, 16), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (40, 40), bias: (40,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 40), bias: (5,)
+Using LP-DeepSplitUnbiased-Base...
+Zono Bounds:
+[-22.49882706890065, -25.711982940005043, -24.681359573419833, -25.682973245350475, -24.307933330354828]
+[14.216658920556622, 15.318812013633822, 17.703876537735376, 29.198101355467514, 13.75782533141579]
+[TOP-1] required confidence (0.9990278757297784≥0.99) is feasible for index 2
+Found spurious cex
+N1 Probability: 0.9878549012429018 < 0.99
+but difference 4.650918382541417 >= 4.595119850134589 (approximate bound)
+Found cex
+N1: 0.994351525594816 (vs. 0.00564545028419119)
+N2: 0.5223542843357384
+N1 Probability: 0.994351525594816 >= 0.99
+
+Found counterexample: ([-0.1, -0.1, 0.1, 0.050659068727261614, -0.1, 0.1, -0.1, -0.06516918943575298, 0.1, 0.1, -0.1, 0.1, -0.1, 0.1, -0.06468684710612264, 0.1], (3, 2))
+
+Initial δ-bound: 29.198101355467514
+Final δ-bound: 20.306480444816618
+UNSAFE
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                8.24s / 100.0%           2.10GiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1    8.24s  100.0%   8.24s   2.10GiB  100.0%  2.10GiB
+  Zonotope Loop                     1    8.24s  100.0%   8.24s   2.10GiB  100.0%  2.10GiB
+    Property Check                708    7.97s   96.8%  11.3ms   1.86GiB   88.8%  2.69MiB
+    Zonotope Propagate            708    214ms    2.6%   303μs    198MiB    9.2%   286KiB
+      DiffZonotope_ReLUProp     1.42k    163ms    2.0%   115μs    145MiB    6.8%   105KiB
+        Zonotope_ReLUProp       2.83k    110ms    1.3%  38.8μs   79.0MiB    3.7%  28.5KiB
+          Column Multiply       2.83k   71.8ms    0.9%  25.3μs   35.8MiB    1.7%  12.9KiB
+          Allocation            2.83k   24.0ms    0.3%  8.46μs   35.5MiB    1.7%  12.9KiB
+          Set Matrix            2.83k   5.57ms    0.1%  1.97μs   1.82MiB    0.1%     675B
+          Vectors               2.83k   5.12ms    0.1%  1.81μs   5.66MiB    0.3%  2.05KiB
+          Influence Matrix      2.83k    217μs    0.0%  76.6ns     0.00B    0.0%    0.00B
+          Bounds                2.83k    186μs    0.0%  65.5ns     0.00B    0.0%    0.00B
+        Set ReLU Phase          1.42k   1.84ms    0.0%  1.30μs   2.57MiB    0.1%  1.86KiB
+      DiffZonotope_DenseProp    2.12k   40.8ms    0.5%  19.2μs   47.8MiB    2.2%  23.0KiB
+        Zonotope_DenseProp      4.25k   14.7ms    0.2%  3.47μs   26.6MiB    1.2%  6.41KiB
+    Compute Split                 570   43.0ms    0.5%  75.5μs   31.6MiB    1.5%  56.8KiB
+      DeepSplit Heuristic         570   29.0ms    0.4%  51.0μs   28.8MiB    1.3%  51.8KiB
+      Split Neuron                570   12.3ms    0.1%  21.5μs   2.56MiB    0.1%  4.59KiB
+    Align Constraints             708   2.98ms    0.0%  4.21μs   11.3MiB    0.5%  16.3KiB
+Initialize                          1   16.9μs    0.0%  16.9μs   24.2KiB    0.0%  24.2KiB
+─────────────────────────────────────────────────────────────────────────────────────────

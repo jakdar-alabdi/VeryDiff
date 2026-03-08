@@ -1,0 +1,64 @@
+Parsing 2_80-0.1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (80, 16), bias: (80,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (80, 80), bias: (80,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 80), bias: (5,)
+Parsing 2_80-0.1-0.1.onnx...
+Found input X
+WARNING: Operation Softmax is not supported
+WE ARE IGNORING THIS OPERATION -- IF YOU DO NOT KNOW WHAT YOU ARE DOING THIS MAY BE UNSOUND!
+op: gemm, weight: (80, 16), bias: (80,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (80, 80), bias: (80,)
+op: relu, weight: nothing, bias: nothing
+op: gemm, weight: (5, 80), bias: (5,)
+Using LP-DeepSplitUnbiased-Base...
+Zono Bounds:
+[-11.266946959941386, -21.345721769822845, -13.45452756605462, -22.94703390965003, -12.645504201308075]
+[11.249542970452897, 24.053484436962478, 14.781376655655796, 22.223808348774476, 15.493966324355043]
+[TOP-1] required confidence (0.9688319880542717≥0.9) is feasible for index 2
+Found spurious cex
+N1 Probability: 0.8354403429077863 < 0.9
+but difference 2.255485718707044 >= 2.1972245773362196 (approximate bound)
+Found cex
+N1: 0.9532375484743748 (vs. 0.04242881844776074)
+N2: 0.4944646988217074
+N1 Probability: 0.9532375484743748 >= 0.9
+
+Found counterexample: ([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, -0.1, 0.1, 0.1, -0.1, -0.1, -0.1, 0.06466013618025117, -0.021668432939311533], (2, 3))
+
+Initial δ-bound: 24.053484436962478
+Final δ-bound: 24.053484436962478
+UNSAFE
+─────────────────────────────────────────────────────────────────────────────────────────
+                                                Time                    Allocations      
+                                       ───────────────────────   ────────────────────────
+           Tot / % measured:                502ms / 100.0%            124MiB / 100.0%    
+
+Section                        ncalls     time    %tot     avg     alloc    %tot      avg
+─────────────────────────────────────────────────────────────────────────────────────────
+Verify                              1    502ms  100.0%   502ms    124MiB   99.9%   124MiB
+  Zonotope Loop                     1    502ms  100.0%   502ms    124MiB   99.9%   124MiB
+    Property Check                 21    492ms   97.9%  23.4ms    102MiB   82.1%  4.85MiB
+    Zonotope Propagate             21   8.20ms    1.6%   390μs   18.2MiB   14.7%   889KiB
+      DiffZonotope_ReLUProp        42   3.94ms    0.8%  93.8μs   14.1MiB   11.4%   343KiB
+        Zonotope_ReLUProp          84   1.47ms    0.3%  17.5μs   8.05MiB    6.5%  98.1KiB
+          Column Multiply          84    547μs    0.1%  6.51μs   3.83MiB    3.1%  46.6KiB
+          Set Matrix               84    388μs    0.1%  4.62μs    108KiB    0.1%  1.29KiB
+          Allocation               84    208μs    0.0%  2.47μs   3.82MiB    3.1%  46.6KiB
+          Vectors                  84    198μs    0.0%  2.36μs    298KiB    0.2%  3.55KiB
+          Influence Matrix         84   8.23μs    0.0%  97.9ns     0.00B    0.0%    0.00B
+          Bounds                   84   6.49μs    0.0%  77.3ns     0.00B    0.0%    0.00B
+        Set ReLU Phase             42   35.5μs    0.0%   846ns   26.2KiB    0.0%     638B
+      DiffZonotope_DenseProp       63   3.93ms    0.8%  62.3μs   4.00MiB    3.2%  65.1KiB
+        Zonotope_DenseProp        126   1.42ms    0.3%  11.3μs   2.01MiB    1.6%  16.3KiB
+    Compute Split                  19   2.18ms    0.4%   115μs   3.61MiB    2.9%   195KiB
+      DeepSplit Heuristic          19   1.76ms    0.4%  92.8μs   3.56MiB    2.9%   192KiB
+      Split Neuron                 19    356μs    0.1%  18.7μs   40.7KiB    0.0%  2.14KiB
+    Align Constraints              21   53.3μs    0.0%  2.54μs    249KiB    0.2%  11.9KiB
+Initialize                          1   25.5μs    0.0%  25.5μs   68.9KiB    0.1%  68.9KiB
+─────────────────────────────────────────────────────────────────────────────────────────
