@@ -228,10 +228,10 @@ function worker_function_internal(work_queue, threadid, prop_state,N,N1,N2,num_t
                 end
             catch e
                 if e isa OutOfMemoryError
-                    empty!(queue)
+                    empty!(work_queue)
                     GC.gc()
                     println("\nMEMOUT")
-                    return UNKNOWN, nothing, (initial_δ_bound, final_δ_bound)
+                    return UNKNOWN, (initial_δ_bound, final_δ_bound)
                 else
                     rethrow(e)
                 end
