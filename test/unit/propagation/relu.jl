@@ -86,8 +86,7 @@ using Random
         @info "First run time: $time_1 s, Second run time: $time_2 s"
         
         # Check that second run allocates less (allowing for small variance)
-        # TODO: Renable when we don't run two versions of RELU
-        #@test alloc_2 < alloc_1 * 0.4
+        @test alloc_2 < alloc_1 * 0.4
     end
     
     @testset "Sampled Points Within Output Bounds" begin

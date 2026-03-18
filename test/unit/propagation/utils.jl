@@ -95,9 +95,16 @@ function create_random_network_mutant(onnx_net :: OnnxNet)
             mutation_type = get(mutation_map, node_name, rand(1:4))
             push!(new_layers, create_random_layer_mutant(node, mutation_type))
         elseif node isa ONNXAddConst{String}
-            # Find corresponding dense layer
-            dense_name = replace(node_name, "addconst_" => "dense_")
-            mutation_type = get(mutation_map, dense_name, rand(1:4))
+            # Find corresponding dense layer via node_prevs topology
+            mutation_type = rand(1:4)  # default
+            if haskey(onnx_net.node_prevs, node_name)
+                for prev_name in onnx_net.node_prevs[node_name]
+                    if haskey(mutation_map, prev_name)
+                        mutation_type = mutation_map[prev_name]
+                        break
+                    end
+                end
+            end
             push!(new_layers, create_random_layer_mutant(node, mutation_type))
         else
             push!(new_layers, create_random_layer_mutant(node))
@@ -201,6 +208,10 @@ function create_random_layer_mutant(layer :: ONNXAddConst{String})
     return create_random_layer_mutant(layer, mutation_type)
 end
 
+function create_random_layer_mutant(layer :: ONNXAdd{String})
+    return deepcopy(layer)
+end
+
 """
     make_dense_pair(input_dim::Int, layer_dims::Vector{Int}; identical::Bool=false)
 
@@ -281,4 +292,268 @@ function create_verification_task(low::Vector, high::Vector; with_secondary::Boo
         1.0,
         1.0
     )
+end
+
+
+"""
+    create_random_add_network(input_dim::Int, layer_dims::Vector{Int}; topology=:fork_join, relu=false, add_const=false)
+
+Create a randomized neural network with ONNXAdd nodes forming a DAG structure.
+Supported topologies:
+- `:fork_join` — Input → Dense₁ → (BranchA: Dense₂, BranchB: Dense₃) → ONNXAdd → Dense₄ → Output
+- `:fork_join_relu` — Same as fork_join but with ReLU and optionally AddConst after each Dense
+- `:resnet` — ResNet-style skip connections: multiple residual blocks each adding the block output to its input
+"""
+function create_random_add_network(input_dim::Int, layer_dims::Vector{Int}; topology::Symbol=:fork_join, relu::Bool=false, add_const::Bool=false)
+    if topology == :fork_join
+        return _create_fork_join_network(input_dim, layer_dims; relu=relu, add_const=add_const)
+    elseif topology == :resnet
+        return _create_resnet_network(input_dim, layer_dims; relu=relu, add_const=add_const)
+    else
+        error("Unknown topology: $topology")
+    end
+end
+
+"""
+Helper: Add optional AddConst and ReLU layers after a Dense layer.
+Returns the updated (layers, layer_count, prev_output_id).
+"""
+function _add_post_dense_layers!(layers, layer_count, prev_output_id, new_dim; relu=false, add_const=false)
+    if add_const
+        layer_count += 1
+        addconst_input_id = prev_output_id
+        addconst_output_id = "output_$layer_count"
+        const_vec = 0.1 .* randn(Float64, new_dim)
+        if all(c ≈ 0 for c in const_vec)
+            const_vec[1] = 0.1
+        end
+        push!(layers, ONNXAddConst([addconst_input_id], [addconst_output_id], "addconst_$layer_count", const_vec))
+        prev_output_id = addconst_output_id
+    end
+
+    if relu
+        layer_count += 1
+        relu_input_id = prev_output_id
+        relu_output_id = "output_$layer_count"
+        push!(layers, ONNXRelu([relu_input_id], [relu_output_id], "relu_$layer_count"))
+        prev_output_id = relu_output_id
+    end
+
+    return layers, layer_count, prev_output_id
+end
+
+"""
+Helper: Create a Dense layer with optional AddConst and ReLU.
+Returns the updated (layers, layer_count, prev_output_id).
+"""
+function _add_dense_block!(layers, layer_count, prev_output_id, cur_dim, new_dim; relu=false, add_const=false, name_prefix="dense")
+    W = 0.1*randn(Float64, (new_dim, cur_dim))
+    b = 0.1*randn(Float64, new_dim)
+    # Set some rows to zero
+    zero_one_rows = randn(new_dim) .< -2.5
+    W[zero_one_rows, :] .= 0.0
+    b[zero_one_rows] .= 0.0
+    # Set some components to zero
+    zero_one_components = randn(size(W)) .< -3.0
+    W[zero_one_components] .= 0.0
+
+    layer_count += 1
+    input_id = prev_output_id
+    output_id = "output_$layer_count"
+    push!(layers, ONNXLinear([input_id], [output_id], "$(name_prefix)_$layer_count", W, b))
+    prev_output_id = output_id
+
+    layers, layer_count, prev_output_id = _add_post_dense_layers!(layers, layer_count, prev_output_id, new_dim; relu=relu, add_const=add_const)
+
+    return layers, layer_count, prev_output_id
+end
+
+"""
+Fork-Join topology:
+  Input → Dense_stem → [BranchA: Dense_a, BranchB: Dense_b] → ONNXAdd → Dense_out₁ → ... → Dense_outN → Output
+
+layer_dims specifies: [stem_dim, branch_dim, out_dim₁, ..., out_dimN]
+(minimum 3 elements)
+"""
+function _create_fork_join_network(input_dim::Int, layer_dims::Vector{Int}; relu::Bool=false, add_const::Bool=false)
+    @assert length(layer_dims) >= 3 "Fork-join requires at least 3 layer dimensions: [stem, branch, output...]"
+    layers = Vector{Node{String}}()
+    layer_count = 0
+
+    stem_dim = layer_dims[1]
+    branch_dim = layer_dims[2]
+
+    # Stem: input → Dense_stem
+    layers, layer_count, stem_out = _add_dense_block!(layers, layer_count, "network_input", input_dim, stem_dim; relu=relu, add_const=add_const, name_prefix="dense_stem")
+
+    # Branch A: stem → Dense_a
+    layers, layer_count, branch_a_out = _add_dense_block!(layers, layer_count, stem_out, stem_dim, branch_dim; relu=relu, add_const=add_const, name_prefix="dense_branch_a")
+
+    # Branch B: stem → Dense_b
+    layers, layer_count, branch_b_out = _add_dense_block!(layers, layer_count, stem_out, stem_dim, branch_dim; relu=relu, add_const=add_const, name_prefix="dense_branch_b")
+
+    # ONNXAdd: branch_a + branch_b
+    layer_count += 1
+    add_output_id = "output_$layer_count"
+    push!(layers, ONNXAdd([branch_a_out, branch_b_out], [add_output_id], "add_$layer_count"))
+    prev_output_id = add_output_id
+    cur_dim = branch_dim
+
+    # Output layers
+    for i in 3:length(layer_dims)
+        new_dim = layer_dims[i]
+        layers, layer_count, prev_output_id = _add_dense_block!(layers, layer_count, prev_output_id, cur_dim, new_dim; relu=(relu && i < length(layer_dims)), add_const=(add_const && i < length(layer_dims)), name_prefix="dense_out")
+        cur_dim = new_dim
+    end
+
+    # Build OnnxNet
+    start_nodes = [layers[1].name]
+    final_nodes = [layers[end].name]
+    input_shapes = Dict("network_input" => (input_dim,))
+    output_shapes = Dict(layers[end].outputs[1] => (layer_dims[end],))
+
+    return OnnxNet(layers, start_nodes, final_nodes, input_shapes, output_shapes)
+end
+
+"""
+ResNet-style topology with multiple residual blocks:
+  Input → Dense₁ → [residual block₁: Dense_res + ONNXAdd(skip)] → ... → [residual blockN: Dense_res + ONNXAdd(skip)] → Dense_out → Output
+
+Each residual block: x → Dense(x) → (optional ReLU/AddConst) → Add(result, x)
+
+layer_dims specifies: [hidden_dim₁, hidden_dim₂, ..., output_dim]
+All hidden dimensions must be equal (since skip connections require matching dimensions).
+The last dimension is the output dimension (with a projection dense layer).
+"""
+function _create_resnet_network(input_dim::Int, layer_dims::Vector{Int}; relu::Bool=false, add_const::Bool=false)
+    @assert length(layer_dims) >= 2 "ResNet requires at least 2 layer dimensions: [hidden_dim..., output_dim]"
+    hidden_dim = layer_dims[1]
+    for i in 1:(length(layer_dims)-1)
+        @assert layer_dims[i] == hidden_dim "All hidden dimensions in ResNet must be equal, got $(layer_dims[i]) != $hidden_dim at position $i"
+    end
+
+    layers = Vector{Node{String}}()
+    layer_count = 0
+
+    # Projection: input → hidden_dim
+    layers, layer_count, prev_output_id = _add_dense_block!(layers, layer_count, "network_input", input_dim, hidden_dim; relu=relu, add_const=add_const, name_prefix="dense_proj")
+    cur_dim = hidden_dim
+
+    # Residual blocks
+    num_res_blocks = length(layer_dims) - 1
+    for block_idx in 1:num_res_blocks
+        skip_input = prev_output_id
+
+        # Dense inside residual block
+        layers, layer_count, block_out = _add_dense_block!(layers, layer_count, prev_output_id, cur_dim, hidden_dim; relu=relu, add_const=add_const, name_prefix="dense_res$(block_idx)")
+
+        # ONNXAdd: block_out + skip_input
+        layer_count += 1
+        add_output_id = "output_$layer_count"
+        push!(layers, ONNXAdd([block_out, skip_input], [add_output_id], "add_res$(block_idx)_$layer_count"))
+        prev_output_id = add_output_id
+    end
+
+    # Final output projection (no relu/addconst on last layer)
+    output_dim = layer_dims[end]
+    layers, layer_count, prev_output_id = _add_dense_block!(layers, layer_count, prev_output_id, cur_dim, output_dim; relu=false, add_const=false, name_prefix="dense_final")
+
+    # Build OnnxNet
+    start_nodes = [layers[1].name]
+    final_nodes = [layers[end].name]
+    input_shapes = Dict("network_input" => (input_dim,))
+    output_shapes = Dict(layers[end].outputs[1] => (output_dim,))
+
+    return OnnxNet(layers, start_nodes, final_nodes, input_shapes, output_shapes)
+end
+
+"""
+    create_random_add_network_mutant(onnx_net::OnnxNet)
+
+Create a mutated version of an OnnxNet that may contain ONNXAdd nodes.
+Mutates ONNXLinear and ONNXAddConst layers using the same strategy as create_random_network_mutant.
+ONNXAdd and ONNXRelu layers are kept identical.
+"""
+function create_random_add_network_mutant(onnx_net::OnnxNet)
+    new_layers = Vector{Node{String}}()
+    # Determine mutation types for dense layers
+    mutation_map = Dict{String, Int}()
+    for (node_name, node) in onnx_net.nodes
+        if node isa ONNXLinear{String} && occursin("dense", node_name)
+            mutation_map[node_name] = rand(1:4)
+        end
+    end
+
+    # Iterate in topological order (use the original layer list order)
+    # We need to iterate the nodes in a consistent order
+    # OnnxNet stores nodes as a Dict, but we can use topological order from node_prevs/node_nexts
+    visited = Set{String}()
+    queue = copy(onnx_net.start_nodes)
+    ordered_nodes = String[]
+    visit_count = Dict{String, Int}()
+    for name in keys(onnx_net.nodes)
+        visit_count[name] = 0
+    end
+
+    while !isempty(queue)
+        node_name = popfirst!(queue)
+        if node_name in visited
+            continue
+        end
+        push!(visited, node_name)
+        push!(ordered_nodes, node_name)
+        if haskey(onnx_net.node_nexts, node_name)
+            for next_name in onnx_net.node_nexts[node_name]
+                visit_count[next_name] += 1
+                if visit_count[next_name] >= length(onnx_net.node_prevs[next_name])
+                    push!(queue, next_name)
+                end
+            end
+        end
+    end
+
+    for node_name in ordered_nodes
+        node = onnx_net.nodes[node_name]
+        if node isa ONNXLinear{String}
+            mutation_type = get(mutation_map, node_name, rand(1:4))
+            push!(new_layers, create_random_layer_mutant(node, mutation_type))
+        elseif node isa ONNXAddConst{String}
+            # Find corresponding dense layer via node_prevs topology
+            mutation_type = rand(1:4)  # default
+            if haskey(onnx_net.node_prevs, node_name)
+                for prev_name in onnx_net.node_prevs[node_name]
+                    if haskey(mutation_map, prev_name)
+                        mutation_type = mutation_map[prev_name]
+                        break
+                    end
+                end
+            end
+            push!(new_layers, create_random_layer_mutant(node, mutation_type))
+        else
+            push!(new_layers, create_random_layer_mutant(node))
+        end
+    end
+
+    start_nodes = onnx_net.start_nodes
+    final_nodes = onnx_net.final_nodes
+    input_shapes = onnx_net.input_shapes
+    output_shapes = onnx_net.output_shapes
+
+    return OnnxNet(new_layers, start_nodes, final_nodes, input_shapes, output_shapes)
+end
+
+"""
+    make_add_pair(input_dim::Int, layer_dims::Vector{Int}; topology=:fork_join, identical=false, relu=false, add_const=false)
+
+Create two networks with ONNXAdd nodes sharing the same architecture.
+When `identical` is true, the weights/biases are identical.
+"""
+function make_add_pair(input_dim::Int, layer_dims::Vector{Int}; topology::Symbol=:fork_join, identical::Bool=false, relu::Bool=false, add_const::Bool=false)
+    N1_onnx = create_random_add_network(input_dim, layer_dims; topology=topology, relu=relu, add_const=add_const)
+    if identical
+        N2_onnx = deepcopy(N1_onnx)
+    else
+        N2_onnx = create_random_add_network_mutant(N1_onnx)
+    end
+    return N1_onnx, N2_onnx
 end
