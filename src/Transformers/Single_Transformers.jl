@@ -31,11 +31,18 @@ function propagate_layer!(ZoutRef :: Zonotope, L :: ONNXAdd{S1}, inputs :: Vecto
     for g in ZoutRef.Gs
         fill!(g, 0.0)
     end
+    if VeryDiff.NEW_HEURISTIC[]
+        for inf in ZoutRef.influence
+            fill!(inf, 0.0)
+        end
+    end
     ZoutRef.c .= 0.0
     for cur_input in inputs
         indices = intersect_indices(ZoutRef.generator_ids, cur_input.generator_ids)
         updateGeneratorsAddAll!(ZoutRef.Gs, indices, cur_input.Gs)
-        updateGeneratorsAddAll!(ZoutRef.influence, indices, cur_input.influence)
+        if VeryDiff.NEW_HEURISTIC[]
+            updateGeneratorsAddAll!(ZoutRef.influence, indices, cur_input.influence)
+        end
         ZoutRef.c .+= cur_input.c
     end
 end

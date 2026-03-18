@@ -105,7 +105,7 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXAdd{S1}, ONNXA
     #     end
     # end
     compute_influence = any([!isnothing(z.zonotope.Z₁.influence) for z in input_zonos])
-    influence_dim = compute_influence ? 0 : size(input_zonos[1].zonotope.Z₁.influence[1], 1)
+    influence_dim = compute_influence ? size(input_zonos[1].zonotope.Z₁.influence[1], 1) : -1
     Z₁ = init_zono_from_dims(size(input_zonos[1].zonotope.Z₁.c,1), generator_ids1, generator_dims, owned_generator_id_1; influence_matrix=compute_influence, influence_dim=influence_dim)
     Z₂ = init_zono_from_dims(size(input_zonos[1].zonotope.Z₂.c,1), generator_ids2, generator_dims, owned_generator_id_2; influence_matrix=compute_influence, influence_dim=influence_dim)
     ∂Z = init_zono_from_dims(size(input_zonos[1].zonotope.∂Z.c,1), generator_idsd, generator_dims, owned_generator_id_d; influence_matrix=false)
