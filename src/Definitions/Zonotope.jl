@@ -18,6 +18,22 @@ macro generatorUpdateLoop(op, outGs, indices, inGs, rows, factor=:(nothing))
     end
 end
 
+@inline function updateGeneratorsAll!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}})
+    if length(inGs) == 0
+        return
+    end
+    rows = trues(size(inGs[1], 1))
+    @generatorUpdateLoop(:(.=), outGs, indices, inGs, rows)
+end
+
+@inline function updateGeneratorsAddAll!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}})
+    if length(inGs) == 0
+        return
+    end
+    rows = trues(size(inGs[1], 1))
+    @generatorUpdateLoop(:(.+=), outGs, indices, inGs, rows)
+end
+
 @inline function updateGenerators!(outGs :: Vector{<:AbstractMatrix{Float64}}, indices :: SortedVector{Int}, inGs::Vector{<:AbstractMatrix{Float64}}, rows :: BitVector)
     @generatorUpdateLoop(:(.=), outGs, indices, inGs, rows)
 end

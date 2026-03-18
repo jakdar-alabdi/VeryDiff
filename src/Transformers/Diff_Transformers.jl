@@ -1,6 +1,74 @@
 function propagate_layer!(
     ZoutRefVec :: Vector{CachedZonotope},
     Ls :: DiffLayer{
+        ONNXAdd{S1},
+        ONNXAdd{S2},
+        ONNXAdd{S3}
+    },
+    inputs :: Vector{DiffZonotope};
+    bounds_cache :: Union{Nothing,BoundsCache}=nothing
+) where {S1, S2, S3}
+    @assert length(inputs) >= 2 "Add layer should have at least two input zonotopes"
+    @assert length(ZoutRefVec) == 1 "Add layer should have exactly one output zonotope"
+    ZoutRef = ZoutRefVec[1]
+    # Get generator dimensions
+    gen_dims = Dict{Int64,Int64}()
+    for input in inputs
+        for (i, gen_id) in enumerate(input.Z₁.generator_ids)
+            if haskey(gen_dims, gen_id)
+                @assert gen_dims[gen_id] == size(input.Z₁.Gs[i], 2) "Generator dimension mismatch for generator ID $gen_id in Z₁ during Add propagation: previous dimension $(gen_dims[gen_id]), current dimension $(size(input.Z₁.Gs[i], 2))!"
+            end
+            gen_dims[gen_id] = size(input.Z₁.Gs[i], 2)
+        end
+        for (i, gen_id) in enumerate(input.Z₂.generator_ids)
+            if haskey(gen_dims, gen_id)
+                @assert gen_dims[gen_id] == size(input.Z₂.Gs[i], 2) "Generator dimension mismatch for generator ID $gen_id in Z₂ during Add propagation!"
+            end
+            gen_dims[gen_id] = size(input.Z₂.Gs[i], 2)
+        end
+        for (i, gen_id) in enumerate(input.∂Z.generator_ids)
+            if haskey(gen_dims, gen_id)
+                @assert gen_dims[gen_id] == size(input.∂Z.Gs[i], 2) "Generator dimension mismatch for generator ID $gen_id in ∂Z during Add propagation!"
+            end
+            gen_dims[gen_id] = size(input.∂Z.Gs[i], 2)
+        end
+    end
+    gen_dims_ordered_1 = Int64[]
+    gen_dims_ordered_2 = Int64[]
+    gen_dims_ordered_∂ = Int64[]
+    for (i,gen_id) in enumerate(ZoutRef.zonotope_proto.Z₁.generator_ids)
+        @assert gen_dims[gen_id] <= size(ZoutRef.zonotope_proto.Z₁.Gs[i],2) "Generator dimension in output zonotope proto (number $i with ID $gen_id: $(size(ZoutRef.zonotope_proto.Z₁.Gs[i],2))) smaller than corresponding generator dimension in input zonotopes ($(gen_dims[gen_id])) during Add propagation!"
+        push!(gen_dims_ordered_1, gen_dims[gen_id])
+    end
+    for gen_id in ZoutRef.zonotope_proto.Z₂.generator_ids
+        push!(gen_dims_ordered_2, gen_dims[gen_id])
+    end
+    for gen_id in ZoutRef.zonotope_proto.∂Z.generator_ids
+        push!(gen_dims_ordered_∂, gen_dims[gen_id])
+    end
+    Zout = get_zonotope!(ZoutRef, gen_dims_ordered_1, gen_dims_ordered_2, gen_dims_ordered_∂)
+    L1 = get_layer1(Ls)
+    L2 = get_layer2(Ls)
+    propagate_layer!(Zout.Z₁, L1, [input.Z₁ for input in inputs])
+    propagate_layer!(Zout.Z₂, L2, [input.Z₂ for input in inputs])
+    if VeryDiff.USE_DIFFZONO[]
+        ∂L = get_diff_layer(Ls)
+        # (A1 + A2 + A3) - (B1 + B2 + B3) = (A1 - B1) + (A2 - B2) + (A3 - B3)
+        for g in Zout.∂Z.Gs
+            fill!(g, 0.0)
+        end
+        Zout.∂Z.c .= 0.0
+        for cur_input in inputs
+            indices = intersect_indices(Zout.∂Z.generator_ids, cur_input.∂Z.generator_ids)
+            updateGeneratorsAddAll!(Zout.∂Z.Gs, indices, cur_input.∂Z.Gs)
+            Zout.∂Z.c .+= cur_input.∂Z.c
+        end
+    end
+end
+
+function propagate_layer!(
+    ZoutRefVec :: Vector{CachedZonotope},
+    Ls :: DiffLayer{
         ONNXLinear{S1},
         ONNXLinear{S2},
         ONNXLinear{S3}},

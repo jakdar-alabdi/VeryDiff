@@ -3,7 +3,7 @@ module Transformers
 using LinearAlgebra
 
 using VNNLib
-using VNNLib.OnnxParser: ONNXLinear, ONNXRelu, ONNXAddConst
+using VNNLib.OnnxParser: ONNXLinear, ONNXRelu, ONNXAddConst, ONNXAdd
 
 using TimerOutputs
 

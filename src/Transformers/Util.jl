@@ -14,19 +14,19 @@ function init_layer_dense_z1_z2(output_dim :: Int, input_zono :: DiffZonotope, i
     # Instantiate Z₁
     # Dense Layer can reuse influence matrix from input (nocopy)
     influence = input_zono.Z₁.influence
-    if layer_idx == input_zono_cache.first_usage
-        owned_generators = input_zono.Z₁.owned_generators
-    else
-        owned_generators = nothing
-    end
+    #if layer_idx == input_zono_cache.first_usage
+    #    owned_generators = input_zono.Z₁.owned_generators
+    #else
+    owned_generators = nothing
+    #end
     Z₁ = init_zonotope(output_dim, input_zono.Z₁, influence, owned_generators)
     # Instantiate Z₂
     influence = input_zono.Z₂.influence
-    if layer_idx == input_zono_cache.first_usage
-        owned_generators = input_zono.Z₂.owned_generators
-    else
-        owned_generators = nothing
-    end
+    #if layer_idx == input_zono_cache.first_usage
+    #    owned_generators = input_zono.Z₂.owned_generators
+    #else
+    owned_generators = nothing
+    #end
     Z₂ = init_zonotope(output_dim, input_zono.Z₂, influence, owned_generators)
     return Z₁, Z₂
 end
@@ -89,9 +89,9 @@ function init_relu_zonotope(PS :: PropState, input_zono_cache :: CachedZonotope,
     generators = Matrix{Float64}[]
     generator_ids = SortedVector{Int64}()
     owned_generators = input_zono.owned_generators
-    if input_zono_cache.first_usage != layer_idx
-        owned_generators = nothing
-    end
+    #if input_zono_cache.first_usage != layer_idx
+    owned_generators = nothing
+    #end
     for (gid, g) in enumerate(input_zono.Gs)
         if !isnothing(owned_generators) && gid == owned_generators
             cols = size(g,2) + new_generators
@@ -108,11 +108,12 @@ function init_relu_zonotope(PS :: PropState, input_zono_cache :: CachedZonotope,
     end
     if isnothing(owned_generators)
         owned_generators = get_free_generator_id!(PS)
+        #@info "No owned generator for ReLU layer at index $(layer_idx). Adding new block of $new_generators generators for Zᵢ at the end of the generator list with ID $owned_generators."
         new_g = zeros(Float64, size(input_zono.Gs[1],1), new_generators)
         # @info "Generator ID $owned_generators: $(size(new_g,2)) columns (new owned generator)"
         push!(generators, new_g)
         push!(generator_ids, owned_generators)
-        owned_generators = length(generator_ids)
+        owned_generators = find_index_position(generator_ids, owned_generators)
     end
     c = zeros(Float64, size(input_zono.Gs[1],1))
     if isnothing(input_zono.influence)
@@ -127,5 +128,6 @@ function init_relu_zonotope(PS :: PropState, input_zono_cache :: CachedZonotope,
             end
         end
     end
+    @assert !isnothing(owned_generators) "Owned generators should be assigned at this point"
     return Zonotope(generators, c, influence, generator_ids, owned_generators)
 end

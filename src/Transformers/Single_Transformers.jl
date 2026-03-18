@@ -25,6 +25,21 @@ function propagate_layer!(ZoutRef :: Zonotope, L :: ONNXAddConst{S1}, Zin :: Zon
     ZoutRef.c .= Zin.c .+ L.c
 end
 
+function propagate_layer!(ZoutRef :: Zonotope, L :: ONNXAdd{S1}, inputs :: Vector{Zonotope}) where {S1}
+    @assert length(inputs) >= 2 "Add layer should have at least two inputs"
+    indices = intersect_indices(ZoutRef.generator_ids, inputs[1].generator_ids)
+    for g in ZoutRef.Gs
+        fill!(g, 0.0)
+    end
+    ZoutRef.c .= 0.0
+    for cur_input in inputs
+        indices = intersect_indices(ZoutRef.generator_ids, cur_input.generator_ids)
+        updateGeneratorsAddAll!(ZoutRef.Gs, indices, cur_input.Gs)
+        updateGeneratorsAddAll!(ZoutRef.influence, indices, cur_input.influence)
+        ZoutRef.c .+= cur_input.c
+    end
+end
+
 function get_slope(l,u, alpha)
     if u <= 0
         return 0.0

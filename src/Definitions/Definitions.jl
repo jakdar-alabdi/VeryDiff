@@ -4,7 +4,7 @@ using LinearAlgebra
 using Statistics
 
 using VNNLib
-using VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu, ONNXAddConst
+using VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu, ONNXAddConst, ONNXAdd
 
 using VeryDiff
 
@@ -23,6 +23,7 @@ export SortedVector, union, intersect_indices, find_index_position, attempt_find
 export parse_network, get_layers, get_inputs, get_outputs, get_layer1, get_diff_layer, get_layer2
 export configure_first_usage!, prepare_prop_state!, zonos_initialized
 export updateGenerators!, updateGeneratorsMul!, updateGeneratorsAdd!, updateGeneratorsAddMul!, updateGeneratorsSub!, updateGeneratorsSubMul!
+export updateGeneratorsAll!, updateGeneratorsAddAll!
 export zono_optimize, zono_bounds, zono_get_max_vector
 
 end
