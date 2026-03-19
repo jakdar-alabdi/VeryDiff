@@ -50,6 +50,12 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
 
                         @objective(model, Max, σ * (Zout.∂Z.G[i, :]' * x + Zout.∂Z.c[i]))
                         optimize!(model)
+
+                        numeric_foucs_opt = num_instables == 0 && has_values(model) && abs(objective_value(model)) > epsilon
+                        if numeric_foucs_opt
+                            set_optimizer_attribute(model, "NumericFocus", 3)
+                            optimize!(model)
+                        end
                         
                         if is_solved_and_feasible(model)
                             cex_input = Zin.Z₁.G * value.(x[1:input_dim]) + Zin.Z₁.c
