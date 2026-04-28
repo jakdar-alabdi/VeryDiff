@@ -36,6 +36,7 @@ function _run_mnist_all_epsilon(specs_csv_file::String, warmup_specs_csv_file::S
 
     println("\nWarmup End")
     
+    spec_name = replace(basename(specs_csv_file), ".csv" => "")
     open(specs_csv_file, "r") do f
         while !eof(f)
             # sleep(20)
@@ -47,7 +48,7 @@ function _run_mnist_all_epsilon(specs_csv_file::String, warmup_specs_csv_file::S
             timeout = parse(Int64, string(spec[5]))
 
             net_name = replace(basename(nn_file₂), ".onnx" => "", "mnist_relu_" => "")
-            mnist_name = "mnist-$epsilon-$timeout"
+            mnist_name = "$spec_name-$epsilon-$timeout"
             out_dir = joinpath(log_dir, run_name, mnist_name, net_name)
             mkpath(out_dir)
             spec_file_name = replace(basename(spec_file), ".vnnlib" => "")
@@ -111,6 +112,7 @@ function _run_mnist_all_top1(specs_csv_file::String, warmup_specs_csv_file::Stri
 
     println("\nWarmup End")
     
+    spec_name = replace(basename(specs_csv_file), ".csv" => "")
     open(specs_csv_file, "r") do f
         while !eof(f)
             # sleep(20)
@@ -122,7 +124,7 @@ function _run_mnist_all_top1(specs_csv_file::String, warmup_specs_csv_file::Stri
             timeout = parse(Int64, string(spec[5]))
 
             net_name = replace(basename(nn_file₂), ".onnx" => "", "mnist_relu_" => "")
-            mnist_name = "mnist-top1-$delta-$timeout"
+            mnist_name = "$spec_name-top1-$delta-$timeout"
             out_dir = joinpath(log_dir, run_name, mnist_name, net_name)
             mkpath(out_dir)
             spec_file_name = replace(basename(spec_file), ".vnnlib" => "")
