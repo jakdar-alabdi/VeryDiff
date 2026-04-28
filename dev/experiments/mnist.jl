@@ -151,10 +151,14 @@ function _run_mnist_all_top1(specs_csv_file::String, warmup_specs_csv_file::Stri
     end
 end
 
-function run_mnist_all_epsilon(eval_func, run_name::String)
-    _run_mnist_all_epsilon("$cur_dir/specs/mnist-prune.csv", "$cur_dir/specs/mnist-prune_warmup.csv", "$cur_dir/experiments_final/better_bounds", run_name, eval_func)
+function run_mnist_all_epsilon(csv_file_name::String, out_dir::String)
+    return (eval_func, run_name::String) -> begin
+        _run_mnist_all_epsilon("$cur_dir/specs/$csv_file_name", "$cur_dir/specs/mnist-prune_warmup.csv", "$cur_dir/$out_dir", run_name, eval_func)
+    end
 end
 
-function run_mnist_all_top1(eval_func, run_name::String)
-    _run_mnist_all_top1("$cur_dir/specs/mnist-prune.csv", "$cur_dir/specs/mnist-prune_warmup.csv", "$cur_dir/experiments_final", run_name, eval_func)
+function run_mnist_all_top1(csv_file_name::String, out_dir::String)
+    return (eval_func, run_name::String) -> begin
+        _run_mnist_all_top1("$cur_dir/specs/$csv_file_name", "$cur_dir/specs/mnist-prune_warmup.csv", "$cur_dir/$out_dir", run_name, eval_func)
+    end
 end
