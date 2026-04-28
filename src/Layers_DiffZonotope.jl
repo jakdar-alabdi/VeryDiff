@@ -154,59 +154,99 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     # end
     # ∂bounds[:,1] = max.(∂bounds[:,1],(Z.Z₁.c .- Z.Z₂.c) .- ∂bounds₁₂)
     # ∂bounds[:,2] = min.(∂bounds[:,2],(Z.Z₁.c .- Z.Z₂.c) .+ ∂bounds₁₂)
+    ∂bounds = zono_bounds(Z.∂Z)
+
     lower₁ = @view bounds₁[:,1]
     upper₁ = @view bounds₁[:,2]
     lower₂ = @view bounds₂[:,1]
     upper₂ = @view bounds₂[:,2]
+    ∂lower = @view ∂bounds[:,1]
+    ∂upper = @view ∂bounds[:,2]
 
     if USE_NEURON_SPLITTING[]
         lowers = (lower₁, lower₂)
         uppers = (upper₁, upper₂)
 
-        if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
-            for node in layer_split_nodes
-                (;network, neuron) = node
-                l, u = lowers[network][neuron], uppers[network][neuron]
-                if node.direction == 1
-                    @timeit to "Set Bounds Lower Part" begin
-                        if isnothing(node.bounds)
-                            node.bounds = [l u] ./ 2
-                        end
-                        l, u = max(l, node.bounds[1]), min(u, node.bounds[2])
-                        node.bounds = [l u]
-                        P.is_unsatisfiable |= l > u
-                    end
-                else
-                    @timeit to "Set Bounds Upper Part" begin
-                        if isnothing(node.bounds)
-                            s₁, s₂ = (l, u) ./ 2
-                            node.bounds = [l s₁; s₂ u]
-                        end
-                        l̅, s₁ = node.bounds[1, 1], node.bounds[1, 2]
-                        s₂, u̅ = node.bounds[2, 1], node.bounds[2, 2]
-                        l = ifelse(l >= s₁, s₂, max(l, l̅))
-                        u = ifelse(u <= s₂, s₁, min(u, u̅))
-                        node.bounds = [l s₁; s₂ u]
-                        P.is_unsatisfiable |= l >= s₁ && u <= s₂
-                    end
-                end
-                if P.is_unsatisfiable
-                    return Z
-                end
-                lowers[network][neuron] = l
-                uppers[network][neuron] = u
-            end
-        else
-            Zs = (Z.Z₁, Z.Z₂)
-            @timeit to "Set ReLU Phase" begin
+        if !isempty(layer_split_nodes)
+            if NEURON_SPLITTING_APPROACH[] == VerticalSplitting
                 for node in layer_split_nodes
-                    (;network, neuron, direction) = node
-                    lowers[network][neuron] *= direction == -1
-                    uppers[network][neuron] *= direction == 1
-                    g = Zs[network].G[neuron, :]
-                    c = Zs[network].c[neuron]
-                    push!(P.split_constraints, SplitConstraint(node, g, c))
+                    (;network, neuron) = node
+                    l, u = lowers[network][neuron], uppers[network][neuron]
+                    if node.direction == 1
+                        @timeit to "Set Bounds Lower Part" begin
+                            if isnothing(node.bounds)
+                                node.bounds = [l u] ./ 2
+                            end
+                            l, u = max(l, node.bounds[1]), min(u, node.bounds[2])
+                            node.bounds = [l u]
+                            P.is_unsatisfiable |= l > u
+                        end
+                    else
+                        @timeit to "Set Bounds Upper Part" begin
+                            if isnothing(node.bounds)
+                                s₁, s₂ = (l, u) ./ 2
+                                node.bounds = [l s₁; s₂ u]
+                            end
+                            l̅, s₁ = node.bounds[1, 1], node.bounds[1, 2]
+                            s₂, u̅ = node.bounds[2, 1], node.bounds[2, 2]
+                            l = ifelse(l >= s₁, s₂, max(l, l̅))
+                            u = ifelse(u <= s₂, s₁, min(u, u̅))
+                            node.bounds = [l s₁; s₂ u]
+                            P.is_unsatisfiable |= l >= s₁ && u <= s₂
+                        end
+                    end
+                    if P.is_unsatisfiable
+                        return Z
+                    end
+                    lowers[network][neuron] = l
+                    uppers[network][neuron] = u
                 end
+            else
+                Zs = (Z.Z₁, Z.Z₂)
+                @timeit to "Set ReLU Phase" begin
+                    for node in layer_split_nodes
+                        (;network, neuron, direction) = node
+                        lowers[network][neuron] *= direction == -1
+                        uppers[network][neuron] *= direction == 1
+                        g = Zs[network].G[neuron, :]
+                        c = Zs[network].c[neuron]
+                        push!(P.split_constraints, SplitConstraint(node, g, c))
+                    end
+                end
+            end
+
+            @timeit to "Set Better Bounds" begin
+                lower₁ .= max.(lower₂ .+ ∂lower, lower₁)
+                lower₂ .= max.(lower₁ .- ∂upper, lower₂)
+                upper₁ .= min.(upper₂ .+ ∂upper, upper₁)
+                upper₂ .= min.(upper₁ .- ∂lower, upper₂)
+                # ∂lower .= max.(lower₁ .- upper₂, ∂lower)
+                # ∂upper .= min.(upper₁ .- lower₂, ∂upper)
+                # G̃ = zeros(size(Z.∂Z.G))
+                # c̃ = zeros(size(Z.∂Z.c))
+                # for i in 1:2
+                #     Ẑ = ifelse(i == 1, Z.Z₁, Z.Z₂)
+                #     offset_l = input_dim + ifelse(i == 1, 0, Z.num_approx₁) + 1
+                #     offset_r = size(Z.∂Z.G, 2) - Z.∂num_approx - ifelse(i == 1, Z.num_approx₂, 0)
+                #     j = ifelse(i == 1, 2, 1)
+    
+                #     for k in [-1, 1]
+                        
+                #         G̃ .= Z.∂Z.G
+                #         G̃[:, 1:input_dim] .= Ẑ.G[:, 1:input_dim] + k * Z.∂Z.G[:, 1:input_dim]
+                #         G̃[:, offset_l:offset_r] .= Ẑ.G[:, input_dim+1:end] + k * Z.∂Z.G[:, offset_l:offset_r]
+                        
+                #         c̃ .= Ẑ.c + k * Z.∂Z.c
+    
+                #         Z̃ = Zonotope(G̃, c̃, nothing)
+                #         bounds = zono_bounds(Z̃)
+                #         lower = @view bounds[:, 1]
+                #         upper = @view bounds[:, 2]
+    
+                #         lowers[j] .= max.(lower, lowers[j])
+                #         uppers[j] .= min.(upper, uppers[j])
+                #     end
+                # end
             end
         end
 
@@ -245,10 +285,6 @@ function propagate_diff_layer(Ls :: Tuple{ReLU,ReLU,ReLU}, Z::DiffZonotope, P::P
     num_approx₁ = size(Z₁_new.G,2)-input_dim
     num_approx₂ = size(Z₂_new.G,2)-input_dim
     if USE_DIFFZONO
-        ∂bounds = zono_bounds(Z.∂Z)
-        ∂lower = @view ∂bounds[:,1]
-        ∂upper = @view ∂bounds[:,2]
-
         zero_diff = ∂upper .== 0.0 .&& ∂lower .== 0.0
 
         # Compute Phase Behaviour

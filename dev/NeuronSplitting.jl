@@ -123,7 +123,7 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                     
                     @timeit to "Property Check" begin
                         prop_satisfied, cex, _, verification_status, p_distance_bound, input_bounds = property_check(N₁, N₂, Zin, Zout, task, prop_state)
-                        distance_bound = min(distance_bound, p_distance_bound)
+                        final_δ_bound = distance_bound = min(distance_bound, p_distance_bound)
                         global FIRST_ROUND = false
                     end
                     
@@ -145,8 +145,6 @@ function deepsplit_verify_network(property_check; fuzz_testing=nothing)
                             @timeit to "DeepSplit Heuristic" begin
                                 split_candidate = split_heuristic(Zout, prop_state, task.distance_indices)
                             end
-
-                            final_δ_bound = distance_bound
 
                             if use_zono_contract && !isempty(prop_state.split_constraints)
                                 @timeit to "Sort Constraints" begin
