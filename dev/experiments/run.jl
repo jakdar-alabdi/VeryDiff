@@ -151,6 +151,9 @@ function run_experiments_pool4()
     run_func(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Base")
     run_func(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Input-DiffZono")
 
+    run_func(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Base")
+    run_func(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Input-DiffZono")
+
     run_func(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Base")
     run_func(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Input-DiffZono")
 end
@@ -172,6 +175,9 @@ function run_experiments_pool5()
     run_func(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Base")
     run_func(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=ZonoContraction, contract=ZonoContract), "ZonoContract-DU-Input-DiffZono")
 
+    run_func(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Base")
+    run_func(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=LP), "DeepSplit-DU-Input-DiffZono")
+    
     run_func(deepsplit_epsilon((true, false, false, false); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Base")
     run_func(deepsplit_epsilon((true, false, true, true); mode=DeepSplitUnbiased, approach=VerticalSplitting), "VerticalSplitting-DU-Input-DiffZono")
 end
