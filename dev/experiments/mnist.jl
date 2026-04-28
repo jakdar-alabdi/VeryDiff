@@ -36,7 +36,7 @@ function _run_mnist_all_epsilon(specs_csv_file::String, warmup_specs_csv_file::S
 
     println("\nWarmup End")
     
-    spec_name = replace(basename(specs_csv_file), ".csv" => "")
+    spec_name = replace(basename(specs_csv_file), "prune" => "", ".csv" => "")
     open(specs_csv_file, "r") do f
         while !eof(f)
             # sleep(20)
