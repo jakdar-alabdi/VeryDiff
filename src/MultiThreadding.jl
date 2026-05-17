@@ -1,4 +1,4 @@
-import Base: push!, length, pop!
+import Base: push!, length, pop!, isempty
 import Base.Order.lt
 import Base.Order.Ordering
 using DataStructures
@@ -27,6 +27,9 @@ function pop!(q::Queue)
 end
 function length(q::Queue)
     return length(q.queue)
+end
+function isempty(q::Queue)
+    return isempty(q.queue)
 end
 
 function peek_queue(q::Queue)

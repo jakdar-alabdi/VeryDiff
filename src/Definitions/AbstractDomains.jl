@@ -43,8 +43,10 @@ mutable struct BoundsCache
     upper₂ :: Union{Vector{Float64}, Nothing}
     ∂lower :: Union{Vector{Float64}, Nothing}
     ∂upper :: Union{Vector{Float64}, Nothing}
+    crossing₁ :: Union{BitVector, Nothing}
+    crossing₂ :: Union{BitVector, Nothing}
     function BoundsCache()
-        return new(false, nothing,nothing,nothing,nothing,nothing,nothing)
+        return new(false, nothing,nothing,nothing,nothing,nothing,nothing,nothing,nothing)
     end
 end
 

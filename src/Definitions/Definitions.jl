@@ -24,5 +24,6 @@ export parse_network, get_layers, get_inputs, get_outputs, get_layer1, get_diff_
 export configure_first_usage!, prepare_prop_state!, zonos_initialized
 export updateGenerators!, updateGeneratorsMul!, updateGeneratorsAdd!, updateGeneratorsAddMul!, updateGeneratorsSub!, updateGeneratorsSubMul!
 export zono_optimize, zono_bounds, zono_get_max_vector
+export Branch, SplitNode, VerificationResult, InputBox, NeuronSplittingLayerData
 
 end

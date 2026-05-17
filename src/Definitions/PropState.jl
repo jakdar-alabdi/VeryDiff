@@ -1,17 +1,22 @@
-
-
 mutable struct PropState
     first :: Bool
     zono_storage :: ZonotopeStorage
     free_generator_id :: Int64
-    task_bounds :: TaskBounds
+    task_bounds :: TaskBounds    
+    num_instable :: Int
+    task :: Union{Nothing, VerificationTask}
+    is_unsatisfiable :: Bool
     function PropState(first :: Bool)
-        return new(first,
-                    ZonotopeStorage(Vector{Zonotope}()),
-                    -1,
-                    TaskBounds()
-                    )
+        return new(first, ZonotopeStorage(Vector{Zonotope}()), -1, TaskBounds(), 0, nothing, false)
     end
+end
+
+mutable struct NeuronSplittingLayerData
+    layer_idx :: Int
+    num_instable :: Int
+    is_unsatisfiable :: Bool
+    task :: VerificationTask
+    split_nodes :: Vector{SplitNode}
 end
 
 function reset_ps!(PS :: PropState)
@@ -26,7 +31,7 @@ end
 Retrieves the CachedZonotope references at the given indices from the PropState's ZonotopeStorage.
 Expects that all indices are valid (i.e., positions are no longer filled with `nothing`).
 """
-function get_zonos_at_pos(idxs :: Vector{Int64}, PS :: PropState) :: Vector{CachedZonotope}
+function get_zonos_at_pos(idxs :: Union{Vector{Int64}, Colon}, PS :: PropState) :: Vector{CachedZonotope}
     return convert(Vector{CachedZonotope}, @view PS.zono_storage.zonotopes[idxs])
 end
 
@@ -181,6 +186,9 @@ function prepare_prop_state!(PS :: PropState, task :: VerificationTask)
     # @debug "Z₂: $(Zin.Z₂)"
     # @debug "∂Z: $(Zin.∂Z)"
     PS.task_bounds = task.task_bounds
+    PS.task = task
+    PS.num_instable = 0
+    PS.is_unsatisfiable = false
 end
 
 function zonos_initialized(PS :: PropState, output_positions :: Vector{Int64}) :: Bool

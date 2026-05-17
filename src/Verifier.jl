@@ -1,7 +1,4 @@
 #using Random
-
-@enum VerificationStatus UNKNOWN SAFE UNSAFE
-
 function verify_network(
     N1 :: OnnxNet{LayerIdT,NShapeIn, NShapeOut},
     N2 :: OnnxNet{LayerIdT,NShapeIn, NShapeOut},
@@ -67,7 +64,7 @@ function verify_network(
             mid, distance, non_zero_indices,
             distance1_secondary, mid1_secondary,
             distance2_secondary, mid2_secondary,
-            nothing, Inf, 1.0 )
+            nothing, Inf, 1.0, Branch())
     )
     @Debugger.propagation_init_hook(N)
     verification_result = worker_function(
@@ -208,7 +205,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             deepcopy(verification_status),
             distance_bound,
             work_share_new,
-            verification_task.task_bounds)
+            verification_task.task_bounds,
+            deepcopy(verification_task.branch))
         Z2 = VerificationTask(
             middle2_vec, distance2_vec,
             verification_task.distance_indices,
@@ -219,7 +217,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             verification_status,
             distance_bound,
             work_share_new,
-            deepcopy(verification_task.task_bounds))
+            deepcopy(verification_task.task_bounds),
+            verification_task.branch)
         return Z1, Z2
     elseif distance_d <= size(verification_task.distance_indices,1) + size(verification_task.distance1_secondary,1)
         input_pos = distance_d - size(verification_task.distance_indices,1)
@@ -246,7 +245,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             deepcopy(verification_status),
             distance_bound,
             work_share_new,
-            verification_task.task_bounds)
+            verification_task.task_bounds,
+            verification_task.branch)
         Z2 = VerificationTask(
             verification_task.middle, verification_task.distance,
             verification_task.distance_indices,
@@ -257,7 +257,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             verification_status,
             distance_bound,
             work_share_new,
-            deepcopy(verification_task.task_bounds))
+            deepcopy(verification_task.task_bounds),
+            deepcopy(verification_task.branch))
         return Z1, Z2
     else
         input_pos = distance_d - size(verification_task.distance_indices,1) - size(verification_task.distance1_secondary,1)
@@ -284,7 +285,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             deepcopy(verification_status),
             distance_bound,
             work_share_new,
-            verification_task.task_bounds)
+            verification_task.task_bounds,
+            verification_task.branch)
         Z2 = VerificationTask(
             verification_task.middle, verification_task.distance,
             verification_task.distance_indices,
@@ -295,7 +297,8 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             verification_status,
             distance_bound,
             work_share_new,
-            deepcopy(verification_task.task_bounds))
+            deepcopy(verification_task.task_bounds),
+            deepcopy(verification_task.branch))
         return Z1, Z2
     end
 end

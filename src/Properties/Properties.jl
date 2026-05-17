@@ -45,4 +45,7 @@ include("Top1.jl")
 
 export get_top1_property, top1_configure_split_heuristic
 
+include("../../dev/Properties.jl")
+export get_epsilon_property_with_neuron_splitting, get_top1_property_with_neuron_splitting
+
 end # module Properties

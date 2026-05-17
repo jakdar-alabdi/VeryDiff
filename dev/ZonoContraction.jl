@@ -1,0 +1,171 @@
+function contract_zono!(box::InputBox, Z::Zonotope, node::SplitNode) :: Union{Nothing,InputBox}
+    (;neuron, direction) = node
+    gs = [G[neuron, :] for G in Z.Gs]
+    c = Z.c[neuron]
+
+    gs = -direction .* gs
+    c = direction * c
+
+    common_gens_indices = intersect_indices(box.generator_ids, Z.generator_ids)[:]
+    lowers = @view box.lowers[common_gens_indices]
+    uppers = @view box.uppers[common_gens_indices]
+
+    vs = [ifelse.(g .>= 0.0, l[1:length(g)], u[1:length(g)]) for (g, l, u) in zip(gs, lowers, uppers)]
+
+    s = sum(g'v for (g, v) in zip(gs, vs))
+    if s > c
+        return nothing
+    end
+
+    for (g, v, l, u) in zip(gs, vs, lowers, uppers)
+        for i in 1:length(g)
+            if g[i] != 0
+                x = (c - (s - g[i] * v[i])) / g[i]
+                if g[i] > 0
+                    u[i] = min(u[i], x)
+                else
+                    l[i] = max(l[i], x)
+                end
+            end
+        end
+    end
+
+    return box
+end
+
+function contract_zono_all!(box::InputBox, split_nodes::Vector{SplitNode}, zonotopes::Vector{CachedZonotope}) :: Union{Nothing,InputBox}
+    for node in split_nodes
+        Z = get_zonotope(zonotopes[node.layer]) |> z -> ifelse(node.network == 1, z.Z₁, z.Z₂)
+        box = contract_zono!(box, Z, node)
+        if isnothing(box)
+            break
+        end
+    end
+    return box
+end
+
+# This function assumes that all the split nodes and the DiffZonotope correspond to the same layer.
+function contract_zono_all!(box::InputBox, split_nodes::Vector{SplitNode}, DZ::DiffZonotope) :: Union{Nothing,InputBox}
+    Zs = (DZ.Z₁, DZ.Z₂)
+    for node in split_nodes
+        box = contract_zono!(box, Zs[node.network], node)
+        if isnothing(box)
+            break
+        end
+    end
+    return box
+end
+
+function transform_offset_zono!(box::InputBox, Z::Zonotope) :: Zonotope
+    common_gens_indices = intersect_indices(box.generator_ids, Z.generator_ids)
+    # @info "Pre-zonotope-bounds: $(zono_bounds(Z))"
+    for (i, idx) in enumerate(common_gens_indices)
+        lower = box.lowers[idx]
+        upper = box.uppers[idx]
+        α = (upper - lower) ./ 2
+        β = (upper + lower) ./ 2
+        Z.c .+= Z.Gs[i] * β
+        Z.Gs[i] .*= α'
+    end
+    # @info "Post-zonotope-bounds: $(zono_bounds(Z))"
+    return Z
+end
+
+function transform_offset_zono(box::InputBox, Z::Zonotope) :: Zonotope
+    return transform_offset_zono!(box, deepcopy(Z))
+end
+
+function transform_offset_diff_zono!(box::InputBox, Z::DiffZonotope) :: DiffZonotope
+    transform_offset_zono!(box, Z.Z₁)
+    transform_offset_zono!(box, Z.Z₂)
+    transform_offset_zono!(box, Z.∂Z)
+    return Z
+end
+
+function transform_verification_task!(box::InputBox, task::VerificationTask) :: VerificationTask
+    lower = box.lowers[1]
+    upper = box.uppers[1]
+    α = (upper - lower) ./ 2
+    β = (upper + lower) ./ 2
+    task.middle[task.distance_indices] .+= task.distance .* β
+    task.distance .*= α
+    return task
+end
+
+function transform_verification_task(box::InputBox, task::VerificationTask) :: VerificationTask
+    return transform_verification_task!(box, deepcopy(task))
+end
+
+function contract_to_verification_task!(box::InputBox, Z::Zonotope, node::SplitNode, task::VerificationTask) :: Union{Nothing,VerificationTask}
+    box = contract_zono!(box, Z, node)
+    if !isnothing(box)
+        if !is_unit_hypercube(box)
+            return transform_verification_task!(box, task)
+        end
+        return task
+    end
+    return nothing
+end
+
+function contract_to_verification_task(box::InputBox, Z::Zonotope, node::SplitNode, task::VerificationTask) :: Union{Nothing,VerificationTask}
+    box = contract_zono!(box, Z, node)
+    if !isnothing(box)
+        if !is_unit_hypercube(box)
+            return transform_verification_task(box, task)
+        end
+        return task
+    end
+    return nothing
+end
+
+function offset_zono_bounds(box::InputBox, Z::Zonotope) :: Matrix{Float64}
+    common_gens_indices = intersect_indices(box.generator_ids, Z.generator_ids)
+    bounds = zeros(2, length(Z.c))
+    for (i, idx) in enumerate(common_gens_indices)
+        lower = @view lowers[idx][1:size(Z.Gs[i], 2)]
+        upper = @view uppers[idx][1:size(Z.Gs[i], 2)]
+        row_bounds = g -> ifelse.(g .>= 0, g .* [lower upper], g .* [upper lower], dims=1)
+        bounds .+= mapreduce(row_bounds, vcat, eachrow(Z.Gs[i]))
+    end
+    bounds .+= Z.c
+    return bounds
+end
+
+function geometric_distance(box::InputBox, neuron::Int, Z::Zonotope) :: Float64
+    gs = [@view G[neuron, :] for G in Z.Gs]
+
+    common_gens_indices = intersect_indices(box.generator_ids, Z.generator_ids)[:]
+    lowers = @view box.lowers[common_gens_indices]
+    uppers = @view box.uppers[common_gens_indices]
+    centers = (lowers .+ uppers) ./ 2
+
+    a = Z.c[neuron] + sum(g'x[1:length(g)] for (g, x) in zip(gs, centers))
+    b = sum(g'g for g in gs)
+
+    return abs(a) / sqrt(b)
+end
+
+function geometric_distance(box::InputBox, node::SplitNode, zonotopes::Vector{CachedZonotope}) :: Float64
+    Z = get_zonotope(zonotopes[node.layer])
+    Z = ifelse(node.network == 1, Z.Z₁, Z.Z₂)
+    return geometric_distance(box, node.neuron, Z)
+end
+
+function geometric_distance0(node::SplitNode, Z::Zonotope) :: Float64
+    gs = [@view G[node.neuron, :] for G in Z.Gs]
+    return abs(Z.c[node.neuron]) / sqrt(sum(g'g for g in gs))
+end
+
+function sort_split_nodes!(split_nodes::Vector{SplitNode}, zonotopes::Vector{CachedZonotope})
+    f = node -> get_zonotope(zonotopes[node.layer]) |> (z -> ifelse(node.network == 1, z.Z₁, z.Z₂))
+    sort!(split_nodes, by=node -> geometric_distance0(node, f(node)))
+end
+
+# This function assumes that all the split nodes and the DiffZonotope correspond to the same layer.
+function sort_split_nodes!(split_nodes::Vector{SplitNode}, Z::DiffZonotope)
+    sort!(split_nodes, by=node -> geometric_distance0(node, ifelse(node.network == 1, Z.Z₁, Z.Z₂)))
+end
+
+function is_unit_hypercube(box::InputBox)
+    return mapreduce((l, u) -> all(x -> isone(-x), l) && all(x -> isone(x), u), &, box.lowers, box.uppers)
+end

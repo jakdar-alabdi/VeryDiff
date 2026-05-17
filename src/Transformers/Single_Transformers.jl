@@ -35,15 +35,15 @@ function get_slope(l,u, alpha)
     end
 end
 
-function propagate_layer!(ZoutRefVec :: Vector{Zonotope}, L :: ONNXRelu{S}, inputs :: Vector{Zonotope}; lower=nothing, upper=nothing) where {S}
+function propagate_layer!(ZoutRefVec :: Vector{Zonotope}, L :: ONNXRelu{S}, inputs :: Vector{Zonotope}; lower=nothing, upper=nothing, split_nodes=nothing) where {S}
     @assert length(inputs) == 1 "Dense layer should have exactly one input"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output"
     ZoutRef = ZoutRefVec[1]
     Zin = inputs[1]
-    return propagate_layer!(ZoutRef, L, Zin; lower=lower, upper=upper)
+    return propagate_layer!(ZoutRef, L, Zin; lower=lower, upper=upper, split_nodes=split_nodes)
 end
 
-function propagate_layer!(ZoutRef :: Zonotope, _L :: ONNXRelu{S}, Zin :: Zonotope; lower=nothing, upper=nothing) where {S}
+function propagate_layer!(ZoutRef :: Zonotope, _L :: ONNXRelu{S}, Zin :: Zonotope; lower=nothing, upper=nothing, split_nodes=nothing) where {S}
     if isnothing(lower) || isnothing(upper)
         bounds = zono_bounds(Zin)
         lower = @view bounds[:,1]
@@ -61,6 +61,20 @@ function propagate_layer!(ZoutRef :: Zonotope, _L :: ONNXRelu{S}, Zin :: Zonotop
     γ = 0.5 .* max.(-λ .* lower,0.0,((-).(1.0,λ)).*upper)  # Computed offset (-λl/2)
 
     ZoutRef.c .= λ .* Zin.c .+ crossing.*γ
+
+    if !isnothing(split_nodes) && VeryDiff.USE_VERTICAL_SPLITTING[]
+        for (;neuron, bounds, direction) in split_nodes
+            if crossing[neuron] && direction == -1
+                l̅, s₁ = bounds[1, 1], bounds[1, 2]
+                s₂, u̅ = bounds[2, 1], bounds[2, 2]
+                
+                λ[neuron] = u̅ / (u̅ - l̅)
+                μ = max(s₁, l̅ / u̅ * s₂)
+                γ[neuron] = 0.5 * λ[neuron] * (μ - l̅)
+                ZoutRef.c[neuron] = λ[neuron] * (Zin.c[neuron] - μ) - γ[neuron]
+            end
+        end
+    end
 
     indices = intersect_indices(ZoutRef.generator_ids, Zin.generator_ids)
     if VeryDiff.NEW_HEURISTIC[]

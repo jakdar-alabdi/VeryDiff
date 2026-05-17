@@ -5,7 +5,8 @@ function propagate_layer!(
         ONNXLinear{S2},
         ONNXLinear{S3}},
     inputs :: Vector{DiffZonotope};
-    bounds_cache :: Union{Nothing,BoundsCache}=nothing) where {S1, S2, S3}
+    bounds_cache :: Union{Nothing,BoundsCache}=nothing,
+    data :: Union{Nothing,NeuronSplittingLayerData}=nothing) where {S1, S2, S3}
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
     ZoutRef = ZoutRefVec[1]
@@ -59,7 +60,8 @@ function propagate_layer!(
         ONNXAddConst{S2},
         ONNXAddConst{S3}},
     inputs :: Vector{DiffZonotope};
-    bounds_cache :: Union{Nothing,BoundsCache}=nothing) where {S1, S2, S3}
+    bounds_cache :: Union{Nothing,BoundsCache}=nothing,
+    data :: Union{Nothing,NeuronSplittingLayerData}=nothing) where {S1, S2, S3}
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
     ZoutRef = ZoutRefVec[1]
@@ -100,7 +102,8 @@ function propagate_layer!(
         ZeroDense{S2},
         ONNXLinear{S3}},
     inputs :: Vector{DiffZonotope};
-    bounds_cache :: Union{Nothing,BoundsCache}=nothing) where {S1, S2, S3}
+    bounds_cache :: Union{Nothing,BoundsCache}=nothing,
+    data :: Union{Nothing,NeuronSplittingLayerData}=nothing) where {S1, S2, S3}
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
     ZoutRef = ZoutRefVec[1]
@@ -160,7 +163,8 @@ function propagate_layer!(
         ONNXRelu{S2},
         ONNXRelu{S3}},
     inputs :: Vector{DiffZonotope};
-    bounds_cache :: Union{Nothing,BoundsCache}=nothing) where {S1, S2, S3}
+    bounds_cache :: Union{Nothing,BoundsCache}=nothing,
+    data :: Union{Nothing,NeuronSplittingLayerData}=nothing) where {S1, S2, S3}
     @assert length(inputs) == 1 "ReLU layer should have exactly one input zonotope"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
     ZoutRef = ZoutRefVec[1]
@@ -168,11 +172,25 @@ function propagate_layer!(
 
     @assert !isnothing(bounds_cache)
 
+    if !isnothing(data) && VeryDiff.INTER_CONTRACT[] && !isempty(data.split_nodes)
+        sort_split_nodes!(data.split_nodes, Zin)
+        box = InputBox(Zin)
+        contract_zono_all!(box, data.split_nodes, Zin)
+        if isnothing(box)
+            data.is_unsatisfiable = true
+            return
+        end
+        if !is_unit_hypercube(box)
+            transform_offset_diff_zono!(box, Zin)
+            transform_verification_task!(box, data.task)
+        end
+    end
+
     # Compute Bounds
     bounds₁ = zono_bounds(Zin.Z₁)
     bounds₂ = zono_bounds(Zin.Z₂)
     ∂bounds = zono_bounds(Zin.∂Z)
-
+    
     if !bounds_cache.initialized
         bounds_cache.lower₁ = copy(bounds₁[:,1])
         bounds_cache.upper₁ = copy(bounds₁[:,2])
@@ -180,21 +198,96 @@ function propagate_layer!(
         bounds_cache.upper₂ = copy(bounds₂[:,2])
         bounds_cache.∂lower = copy(∂bounds[:,1])
         bounds_cache.∂upper = copy(∂bounds[:,2])
+        bounds_cache.crossing₁ = bounds_cache.lower₁ .< 0.0 .&& bounds_cache.upper₁ .> 0.0
+        bounds_cache.crossing₂ = bounds_cache.lower₂ .< 0.0 .&& bounds_cache.upper₂ .> 0.0
+        # dim = length(bounds_cache.lower₁)
+        # bounds_cache.crossing₂ = @simd_bool_expr dim ((bounds_cache.lower₂ < 0.0) & (bounds_cache.upper₂ > 0.0))
         bounds_cache.initialized = true
-    else
-        bounds_cache.lower₁ .= max.(bounds₁[:,1], bounds_cache.lower₁)
-        bounds_cache.upper₁ .= min.(bounds₁[:,2], bounds_cache.upper₁)
-        bounds_cache.lower₂ .= max.(bounds₂[:,1], bounds_cache.lower₂)
-        bounds_cache.upper₂ .= min.(bounds₂[:,2], bounds_cache.upper₂)
-        bounds_cache.∂lower .= max.(∂bounds[:,1], bounds_cache.∂lower)
-        bounds_cache.∂upper .= min.(∂bounds[:,2], bounds_cache.∂upper)
     end
+
+    split_nodes₁, split_nodes₂ = nothing, nothing
+    if VeryDiff.USE_NEURON_SPLITTING[]
+        if !isnothing(data) && !isempty(data.split_nodes)
+            bounds = (bounds₁, bounds₂)
+            if VeryDiff.USE_VERTICAL_SPLITTING[]
+                cached_lowers = (bounds_cache.lower₁, bounds_cache.lower₂)
+                cached_uppers = (bounds_cache.upper₁, bounds_cache.upper₂)
+                for node in data.split_nodes
+                    net, n = node.network, node.neuron
+                    l = max(bounds[net][n, 1], cached_lowers[net][n])
+                    u = min(bounds[net][n, 2], cached_uppers[net][n])
+                    if l < 0 && u > 0
+                        if node.direction == 1
+                            if isnothing(node.bounds)
+                                node.bounds = [l u] ./ 2
+                            end
+                            l̲, u̲ = node.bounds[1], node.bounds[2]
+                            l, u = max(l, l̲), min(u, u̲)
+                            node.bounds = [l u]
+                            data.is_unsatisfiable |= l > u
+                        else
+                            if isnothing(node.bounds)
+                                s₁, s₂ = (l, u) ./ 2
+                                node.bounds = [l s₁; s₂ u]
+                            end
+                            l̅, s₁ = node.bounds[1, 1], node.bounds[1, 2]
+                            s₂, u̅ = node.bounds[2, 1], node.bounds[2, 2]
+                            l = max(l, ifelse(l >= s₁, s₂, l̅))
+                            u = min(u, ifelse(u <= s₂, s₁, u̅))
+                            # l = ifelse(l >= s₁, s₂, max(l, l̅))
+                            # u = ifelse(u <= s₂, s₁, min(u, u̅))
+                            node.bounds = [l s₁; s₂ u]
+                            data.is_unsatisfiable |= l >= s₁ && u <= s₂
+                        end
+                        if data.is_unsatisfiable
+                            break
+                        end
+                    end
+                    bounds[net][n, 1] = l
+                    bounds[net][n, 2] = u
+                end
+                if data.is_unsatisfiable
+                   return
+                end
+            else
+                for (;network, neuron, direction) in data.split_nodes
+                    if direction == 1
+                        bounds[network][neuron, 1] = max(bounds[network][neuron, 1], 0.0)
+                    else
+                        bounds[network][neuron, 2] = min(bounds[network][neuron, 2], 0.0)
+                    end
+                end
+            end
+
+            split_nodes₁ = @view data.split_nodes[findall(n -> n.network == 1, data.split_nodes)]
+            split_nodes₂ = @view data.split_nodes[findall(n -> n.network == 2, data.split_nodes)]
+        end
+
+        bounds₁[:, 1] .= max.(bounds₂[:, 1] .+ ∂bounds[:, 1], bounds₁[:, 1], bounds_cache.lower₁)
+        bounds₁[:, 2] .= min.(bounds₂[:, 2] .+ ∂bounds[:, 2], bounds₁[:, 2], bounds_cache.upper₁)
+        bounds₂[:, 1] .= max.(bounds₁[:, 1] .- ∂bounds[:, 2], bounds₂[:, 1], bounds_cache.lower₂)
+        bounds₂[:, 2] .= min.(bounds₁[:, 2] .- ∂bounds[:, 1], bounds₂[:, 2], bounds_cache.upper₂)
+        ∂bounds[:, 1] .= max.(bounds₁[:, 1] .- bounds₂[:, 2], ∂bounds[:, 1], bounds_cache.∂lower)
+        ∂bounds[:, 2] .= min.(bounds₁[:, 2] .- bounds₂[:, 1], ∂bounds[:, 2], bounds_cache.∂upper)
+    end
+
+    bounds_cache.lower₁ .= max.(bounds₁[:,1], bounds_cache.lower₁)
+    bounds_cache.upper₁ .= min.(bounds₁[:,2], bounds_cache.upper₁)
+    bounds_cache.lower₂ .= max.(bounds₂[:,1], bounds_cache.lower₂)
+    bounds_cache.upper₂ .= min.(bounds₂[:,2], bounds_cache.upper₂)
+    bounds_cache.∂lower .= max.(∂bounds[:,1], bounds_cache.∂lower)
+    bounds_cache.∂upper .= min.(∂bounds[:,2], bounds_cache.∂upper)
+
     lower₁ = bounds_cache.lower₁
     upper₁ = bounds_cache.upper₁
     lower₂ = bounds_cache.lower₂
     upper₂ = bounds_cache.upper₂
     ∂lower = bounds_cache.∂lower
     ∂upper = bounds_cache.∂upper
+    
+    dim = length(bounds_cache.lower₁)
+    bounds_cache.crossing₁ = @simd_bool_expr dim ((lower₁ < 0.0) & (upper₁ > 0.0))
+    bounds_cache.crossing₂ = @simd_bool_expr dim ((lower₂ < 0.0) & (upper₂ > 0.0))
     #@info "Bounds Cache: Z₁=[$(lower₁), $(upper₁)], Z₂=[$(lower₂), $(upper₂)], ∂Z=[$(∂lower), $(∂upper)]"
 
     (
@@ -211,8 +304,15 @@ function propagate_layer!(
     ) = get_selectors(bounds₁, bounds₂, ∂bounds)
     # Do NOT use counts created above for new_gen₁ / new_gen₂,
     # because these omit dimensions where difference is still zero
+    # crossing₁ = lower₁ .< 0.0 .&& upper₁ .> 0.0
+    # crossing₂ = lower₂ .< 0.0 .&& upper₂ .> 0.0
+    # bounds_cache.crossing₁ = crossing₁
+    # bounds_cache.crossing₂ = crossing₂
+    # new_gen₁ = count(crossing₁)
+    # new_gen₂ = count(crossing₂)
     new_gen₁ = count(lower₁ .< 0.0 .&& upper₁ .> 0.0)
     new_gen₂ = count(lower₂ .< 0.0 .&& upper₂ .> 0.0)
+    data.num_instable += new_gen₁ + new_gen₂
     ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
     # @debug "Instable Neurons: Network 1: $new_gen₁, Network 2: $new_gen₂, Differential: $∂new_gen"
     Zout_proto = ZoutRef.zonotope_proto # Need this to be able to access the generator ids
@@ -265,8 +365,8 @@ function propagate_layer!(
     L1 = get_layer1(Ls)
     L2 = get_layer2(Ls)
     # Compute Zonotopes for individual networks
-    propagate_layer!(Zout.Z₁, L1, Zin.Z₁;lower=lower₁, upper=upper₁)
-    propagate_layer!(Zout.Z₂, L2, Zin.Z₂;lower=lower₂, upper=upper₂)
+    propagate_layer!(Zout.Z₁, L1, Zin.Z₁;lower=lower₁, upper=upper₁, split_nodes=split_nodes₁)
+    propagate_layer!(Zout.Z₂, L2, Zin.Z₂;lower=lower₂, upper=upper₂, split_nodes=split_nodes₂)
 
     if VeryDiff.USE_DIFFZONO[]
         dim = length(any_neg)
