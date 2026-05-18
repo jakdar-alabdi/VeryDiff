@@ -200,8 +200,6 @@ function propagate_layer!(
         bounds_cache.∂upper = copy(∂bounds[:,2])
         bounds_cache.crossing₁ = bounds_cache.lower₁ .< 0.0 .&& bounds_cache.upper₁ .> 0.0
         bounds_cache.crossing₂ = bounds_cache.lower₂ .< 0.0 .&& bounds_cache.upper₂ .> 0.0
-        # dim = length(bounds_cache.lower₁)
-        # bounds_cache.crossing₂ = @simd_bool_expr dim ((bounds_cache.lower₂ < 0.0) & (bounds_cache.upper₂ > 0.0))
         bounds_cache.initialized = true
     end
 
@@ -271,23 +269,12 @@ function propagate_layer!(
         ∂bounds[:, 2] .= min.(bounds₁[:, 2] .- bounds₂[:, 1], ∂bounds[:, 2], bounds_cache.∂upper)
     end
 
-    bounds_cache.lower₁ .= max.(bounds₁[:,1], bounds_cache.lower₁)
-    bounds_cache.upper₁ .= min.(bounds₁[:,2], bounds_cache.upper₁)
-    bounds_cache.lower₂ .= max.(bounds₂[:,1], bounds_cache.lower₂)
-    bounds_cache.upper₂ .= min.(bounds₂[:,2], bounds_cache.upper₂)
-    bounds_cache.∂lower .= max.(∂bounds[:,1], bounds_cache.∂lower)
-    bounds_cache.∂upper .= min.(∂bounds[:,2], bounds_cache.∂upper)
-
-    lower₁ = bounds_cache.lower₁
-    upper₁ = bounds_cache.upper₁
-    lower₂ = bounds_cache.lower₂
-    upper₂ = bounds_cache.upper₂
-    ∂lower = bounds_cache.∂lower
-    ∂upper = bounds_cache.∂upper
-    
-    dim = length(bounds_cache.lower₁)
-    bounds_cache.crossing₁ = @simd_bool_expr dim ((lower₁ < 0.0) & (upper₁ > 0.0))
-    bounds_cache.crossing₂ = @simd_bool_expr dim ((lower₂ < 0.0) & (upper₂ > 0.0))
+    lower₁ = bounds_cache.lower₁ .= max.(bounds₁[:,1], bounds_cache.lower₁)
+    upper₁ = bounds_cache.upper₁ .= min.(bounds₁[:,2], bounds_cache.upper₁)
+    lower₂ = bounds_cache.lower₂ .= max.(bounds₂[:,1], bounds_cache.lower₂)
+    upper₂ = bounds_cache.upper₂ .= min.(bounds₂[:,2], bounds_cache.upper₂)
+    ∂lower = bounds_cache.∂lower .= max.(∂bounds[:,1], bounds_cache.∂lower)
+    ∂upper = bounds_cache.∂upper .= min.(∂bounds[:,2], bounds_cache.∂upper)
     #@info "Bounds Cache: Z₁=[$(lower₁), $(upper₁)], Z₂=[$(lower₂), $(upper₂)], ∂Z=[$(∂lower), $(∂upper)]"
 
     (
@@ -304,15 +291,18 @@ function propagate_layer!(
     ) = get_selectors(bounds₁, bounds₂, ∂bounds)
     # Do NOT use counts created above for new_gen₁ / new_gen₂,
     # because these omit dimensions where difference is still zero
+    dim = length(lower₁)
+    crossing₁ = @simd_bool_expr dim ((lower₁ < 0.0) & (upper₁ > 0.0))
+    crossing₂ = @simd_bool_expr dim ((lower₂ < 0.0) & (upper₂ > 0.0))
     # crossing₁ = lower₁ .< 0.0 .&& upper₁ .> 0.0
     # crossing₂ = lower₂ .< 0.0 .&& upper₂ .> 0.0
-    # bounds_cache.crossing₁ = crossing₁
-    # bounds_cache.crossing₂ = crossing₂
-    # new_gen₁ = count(crossing₁)
-    # new_gen₂ = count(crossing₂)
-    new_gen₁ = count(lower₁ .< 0.0 .&& upper₁ .> 0.0)
-    new_gen₂ = count(lower₂ .< 0.0 .&& upper₂ .> 0.0)
+    bounds_cache.crossing₁ = crossing₁
+    bounds_cache.crossing₂ = crossing₂
+    new_gen₁ = count(crossing₁)
+    new_gen₂ = count(crossing₂)
     data.num_instable += new_gen₁ + new_gen₂
+    # new_gen₁ = count(lower₁ .< 0.0 .&& upper₁ .> 0.0)
+    # new_gen₂ = count(lower₂ .< 0.0 .&& upper₂ .> 0.0)
     ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
     # @debug "Instable Neurons: Network 1: $new_gen₁, Network 2: $new_gen₂, Differential: $∂new_gen"
     Zout_proto = ZoutRef.zonotope_proto # Need this to be able to access the generator ids
