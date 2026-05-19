@@ -33,6 +33,10 @@ function propagate!(N :: GeminiNetwork, P :: PropState)
         data = NeuronSplittingLayerData(diff_layer.layer_idx, 0, false, P.task, split_nodes)
         propagate_layer!(outputs, diff_layer, input_zonotopes; bounds_cache=bounds_cache, data=data)
         P.num_instable += data.num_instable
+        if data.is_unsatisfiable
+            P.is_unsatisfiable = true
+            break
+        end
         #@debug "Layer $(diff_layer.layer_idx) output Zonotope ∂Z bounds: $(zono_bounds(output_zonotope_ref.zonotope.∂Z)[1:5,:])"
         #@debug "Layer $(diff_layer.layer_idx) output Zonotope Z₁ bounds: $(zono_bounds(output_zonotope_ref.zonotope.Z₁)[1:5,:])"
     end

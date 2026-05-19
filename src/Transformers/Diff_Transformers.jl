@@ -235,7 +235,7 @@ function propagate_layer!(
                             # l = ifelse(l >= s₁, s₂, max(l, l̅))
                             # u = ifelse(u <= s₂, s₁, min(u, u̅))
                             node.bounds = [l s₁; s₂ u]
-                            data.is_unsatisfiable |= l >= s₁ && u <= s₂
+                            data.is_unsatisfiable |= l > u || l >= s₁ && u <= s₂
                         end
                         if data.is_unsatisfiable
                             break
@@ -291,15 +291,10 @@ function propagate_layer!(
     ) = get_selectors(bounds₁, bounds₂, ∂bounds)
     # Do NOT use counts created above for new_gen₁ / new_gen₂,
     # because these omit dimensions where difference is still zero
-    dim = length(lower₁)
-    crossing₁ = @simd_bool_expr dim ((lower₁ < 0.0) & (upper₁ > 0.0))
-    crossing₂ = @simd_bool_expr dim ((lower₂ < 0.0) & (upper₂ > 0.0))
-    # crossing₁ = lower₁ .< 0.0 .&& upper₁ .> 0.0
-    # crossing₂ = lower₂ .< 0.0 .&& upper₂ .> 0.0
-    bounds_cache.crossing₁ = crossing₁
-    bounds_cache.crossing₂ = crossing₂
-    new_gen₁ = count(crossing₁)
-    new_gen₂ = count(crossing₂)
+    bounds_cache.crossing₁ .= lower₁ .< 0.0 .&& upper₁ .> 0.0
+    bounds_cache.crossing₂ .= lower₂ .< 0.0 .&& upper₂ .> 0.0
+    new_gen₁ = count(bounds_cache.crossing₁)
+    new_gen₂ = count(bounds_cache.crossing₂)
     data.num_instable += new_gen₁ + new_gen₂
     # new_gen₁ = count(lower₁ .< 0.0 .&& upper₁ .> 0.0)
     # new_gen₂ = count(lower₂ .< 0.0 .&& upper₂ .> 0.0)

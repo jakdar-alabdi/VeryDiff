@@ -10,70 +10,78 @@ function deepsplit_heuristic(
     relative_impact_func)
 
     @assert prop_state.num_instable > 0
-
-    zonos = get_zonos_at_pos(:, prop_state)
-    Zout = get_zonotope(zonos[end])
+    Zin = get_zonotope(prop_state.zono_storage.zonotopes[1])
+    Zout = get_zonotope(prop_state.zono_storage.zonotopes[end])
     input_dim = length(prop_state.task.distance)
-    bounds_caches = prop_state.task_bounds.bounds_cache
+    bounds_cache = prop_state.task_bounds.bounds_cache
     L = length(relu_layers)
     
     max_score = -Inf
     max_node = nothing
-    
-    for net in 1:2
 
+    for net in 1:2
         Z = ifelse(net == 1, Zout.Z₁, Zout.Z₂)
-        if isnothing(Z.owned_generators)
-            continue
-        end
         
         Z_dir = Z
         if USE_DIFF_GENERATORS_DEEPSPLIT[]
             Z_dir = Zout.∂Z
         end
 
-        s = [zeros(length(get_zonotope(zonos[l.layer_idx]).∂Z.c)) for l in relu_layers]
+        s = [zeros(length(bounds_cache[l.layer_idx].lower₁)) for l in relu_layers]
         s_input = zeros(input_dim)
-        offset_l₁ = 0
+        offset₁ = 0
 
         for l₁ in L:-1:1
-            idx_l₁ = relu_layers[l₁].layer_idx
-            Z_l₁ = get_zonotope(zonos[idx_l₁]) |> DZ -> ifelse(net == 1, DZ.Z₁, DZ.Z₂)
-            
-            if !isnothing(Z_l₁.owned_generators)
-                bc_l₁ = bounds_caches[idx_l₁]
-                crossing_l₁ = ifelse(net == 1, bc_l₁.crossing₁, bc_l₁.crossing₂)
-                num_instable_l₁ = count(crossing_l₁)
-                G_dir_idx = find_index_position(Z_dir.generator_ids, Z_l₁.generator_ids[Z_l₁.owned_generators])
+            diff_layer₁ = relu_layers[l₁]
+            input_positions₁ = get_inputs(diff_layer₁)
+            output_positions₁ = get_outputs(diff_layer₁)
+            inputs₁ = get_zonos_at_pos(input_positions₁, prop_state)
+            outputs₁ = get_zonos_at_pos(output_positions₁, prop_state)
+            Zin₁ = get_zonotope(inputs₁[1]) |> DZ -> ifelse(net == 1, DZ.Z₁, DZ.Z₂)
+            Zout₁ = get_zonotope(outputs₁[1]) |> DZ -> ifelse(net == 1, DZ.Z₁, DZ.Z₂)
 
-                ϵ = get_generators!(Z_dir, G_dir_idx, offset_l₁, num_instable_l₁)
-                s[l₁][crossing_l₁] .= sum(abs, ϵ, dims=1)[:]
+            if !isnothing(Zout₁.owned_generators)
+                bc₁ = bounds_cache[diff_layer₁.layer_idx]
+                crossing₁ = ifelse(net == 1, bc₁.crossing₁, bc₁.crossing₂)
+                num_instable₁ = count(crossing₁)
+                G_dir_idx = find_index_position(Z_dir.generator_ids, Zout₁.generator_ids[Zout₁.owned_generators])
+
+                ϵ = get_generators!(Z_dir, G_dir_idx, offset₁, num_instable₁)
+                s[l₁][crossing₁] .= sum(abs, ϵ, dims=1)[:]
     
-                offset_l₂ = 0
+                offset₂ = 0
                 for l₂ in (l₁ + 1):L
-                    idx_l₂ = relu_layers[l₂].layer_idx
-                    Z_l₂ = get_zonotope(zonos[idx_l₂]) |> DZ -> ifelse(net == 1, DZ.Z₁, DZ.Z₂)
-                    bc_l₂ = bounds_caches[idx_l₂]
-                    crossing_l₂ = ifelse(net == 1, bc_l₂.crossing₁, bc_l₂.crossing₂)
-                    num_instable_l₂ = count(crossing_l₂)
-                    G_idx = find_index_position(Z_l₂.generator_ids, Z_l₁.generator_ids[Z_l₁.owned_generators])
-    
-                    ϵ = get_generators!(Z_l₂, G_idx, offset_l₂, num_instable_l₁)
-                    α = relative_impact_func(Z_l₂, ϵ, crossing_l₂)
-                    s[l₁][crossing_l₁] .+ sum(α .* s[l₂], dims=1)[:]
-    
-                    offset_l₂ += num_instable_l₂
+                    diff_layer₂ = relu_layers[l₂]
+                    input_positions₂ = get_inputs(diff_layer₂)
+                    output_positions₂ = get_outputs(diff_layer₂)
+                    inputs₂ = get_zonos_at_pos(input_positions₂, prop_state)
+                    outputs₂ = get_zonos_at_pos(output_positions₂, prop_state)
+                    Zin₂ = get_zonotope(inputs₂[1]) |> DZ -> ifelse(net == 1, DZ.Z₁, DZ.Z₂)
+                    Zout₂ = get_zonotope(outputs₂[1]) |> DZ -> ifelse(net == 1, DZ.Z₁, DZ.Z₂)
+
+                    if !isnothing(Zout₂.owned_generators)
+                        bc₂ = bounds_cache[diff_layer₂.layer_idx]
+                        crossing₂ = ifelse(net == 1, bc₂.crossing₁, bc₂.crossing₂)
+                        num_instable₂ = count(crossing₂)
+                        G_idx = find_index_position(Zin₂.generator_ids, Zout₁.generator_ids[Zout₁.owned_generators])
+        
+                        ϵ = get_generators!(Zin₂, G_idx, offset₂, num_instable₁)
+                        α = relative_impact_func(Zin₂, ϵ, crossing₂)
+                        s[l₁][crossing₁] .+ sum(α .* s[l₂], dims=1)[:]
+        
+                        offset₂ += num_instable₂
+                    end
                 end
     
                 if VeryDiff.INCORPORATE_INPUT_SPLITTING[]
-                    lower, upper = ifelse(net == 1, (bc_l₁.lower₁, bc_l₁.upper₁), (bc_l₁.lower₂, bc_l₁.upper₂))
-                    bounds_width = upper[crossing_l₁] - lower[crossing_l₁]
-                    α = abs.(Z_l₁.Gs[1][crossing_l₁, :]) ./ bounds_width
-                    s_input .+= sum(α .* s[l₁][crossing_l₁] .* VeryDiff.INDIRECT_INPUT_MULTIPLIER[], dims=1)[:]
+                    lower, upper = ifelse(net == 1, (bc₁.lower₁, bc₁.upper₁), (bc₁.lower₂, bc₁.upper₂))
+                    bounds_width = upper[crossing₁] - lower[crossing₁]
+                    α = abs.(Zin₁.Gs[1][crossing₁, :]) ./ bounds_width
+                    s_input .+= sum(α .* s[l₁][crossing₁] .* VeryDiff.INDIRECT_INPUT_MULTIPLIER[], dims=1)[:]
                 end
     
                 if !USE_VERTICAL_SPLITTING[] || l₁ < L
-                    instables = findall(crossing_l₁)
+                    instables = findall(crossing₁)
                     if isempty(instables)
                         continue
                     end
@@ -81,20 +89,20 @@ function deepsplit_heuristic(
                     n = argmax(i -> s[l₁][i], instables)
                     if s[l₁][n] > max_score
                         max_score = s[l₁][n]
-                        max_node = SplitNode(net, idx_l₁, n, 0, nothing)
+                        max_node = SplitNode(net, diff_layer₁.layer_idx, n, diff_layer₁)
                     end
                 end
     
-                offset_l₁ += num_instable_l₁
+                offset₁ += num_instable₁
             end
         end
 
-        if VeryDiff.INCORPORATE_INPUT_SPLITTING[]
+        if !isnothing(max_node) && VeryDiff.INCORPORATE_INPUT_SPLITTING[]
             d = argmax(s_input)
             if s_input[d] > max_score
                 max_score = s_input[d]
                 d = prop_state.task.distance_indices[d]
-                max_node = SplitNode(0, 0, d, 0, nothing)
+                max_node = SplitNode(0, 0, d)
             end
         end
     end

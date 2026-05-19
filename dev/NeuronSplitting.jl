@@ -86,9 +86,14 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
         Zout = get_zonotope(zonotopes[end])
         veri_result.num_propagations += 1
 
-        @info "NumApprox₁: $(size(Zout.Z₁.Gs[2], 2))/$(size(Zout.∂Z.Gs[2], 2))"
-        @info "NumApprox₂: $(size(Zout.Z₂.Gs[2], 2))/$(size(Zout.∂Z.Gs[3], 2))"
-        @info "NumInstable: $(prop_state.num_instable)"
+        if prop_state.is_unsatisfiable
+            continue
+        end
+
+        # @info "Z₁.Gs sizes: $(size.(Zout.Z₁.Gs, 2))"
+        # @info "Z₂.Gs sizes: $(size.(Zout.Z₂.Gs, 2))"
+        # @info "∂Z.Gs sizes: $(size.(Zout.∂Z.Gs, 2))"
+        # @info "NumInstable: $(prop_state.num_instable)"
         # @assert (size(Zout.∂Z.Gs[2], 2) + size(Zout.∂Z.Gs[3], 2)) == prop_state.num_instable
 
         if first_task
@@ -100,10 +105,6 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             println("Zono Bounds:")
             println(bounds[:, 1])
             println(bounds[:, 2])
-        end
-
-        if prop_state.is_unsatisfiable
-            continue
         end
         
         prop_satisfied, cex, _, verification_status, distance_bound, box = property_check(N₁, N₂, prop_state)
@@ -168,32 +169,32 @@ end
 
 function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::VerificationTask, zonotopes::Vector{CachedZonotope}, verification_status, distance_bound::Float64)
     if !VeryDiff.PRE_CONTRACT[] && !isnothing(box) && !is_unit_hypercube(box)
-        task = transform_verification_task!(box, task)
+        transform_verification_task!(box, task)
     end
 
     direction₁, direction₂ = -1, 1 # inactive, active
-    bounds₁ = bounds₂ = nothing
-    (;network, layer, neuron) = node
+    bounds₁, bounds₂ = nothing, nothing
+    (;network, layer, neuron, diff_layer) = node
     
+    old_node_idx = nothing
     if VeryDiff.USE_VERTICAL_SPLITTING[]
         split_nodes = task.branch.split_nodes
-        n = findfirst(n -> (n.network, n.layer, n.neuron) == (network, layer, neuron), split_nodes)
-        if !isnothing(n)
-            node = split_nodes[n]
-            if node.direction == 1
-                l, u = node.bounds[1], node.bounds[2]
-                s₁, s₂ = (l, u) ./ 2
-                bounds₁ = [l s₁; s₂ u]
+        old_node_idx = findfirst(n -> (n.network, n.layer, n.neuron) == (network, layer, neuron), split_nodes)
+        if !isnothing(old_node_idx)
+            old_node = split_nodes[old_node_idx]
+            if old_node.direction == 1
+                l̲, u̲ = old_node.bounds[1], old_node.bounds[2]
+                s₁, s₂ = l̲ / 2, u̲ / 2
+                bounds₁ = [l̲ s₁; s₂ u̲]
                 bounds₂ = [s₁ s₂]
             else
                 direction₂ = -1
-                l₁, u₁ = node.bounds[1, 1], node.bounds[1, 2]
-                l₂, u₂ = node.bounds[2, 1], node.bounds[2, 1]
-                s₁, s₂ = (l₁ + u₁, l₂ + u₂) ./ 2
-                bounds₁ = [l₁ s₁; s₂ u₂]
-                bounds₂ = [s₁ u₁; l₂ s₂]
+                l̅, s̅₁ = old_node.bounds[1, 1], old_node.bounds[1, 2]
+                s̅₂, u̅ = old_node.bounds[2, 1], old_node.bounds[2, 2]
+                s₁, s₂ = (l̅ + s̅₁) / 2, (s̅₂ + u̅) / 2
+                bounds₁ = [l̅ s₁; s₂ u̅]
+                bounds₂ = [s₁ s̅₁; s̅₂ s₂]
             end
-            task.branch.split_nodes = vcat(split_nodes[1:n-1], split_nodes[n+1:end])
         end
     end
 
@@ -201,10 +202,15 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
     distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = task
     
     branch₁, branch₂ = branch, deepcopy(branch)
-    node₁ = SplitNode(network, layer, neuron, direction₁, bounds₁)
-    push!(branch₁.split_nodes, node₁)
-    node₂ = SplitNode(network, layer, neuron, direction₂, bounds₂)
-    push!(branch₂.split_nodes, node₂)
+    node₁ = SplitNode(network, layer, neuron, diff_layer, direction₁, bounds₁)
+    node₂ = SplitNode(network, layer, neuron, diff_layer, direction₂, bounds₂)
+    if isnothing(old_node_idx)     
+        push!(branch₁.split_nodes, node₁)
+        push!(branch₂.split_nodes, node₂)
+    else
+        branch₁.split_nodes[old_node_idx] = node₁
+        branch₂.split_nodes[old_node_idx] = node₂
+    end
     
     task₁ = VerificationTask(
         middle, distance, distance_indices, distance1_secondary, middle1_secondary, distance2_secondary, 

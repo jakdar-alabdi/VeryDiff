@@ -6,9 +6,9 @@ function contract_zono!(box::InputBox, Z::Zonotope, node::SplitNode) :: Union{No
     gs = -direction .* gs
     c = direction * c
 
-    common_gens_indices = intersect_indices(box.generator_ids, Z.generator_ids)[:]
-    lowers = @view box.lowers[common_gens_indices]
-    uppers = @view box.uppers[common_gens_indices]
+    common_indices = intersect_indices(box.generator_ids, Z.generator_ids)[:]
+    lowers = @view box.lowers[common_indices]
+    uppers = @view box.uppers[common_indices]
 
     vs = [ifelse.(g .>= 0.0, l[1:length(g)], u[1:length(g)]) for (g, l, u) in zip(gs, lowers, uppers)]
 
@@ -57,9 +57,9 @@ function contract_zono_all!(box::InputBox, split_nodes::Vector{SplitNode}, DZ::D
 end
 
 function transform_offset_zono!(box::InputBox, Z::Zonotope) :: Zonotope
-    common_gens_indices = intersect_indices(box.generator_ids, Z.generator_ids)
+    common_indices = intersect_indices(box.generator_ids, Z.generator_ids)
     # @info "Pre-zonotope-bounds: $(zono_bounds(Z))"
-    for (i, idx) in enumerate(common_gens_indices)
+    for (i, idx) in enumerate(common_indices)
         lower = box.lowers[idx]
         upper = box.uppers[idx]
         α = (upper - lower) ./ 2
@@ -119,9 +119,9 @@ function contract_to_verification_task(box::InputBox, Z::Zonotope, node::SplitNo
 end
 
 function offset_zono_bounds(box::InputBox, Z::Zonotope) :: Matrix{Float64}
-    common_gens_indices = intersect_indices(box.generator_ids, Z.generator_ids)
+    common_indices = intersect_indices(box.generator_ids, Z.generator_ids)
     bounds = zeros(2, length(Z.c))
-    for (i, idx) in enumerate(common_gens_indices)
+    for (i, idx) in enumerate(common_indices)
         lower = @view lowers[idx][1:size(Z.Gs[i], 2)]
         upper = @view uppers[idx][1:size(Z.Gs[i], 2)]
         row_bounds = g -> ifelse.(g .>= 0, g .* [lower upper], g .* [upper lower], dims=1)
@@ -134,9 +134,9 @@ end
 function geometric_distance(box::InputBox, neuron::Int, Z::Zonotope) :: Float64
     gs = [@view G[neuron, :] for G in Z.Gs]
 
-    common_gens_indices = intersect_indices(box.generator_ids, Z.generator_ids)[:]
-    lowers = @view box.lowers[common_gens_indices]
-    uppers = @view box.uppers[common_gens_indices]
+    common_indices = intersect_indices(box.generator_ids, Z.generator_ids)[:]
+    lowers = @view box.lowers[common_indices]
+    uppers = @view box.uppers[common_indices]
     centers = (lowers .+ uppers) ./ 2
 
     a = Z.c[neuron] + sum(g'x[1:length(g)] for (g, x) in zip(gs, centers))

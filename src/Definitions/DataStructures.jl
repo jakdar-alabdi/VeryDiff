@@ -9,8 +9,12 @@ mutable struct SplitNode
     network :: Int
     layer :: Int
     neuron :: Int
+    diff_layer :: Union{DiffLayer, Nothing}
     direction :: Int
     bounds :: Union{Matrix{Float64}, Nothing}
+    function SplitNode(network::Int, layer::Int, neuron::Int, diff_layer=nothing, direction=1, bounds=nothing)
+        new(network, layer, neuron, diff_layer, direction, bounds)
+    end
 end
 
 mutable struct Branch

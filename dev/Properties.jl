@@ -11,6 +11,7 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
         ∂out_gens = Zout.∂Z.Gs
         mask = prop_state.task.branch.undetermined
         split_nodes = prop_state.task.branch.split_nodes
+        bounds_cache = prop_state.task_bounds.bounds_cache
         num_instable = prop_state.num_instable
         box = nothing
 
@@ -25,13 +26,20 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
 
         if VeryDiff.USE_LP[] || prop_state.num_instable == 0
             model = Model(() -> Gurobi.Optimizer(GRB_ENV[]))
-            set_time_limit_sec(model, 10)
+            set_time_limit_sec(model, 20)
             
-            xs = [@variable(model, [1:size(∂out_gens[find_index_position(∂out_ids, i)], 2)], lower_bound=-1.0, upper_bound=1.0) for i in ∂out_ids]
+            xs = [@variable(model, [1:size(G, 2)], lower_bound=-1.0, upper_bound=1.0) for G in ∂out_gens]
 
-            for (;network, layer, neuron, direction) in split_nodes
-                Z = zonotopes[layer].zonotope |> (z -> ifelse(network == 1, z.Z₁, z.Z₂))
-                @constraint(model, direction * (sum(G[neuron, :]'xs[find_index_position(∂out_ids, i)][1:size(G, 2)] for (G, i) in zip(Z.Gs, Z.generator_ids)) + Z.c[neuron]) >= 0.0)
+            for (;network, diff_layer, neuron, direction, bounds) in split_nodes
+                input_positions = get_inputs(diff_layer)
+                inputs = get_zonos_at_pos(input_positions, prop_state)
+                Z = get_zonotope(inputs[1]) |> DZ -> ifelse(network == 1, DZ.Z₁, DZ.Z₂)
+                indices = intersect_indices(∂out_ids, Z.generator_ids)
+                bc = bounds_cache[diff_layer.layer_idx]
+                lower, upper = ifelse(network == 1, (bc.lower₁[neuron], bc.upper₁[neuron]), (bc.lower₂[neuron], bc.upper₂[neuron]))
+                expr = sum(G[neuron, :]'xs[i][1:size(G, 2)] for (G, i) in zip(Z.Gs, indices)) + Z.c[neuron]
+                @constraint(model, lower <= expr <= upper)
+                # @constraint(model, direction * (sum(G[neuron, :]'xs[i][1:size(G, 2)] for (G, i) in zip(Z.Gs, indices)) + Z.c[neuron]) >= 0.0)
             end
 
             _distance_bound = 0.0
@@ -70,18 +78,6 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
                     end
                     mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
                 end
-            end
-            if prop_state.num_instable == 0 && any(mask)
-                @info "$mask, $(findall(mask))"
-                count_instable = 0
-                for Z in get_zonotope.(zonotopes)
-                    num_approx₁ = length(Z.Z₁.Gs) <= 1 ? 0 : sum(size(G, 2) for G in Z.Z₁.Gs) - size(Z.Z₁.Gs[1], 2)
-                    num_approx₂ = length(Z.Z₂.Gs) <= 1 ? 0 : sum(size(G, 2) for G in Z.Z₂.Gs) - size(Z.Z₂.Gs[1], 2)
-                    ∂num_approx = length(Z.∂Z.Gs) <= 1 ? 0 : sum(size(G, 2) for G in Z.∂Z.Gs) - size(Z.∂Z.Gs[1], 2)
-                    @info "num_approx₁: $(num_approx₁), num_approx₂: $(num_approx₂), ∂num_approx: $(∂num_approx)"
-                    count_instable += num_approx₁ + num_approx₂
-                end
-                @info "count_instable: $count_instable"
             end
             @assert !(prop_state.num_instable == 0 && any(mask))
             distance_bound = min(distance_bound, _distance_bound)
