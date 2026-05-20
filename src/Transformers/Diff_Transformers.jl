@@ -214,7 +214,7 @@ function propagate_layer!(
                     net, n = node.network, node.neuron
                     l = max(bounds[net][n, 1], cached_lowers[net][n])
                     u = min(bounds[net][n, 2], cached_uppers[net][n])
-                    if l < 0 && u > 0
+                    if l < 0.0 && u > 0.0
                         if node.direction == 1
                             if isnothing(node.bounds)
                                 node.bounds = [l u] ./ 2
@@ -235,7 +235,7 @@ function propagate_layer!(
                             # l = ifelse(l >= s₁, s₂, max(l, l̅))
                             # u = ifelse(u <= s₂, s₁, min(u, u̅))
                             node.bounds = [l s₁; s₂ u]
-                            data.is_unsatisfiable |= l > u || l >= s₁ && u <= s₂
+                            data.is_unsatisfiable |= l >= s₁ && u <= s₂
                         end
                         if data.is_unsatisfiable
                             break

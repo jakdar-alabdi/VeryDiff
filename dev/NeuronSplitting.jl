@@ -70,7 +70,6 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     while !isempty(queue)
         task = pop!(queue)
         veri_result.final_δ_bound = task.distance_bound
-
         @info "Distance Bound: $(task.distance_bound)"
         
         if !check_resources(start_time, timeout)
@@ -81,19 +80,19 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
         end
 
         prepare_prop_state!(prop_state, task)
+        Zin = prop_state.zono_storage.zonotopes[1].zonotope
         prop_state = propagate!(N, prop_state)
-        zonotopes = get_zonos_at_pos(:, prop_state)
-        Zout = get_zonotope(zonotopes[end])
+        Zout = prop_state.zono_storage.zonotopes[end].zonotope
         veri_result.num_propagations += 1
 
         if prop_state.is_unsatisfiable
             continue
         end
 
-        # @info "Z₁.Gs sizes: $(size.(Zout.Z₁.Gs, 2))"
-        # @info "Z₂.Gs sizes: $(size.(Zout.Z₂.Gs, 2))"
-        # @info "∂Z.Gs sizes: $(size.(Zout.∂Z.Gs, 2))"
-        # @info "NumInstable: $(prop_state.num_instable)"
+        @info "Z₁.Gs sizes: $(size.(Zout.Z₁.Gs, 2))"
+        @info "Z₂.Gs sizes: $(size.(Zout.Z₂.Gs, 2))"
+        @info "∂Z.Gs sizes: $(size.(Zout.∂Z.Gs, 2))"
+        @info "NumInstable: $(prop_state.num_instable)"
         # @assert (size(Zout.∂Z.Gs[2], 2) + size(Zout.∂Z.Gs[3], 2)) == prop_state.num_instable
 
         if first_task
@@ -122,17 +121,14 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
                 veri_result.verification_time = time_ns() - start_time
                 return veri_result, nothing
             end
-
             @assert prop_state.num_instable > 0
 
             split_nodes = prop_state.task.branch.split_nodes
-            
             if VeryDiff.USE_ZONO_CONTRACT[] && !isempty(split_nodes)
                 if isnothing(box)
                     box = InputBox(Zout)
-                    sort_split_nodes!(split_nodes, zonotopes)
                 end
-                box = contract_zono_all!(box, split_nodes, zonotopes)
+                box = contract_zono_all!(box, split_nodes, prop_state)
                 if isnothing(box)
                     continue
                 end
@@ -141,13 +137,13 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             split_candidate = deepsplit_heuristic(prop_state, relu_layers, relative_impact_func)
             if split_candidate.layer == 0
                 if VeryDiff.USE_ZONO_CONTRACT[] && !isempty(split_nodes)
-                    task₁, task₂ = split_contract_zono(split_candidate.neuron, box, zonotopes, task, verification_status, distance_bound)
+                    task₁, task₂ = split_contract_zono(split_candidate.neuron, box, prop_state, verification_status, distance_bound)
                 else
                     task₁, task₂ = split_zono(split_candidate.neuron, task, verification_status, distance_bound)
                 end
                 veri_result.num_input_splits += !isnothing(task₁) || !isnothing(task₂)
             else
-                task₁, task₂ = split_neuron(split_candidate, box, task, zonotopes, verification_status, distance_bound)
+                task₁, task₂ = split_neuron(split_candidate, box, prop_state, verification_status, distance_bound)
                 veri_result.num_neuron_splits += !isnothing(task₁) || !isnothing(task₂)
             end
 
@@ -161,15 +157,14 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
 
         reset_ps!(prop_state)
     end
-
     veri_result.status = SAFE
     veri_result.verification_time = time_ns() - start_time
     return veri_result, nothing
 end
 
-function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::VerificationTask, zonotopes::Vector{CachedZonotope}, verification_status, distance_bound::Float64)
+function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, prop_state::PropState, verification_status, distance_bound::Float64)
     if !VeryDiff.PRE_CONTRACT[] && !isnothing(box) && !is_unit_hypercube(box)
-        transform_verification_task!(box, task)
+        transform_verification_task!(box, prop_state.task)
     end
 
     direction₁, direction₂ = -1, 1 # inactive, active
@@ -178,7 +173,7 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
     
     old_node_idx = nothing
     if VeryDiff.USE_VERTICAL_SPLITTING[]
-        split_nodes = task.branch.split_nodes
+        split_nodes = prop_state.task.branch.split_nodes
         old_node_idx = findfirst(n -> (n.network, n.layer, n.neuron) == (network, layer, neuron), split_nodes)
         if !isnothing(old_node_idx)
             old_node = split_nodes[old_node_idx]
@@ -199,7 +194,7 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
     end
 
     (;middle, distance, distance_indices, distance1_secondary, middle1_secondary, 
-    distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = task
+    distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = prop_state.task
     
     branch₁, branch₂ = branch, deepcopy(branch)
     node₁ = SplitNode(network, layer, neuron, diff_layer, direction₁, bounds₁)
@@ -223,13 +218,12 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
     )
 
     if VeryDiff.PRE_CONTRACT[]
-        Z = get_zonotope(zonotopes[node.layer])
+        Z = get_split_node_zono(node, prop_state)
         if isnothing(box)
             box₁, box₂ = InputBox(Z), InputBox(Z)
         else
             box₁, box₂ = box, InputBox(box)
         end
-        Z = ifelse(node.network == 1, Z.Z₁, Z.Z₂)
         task₁ = contract_to_verification_task!(box₁, Z, node₁, task₁)
         task₂ = contract_to_verification_task!(box₂, Z, node₂, task₂)
     end
@@ -237,8 +231,8 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
     return task₁, task₂
 end
 
-function split_contract_zono(d::Int, box::InputBox, zonotopes::Vector{CachedZonotope}, task::VerificationTask, verification_status, distance_bound::Float64)
-    distance_d = findfirst(x -> x == d, task.distance_indices)
+function split_contract_zono(d::Int, box::InputBox, prop_state::PropState, verification_status, distance_bound::Float64)
+    distance_d = findfirst(x -> x == d, prop_state.task.distance_indices)
     @assert !isnothing(distance_d)
     
     box₁, box₂ = box, InputBox(box)
@@ -248,9 +242,9 @@ function split_contract_zono(d::Int, box::InputBox, zonotopes::Vector{CachedZono
     box₂.uppers[1][distance_d] = cutting_point
 
     (;middle, distance, distance_indices, distance1_secondary, middle1_secondary, 
-    distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = task
+    distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = prop_state.task
 
-    box₁ = contract_zono_all!(box₁, branch.split_nodes, zonotopes)
+    box₁ = contract_zono_all!(box₁, branch.split_nodes, prop_state)
     task₁ = nothing
     if !isnothing(box₁)
         task₁ = VerificationTask(
@@ -260,7 +254,7 @@ function split_contract_zono(d::Int, box::InputBox, zonotopes::Vector{CachedZono
         task₁ = transform_verification_task!(box₁, task₁)
     end
 
-    box₂ = contract_zono_all!(box₂, branch.split_nodes, zonotopes)
+    box₂ = contract_zono_all!(box₂, branch.split_nodes, prop_state)
     task₂ = nothing
     if !isnothing(box₂)
         f = ifelse(isnothing(task₁), identity, deepcopy)
@@ -291,4 +285,14 @@ function get_relu_layers(N::GeminiNetwork) :: Vector{DiffLayer{
     isdiffrelu = l -> l isa VeryDiff.Definitions.DiffLayer{VNNLib.OnnxParser.ONNXRelu{S1},VNNLib.OnnxParser.ONNXRelu{S2},VNNLib.OnnxParser.ONNXRelu{S3}} where {S1,S2,S3}
     relu_layers_pos = findall(isdiffrelu, get_layers(N))
     return @view get_layers(N)[relu_layers_pos]
+end
+
+function get_split_node_diffzono(node::SplitNode, prop_state::PropState) :: DiffZonotope
+    inputs = get_zonos_at_pos(get_inputs(node.diff_layer), prop_state)
+    return get_zonotope(inputs[1])
+end
+
+function get_split_node_zono(node::SplitNode, prop_state::PropState) :: Zonotope
+    DZ = get_split_node_diffzono(node, prop_state)
+    return ifelse(node.network == 1, DZ.Z₁, DZ.Z₂)
 end

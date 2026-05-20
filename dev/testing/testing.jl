@@ -91,9 +91,9 @@ acas_csv_dir = joinpath(cur_dir, "acas-prune.csv")
 mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
 lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 
-verifier = deepsplit_epsilon((true, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.ZonoContractPost)
+verifier = deepsplit_epsilon((true, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.LP, contract=VeryDiff.ZonoContractInter)
 # verifier = verydiff_epsilon()
 
 # run_tests_epsilon(benchmarks_dir, acas_csv_dir, "", verifier)
 # run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
-run_tests_epsilon(benchmarks_dir, acas_csv_dir, "", verifier)
+run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)

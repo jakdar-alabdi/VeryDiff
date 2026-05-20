@@ -54,7 +54,10 @@ struct InputBox
         end
         InputBox(generator_ids, generator_sizes)
     end
-    function InputBox(box :: InputBox)
+    function InputBox(Z::Zonotope)
+        InputBox(Z.generator_ids, size.(Z.Gs, 2))
+    end
+    function InputBox(box::InputBox)
         lowers = [zeros(length(l)) for l in box.lowers]
         uppers = [zeros(length(u)) for u in box.uppers]
         for i in 1:length(box.generator_ids)

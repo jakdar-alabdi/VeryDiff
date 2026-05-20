@@ -4,15 +4,11 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
     VeryDiff.EQUIVALENCE_PROPERTY[] = VeryDiff.EpsilonEquivalence
 
     return (N₁::Network, N₂::Network, prop_state::PropState) -> begin
-        zonotopes = get_zonos_at_pos(:, prop_state)
-        Zin = get_zonotope(zonotopes[1])
-        Zout = get_zonotope(zonotopes[end])
-        ∂out_ids = Zout.∂Z.generator_ids
-        ∂out_gens = Zout.∂Z.Gs
+        Zin = prop_state.zono_storage.zonotopes[1].zonotope
+        Zout = prop_state.zono_storage.zonotopes[end].zonotope
         mask = prop_state.task.branch.undetermined
         split_nodes = prop_state.task.branch.split_nodes
         bounds_cache = prop_state.task_bounds.bounds_cache
-        num_instable = prop_state.num_instable
         box = nothing
 
         prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing; mask=mask)
@@ -21,22 +17,25 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
         end
 
         if VeryDiff.USE_ZONO_CONTRACT[]
-            split_nodes = sort_split_nodes!(split_nodes, zonotopes)
+            sort_split_nodes!(split_nodes, prop_state)
         end
 
-        if VeryDiff.USE_LP[] || prop_state.num_instable == 0
+        if VeryDiff.USE_LP[] || !VeryDiff.USE_VERTICAL_SPLITTING[] && prop_state.num_instable == 0
             model = Model(() -> Gurobi.Optimizer(GRB_ENV[]))
-            set_time_limit_sec(model, 20)
+            set_time_limit_sec(model, 10)
             
-            xs = [@variable(model, [1:size(G, 2)], lower_bound=-1.0, upper_bound=1.0) for G in ∂out_gens]
+            xs = [@variable(model, [1:size(G, 2)], lower_bound=-1.0, upper_bound=1.0) for G in Zout.∂Z.Gs]
 
-            for (;network, diff_layer, neuron, direction, bounds) in split_nodes
-                input_positions = get_inputs(diff_layer)
-                inputs = get_zonos_at_pos(input_positions, prop_state)
-                Z = get_zonotope(inputs[1]) |> DZ -> ifelse(network == 1, DZ.Z₁, DZ.Z₂)
-                indices = intersect_indices(∂out_ids, Z.generator_ids)
+            for node in split_nodes
+                (;network, diff_layer, neuron, direction, bounds) = node
+                Z = VeryDiff.get_split_node_zono(node, prop_state)
+                indices = intersect_indices(Zout.∂Z.generator_ids, Z.generator_ids)
                 bc = bounds_cache[diff_layer.layer_idx]
-                lower, upper = ifelse(network == 1, (bc.lower₁[neuron], bc.upper₁[neuron]), (bc.lower₂[neuron], bc.upper₂[neuron]))
+                if network == 1
+                    lower, upper = bc.lower₁[neuron], bc.upper₁[neuron]
+                else
+                    lower, upper = bc.lower₂[neuron], bc.upper₂[neuron]
+                end
                 expr = sum(G[neuron, :]'xs[i][1:size(G, 2)] for (G, i) in zip(Z.Gs, indices)) + Z.c[neuron]
                 @constraint(model, lower <= expr <= upper)
                 # @constraint(model, direction * (sum(G[neuron, :]'xs[i][1:size(G, 2)] for (G, i) in zip(Z.Gs, indices)) + Z.c[neuron]) >= 0.0)
@@ -45,7 +44,7 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
             _distance_bound = 0.0
             for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
                 for (j, σ) in [(1, -1), (2, 1)][mask[i, :]]
-                    @objective(model, Max, σ * (sum(G[i, :]'xs[k] for (k, G) in enumerate(∂out_gens)) + Zout.∂Z.c[i]))
+                    @objective(model, Max, σ * (sum(G[i, :]'xs[k] for (k, G) in enumerate(Zout.∂Z.Gs)) + Zout.∂Z.c[i]))
                     optimize!(model)
 
                     numeric_foucs_opt = prop_state.num_instable == 0 && has_values(model) && abs(objective_value(model)) > epsilon
@@ -70,7 +69,6 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
                             return false, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), nothing, nothing, distance_bound, nothing
                         end
                     end
-
                     if has_values(model)
                         δ = abs(objective_value(model))
                         mask[i, j] &= δ > epsilon
@@ -83,8 +81,7 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
             distance_bound = min(distance_bound, _distance_bound)
             
         elseif VeryDiff.POST_CONTRACT[]
-            box = InputBox(Zout)
-            box = contract_zono_all!(box, split_nodes, zonotopes) 
+            box = contract_zono_all!(InputBox(Zout), split_nodes, prop_state) 
             if isnothing(box)
                 return true, nothing, nothing, nothing, distance_bound, nothing
             end
