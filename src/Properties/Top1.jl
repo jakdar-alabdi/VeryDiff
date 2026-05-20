@@ -7,7 +7,7 @@ function get_top1_property(;delta=zero(Float64),naive=false)
     else
         dist=0.0
     end
-    return (N1, N2, Zin, Zout, verification_status) -> begin
+    return (N1, N2, Zin, Zout, verification_status; prop_state=nothing) -> begin
         global TOP1_FOUND_CONCRETE_DELTA
         if VeryDiff.FIRST_ROUND[]
             TOP1_FOUND_CONCRETE_DELTA[] = false
@@ -69,6 +69,28 @@ function get_top1_property(;delta=zero(Float64),naive=false)
             set_time_limit_sec(model, 10)
             var_num = variable_offsets[end]-1
             @variable(model,-1.0 <= x[1:var_num] <= 1.0)
+
+            if !isnothing(prop_state)
+                # @info "Add split constraints"
+                for node in prop_state.task.branch.split_nodes
+                    (;network, neuron, diff_layer, direction, bounds) = node
+                    Z = VeryDiff.get_split_node_zono(node, prop_state)
+                    indices = intersect_indices(common_generator_indices, Z.generator_ids)
+                    bc = prop_state.task_bounds.bounds_cache[diff_layer.layer_idx]
+                    if network == 1
+                        lower, upper = bc.lower₁[neuron], bc.upper₁[neuron]
+                    else
+                        lower, upper = bc.lower₂[neuron], bc.upper₂[neuron]
+                    end
+                    expr = AffExpr(Z.c[neuron])
+                    for (G, idx) in zip(Z.Gs, indices)
+                        offset_start = variable_offsets[idx]
+                        offset_end = offset_start + size(G, 2) - 1
+                        add_to_expression!(expr, G[neuron, :]'x[offset_start:offset_end])
+                    end
+                    @constraint(model, lower <= expr <= upper)
+                end
+            end
             
             # Constraint 1: Maximal output of first network is top_index
             offset1_start = variable_offsets[indices₁[1]]

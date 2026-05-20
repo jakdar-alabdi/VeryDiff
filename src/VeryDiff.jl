@@ -129,7 +129,8 @@ export get_top1_property, top1_configure_split_heuristic
 
 export deepsplit_verify_network
 export contract_zono!, contract_zono_all!, transform_offset_diff_zono!, 
-contract_to_verification_task!, transform_verification_task!, sort_split_nodes!, is_unit_hypercube
+contract_to_verification_task!, transform_verification_task!, sort_split_nodes!, 
+is_unit_hypercube, transform_constraints!
 export deepsplit_heuristic
 
 end # module AlphaZono

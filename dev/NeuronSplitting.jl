@@ -21,7 +21,6 @@ function deepsplit_verify_network(
 
         lower = @view bounds[:, 1]
         upper = @view bounds[:, 2]
-    
         mid = (upper .+ lower) ./ 2
         distance = mid .- lower
         non_zero_indices = findall((!).(iszero.(distance)))
@@ -33,12 +32,17 @@ function deepsplit_verify_network(
         N₁ = executable_network(N₁)
         N₂ = executable_network(N₂)
 
+        if N.diff_layers[end] isa VeryDiff.Definitions.DiffLayer{VNNLib.OnnxParser.ONNXSoftmax{S},VNNLib.OnnxParser.ONNXSoftmax{S},VNNLib.OnnxParser.ONNXSoftmax{S}} where S
+            pop!(N.diff_layers)
+            @warn "Removed final Softmax layer from differential network for verification."
+            @warn "VeryDiff assumes this is handled by the choice of an appropriate property!"
+        end
+
         veri_result, cex = deepsplit_verify_network(N, N₁, N₂, initial_task, property_check; timeout=timeout)
 
         if !isnothing(cex)
             println("Found counterexample: $cex")
         end
-
         println("Initial δ-bound: $(veri_result.initial_δ_bound), Final δ-bound: $(veri_result.final_δ_bound)")
         println("Verification Status: $(veri_result.status)")
 
@@ -89,10 +93,10 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             continue
         end
 
-        @info "Z₁.Gs sizes: $(size.(Zout.Z₁.Gs, 2))"
-        @info "Z₂.Gs sizes: $(size.(Zout.Z₂.Gs, 2))"
-        @info "∂Z.Gs sizes: $(size.(Zout.∂Z.Gs, 2))"
-        @info "NumInstable: $(prop_state.num_instable)"
+        # @info "Z₁.Gs sizes: $(size.(Zout.Z₁.Gs, 2))"
+        # @info "Z₂.Gs sizes: $(size.(Zout.Z₂.Gs, 2))"
+        # @info "∂Z.Gs sizes: $(size.(Zout.∂Z.Gs, 2))"
+        # @info "NumInstable: $(prop_state.num_instable)"
         # @assert (size(Zout.∂Z.Gs[2], 2) + size(Zout.∂Z.Gs[3], 2)) == prop_state.num_instable
 
         if first_task
@@ -224,8 +228,8 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, prop_state:
         else
             box₁, box₂ = box, InputBox(box)
         end
-        task₁ = contract_to_verification_task!(box₁, Z, node₁, task₁)
-        task₂ = contract_to_verification_task!(box₂, Z, node₂, task₂)
+        task₁ = contract_to_verification_task!(box₁, node₁, Z, task₁)
+        task₂ = contract_to_verification_task!(box₂, node₂, Z, task₂)
     end
 
     return task₁, task₂

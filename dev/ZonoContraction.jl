@@ -57,7 +57,6 @@ end
 
 function transform_offset_zono!(box::InputBox, Z::Zonotope) :: Zonotope
     common_indices = intersect_indices(box.generator_ids, Z.generator_ids)
-    # @info "Pre-zonotope-bounds: $(zono_bounds(Z))"
     for (i, idx) in enumerate(common_indices)
         lower = box.lowers[idx]
         upper = box.uppers[idx]
@@ -66,7 +65,6 @@ function transform_offset_zono!(box::InputBox, Z::Zonotope) :: Zonotope
         Z.c .+= Z.Gs[i] * β
         Z.Gs[i] .*= α'
     end
-    # @info "Post-zonotope-bounds: $(zono_bounds(Z))"
     return Z
 end
 
@@ -79,6 +77,21 @@ function transform_offset_diff_zono!(box::InputBox, Z::DiffZonotope) :: DiffZono
     transform_offset_zono!(box, Z.Z₂)
     transform_offset_zono!(box, Z.∂Z)
     return Z
+end
+
+function transform_constraints!(box::InputBox, split_nodes::Vector{SplitNode}, prop_state::PropState)
+    αs = [(u - l) ./ 2 for (l, u) in zip(box.lowers, box.uppers)]
+    βs = [(u + l) ./ 2 for (l, u) in zip(box.lowers, box.uppers)]
+    for node in split_nodes
+        Z = get_split_node_zono(node, prop_state)
+        common_indices = intersect_indices(box.generator_ids, Z.generator_ids)
+        for (G, idx) in zip(Z.Gs, common_indices)
+            α = @view αs[idx][1:size(G, 2)]
+            β = @view βs[idx][1:size(G, 2)]
+            Z.c[node.neuron] += G[node.neuron, :]'β
+            G[node.neuron, :] .*= α
+        end
+    end
 end
 
 function transform_verification_task!(box::InputBox, task::VerificationTask) :: VerificationTask
@@ -150,15 +163,15 @@ function geometric_distance0(node::SplitNode, Z::Zonotope) :: Float64
     return abs(Z.c[node.neuron]) / sqrt(sum(g'g for g in gs))
 end
 
-function sort_split_nodes!(split_nodes::Vector{SplitNode}, prop_state::PropState)
+function sort_split_nodes!(split_nodes::Vector{SplitNode}, prop_state::PropState) :: Vector{SplitNode}
     sort!(split_nodes, by=node -> geometric_distance0(node, get_split_node_zono(node, prop_state)))
 end
 
 # This function assumes that all the split nodes and the DiffZonotope correspond to the same layer.
-function sort_split_nodes!(split_nodes::Vector{SplitNode}, Z::DiffZonotope)
+function sort_split_nodes!(split_nodes::Vector{SplitNode}, Z::DiffZonotope) :: Vector{SplitNode}
     sort!(split_nodes, by=node -> geometric_distance0(node, ifelse(node.network == 1, Z.Z₁, Z.Z₂)))
 end
 
-function is_unit_hypercube(box::InputBox)
+function is_unit_hypercube(box::InputBox) :: Bool
     return mapreduce((l, u) -> all(x -> isone(-x), l) && all(x -> isone(x), u), &, box.lowers, box.uppers; init=false)
 end
