@@ -174,8 +174,7 @@ function propagate_layer!(
 
     if !isnothing(data) && VeryDiff.INTER_CONTRACT[] && !isempty(data.split_nodes)
         sort_split_nodes!(data.split_nodes, Zin)
-        box = InputBox(Zin)
-        contract_zono_all!(box, data.split_nodes, Zin)
+        box = contract_zono_all!(InputBox(Zin), data.split_nodes, Zin)
         if isnothing(box)
             data.is_unsatisfiable = true
             return
@@ -214,32 +213,28 @@ function propagate_layer!(
                     net, n = node.network, node.neuron
                     l = max(bounds[net][n, 1], cached_lowers[net][n])
                     u = min(bounds[net][n, 2], cached_uppers[net][n])
-                    if l < 0.0 && u > 0.0
-                        if node.direction == 1
-                            if isnothing(node.bounds)
-                                node.bounds = [l u] ./ 2
-                            end
-                            l̲, u̲ = node.bounds[1], node.bounds[2]
-                            l, u = max(l, l̲), min(u, u̲)
-                            node.bounds = [l u]
-                            data.is_unsatisfiable |= l > u
-                        else
-                            if isnothing(node.bounds)
-                                s₁, s₂ = (l, u) ./ 2
-                                node.bounds = [l s₁; s₂ u]
-                            end
-                            l̅, s₁ = node.bounds[1, 1], node.bounds[1, 2]
-                            s₂, u̅ = node.bounds[2, 1], node.bounds[2, 2]
-                            l = max(l, ifelse(l >= s₁, s₂, l̅))
-                            u = min(u, ifelse(u <= s₂, s₁, u̅))
-                            # l = ifelse(l >= s₁, s₂, max(l, l̅))
-                            # u = ifelse(u <= s₂, s₁, min(u, u̅))
+                    if node.direction == 1
+                        if isnothing(node.bounds)
+                            node.bounds = [l u] ./ 2
+                        end
+                        l̲, u̲ = node.bounds[1], node.bounds[2]
+                        l, u = max(l, l̲), min(u, u̲)
+                        node.bounds = [l u]
+                        data.is_unsatisfiable |= l > u
+                    else
+                        if isnothing(node.bounds)
+                            s₁, s₂ = (l, u) ./ 2
                             node.bounds = [l s₁; s₂ u]
-                            data.is_unsatisfiable |= l >= s₁ && u <= s₂
                         end
-                        if data.is_unsatisfiable
-                            break
-                        end
+                        l̅, s₁ = node.bounds[1, 1], node.bounds[1, 2]
+                        s₂, u̅ = node.bounds[2, 1], node.bounds[2, 2]
+                        l = ifelse(l >= s₁, s₂, max(l, l̅))
+                        u = ifelse(u <= s₂, s₁, min(u, u̅))
+                        node.bounds = [l s₁; s₂ u]
+                        data.is_unsatisfiable |= l >= s₁ && u <= s₂
+                    end
+                    if data.is_unsatisfiable
+                        break
                     end
                     bounds[net][n, 1] = l
                     bounds[net][n, 2] = u
@@ -260,15 +255,15 @@ function propagate_layer!(
             split_nodes₁ = @view data.split_nodes[findall(n -> n.network == 1, data.split_nodes)]
             split_nodes₂ = @view data.split_nodes[findall(n -> n.network == 2, data.split_nodes)]
         end
-
-        bounds₁[:, 1] .= max.(bounds₂[:, 1] .+ ∂bounds[:, 1], bounds₁[:, 1], bounds_cache.lower₁)
-        bounds₁[:, 2] .= min.(bounds₂[:, 2] .+ ∂bounds[:, 2], bounds₁[:, 2], bounds_cache.upper₁)
-        bounds₂[:, 1] .= max.(bounds₁[:, 1] .- ∂bounds[:, 2], bounds₂[:, 1], bounds_cache.lower₂)
-        bounds₂[:, 2] .= min.(bounds₁[:, 2] .- ∂bounds[:, 1], bounds₂[:, 2], bounds_cache.upper₂)
-        ∂bounds[:, 1] .= max.(bounds₁[:, 1] .- bounds₂[:, 2], ∂bounds[:, 1], bounds_cache.∂lower)
-        ∂bounds[:, 2] .= min.(bounds₁[:, 2] .- bounds₂[:, 1], ∂bounds[:, 2], bounds_cache.∂upper)
     end
 
+    bounds₁[:, 1] .= max.(bounds₂[:, 1] .+ ∂bounds[:, 1], bounds₁[:, 1], bounds_cache.lower₁)
+    bounds₁[:, 2] .= min.(bounds₂[:, 2] .+ ∂bounds[:, 2], bounds₁[:, 2], bounds_cache.upper₁)
+    bounds₂[:, 1] .= max.(bounds₁[:, 1] .- ∂bounds[:, 2], bounds₂[:, 1], bounds_cache.lower₂)
+    bounds₂[:, 2] .= min.(bounds₁[:, 2] .- ∂bounds[:, 1], bounds₂[:, 2], bounds_cache.upper₂)
+    ∂bounds[:, 1] .= max.(bounds₁[:, 1] .- bounds₂[:, 2], ∂bounds[:, 1], bounds_cache.∂lower)
+    ∂bounds[:, 2] .= min.(bounds₁[:, 2] .- bounds₂[:, 1], ∂bounds[:, 2], bounds_cache.∂upper)
+    
     lower₁ = bounds_cache.lower₁ .= max.(bounds₁[:,1], bounds_cache.lower₁)
     upper₁ = bounds_cache.upper₁ .= min.(bounds₁[:,2], bounds_cache.upper₁)
     lower₂ = bounds_cache.lower₂ .= max.(bounds₂[:,1], bounds_cache.lower₂)

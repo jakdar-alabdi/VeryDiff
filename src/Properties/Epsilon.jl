@@ -8,7 +8,7 @@ end
 
 function get_epsilon_property(epsilon;focus_dim=nothing)
     @info "Creating epsilon property with ε = $epsilon, focus_dim = $focus_dim"
-    return (N1, N2, Zin, Zout, verification_status; mask=nothing) -> begin
+    return (N1, N2, Zin, Zout, verification_status; safe_out_dim=nothing) -> begin
         #TODO: Use verification status to ignore proven epsilons
         @assert length(Zin.Z₁.generator_ids) == 0 || length(Zout.∂Z.generator_ids) == 0 || Zout.∂Z.generator_ids[1] == Zin.Z₁.generator_ids[1] "Input generator block with ID $(Zin.Z₁.generator_ids[1]) not found in output differential Zonotope!"
         out_bounds = zono_bounds(Zout.∂Z)
@@ -39,8 +39,8 @@ function get_epsilon_property(epsilon;focus_dim=nothing)
                 return false, (cex_input, (N1(cex_input),N2(cex_input),sample_distance)), nothing, nothing, distance_bound
             end
             
-            if !isnothing(mask)
-                mask .&= abs.(out_bounds) .> epsilon
+            if !isnothing(safe_out_dim)
+                safe_out_dim .|= abs.(out_bounds) .<= epsilon
             end
 
             return false, nothing, (out_bounds, epsilon, focus_dim), nothing, distance_bound

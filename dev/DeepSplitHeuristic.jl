@@ -7,26 +7,29 @@ function deepsplit_heuristic(prop_state::PropState,
         } where {S1,S2,S3}
     }, relative_impact_func)
 
+    @assert prop_state.num_instable > 0
+
     L = length(relu_layers)
     zonos = prop_state.zono_storage.zonotopes
+    Zin = zonos[1].zonotope
     Zout = zonos[end].zonotope
-    input_dim = length(prop_state.task.distance)
+    input_dim = length(Zin.Z₁.c)
     bounds_cache = prop_state.task_bounds.bounds_cache
 
+    Zouts = (Zout.Z₁, Zout.Z₂)
+    owned_generator_ids = Zouts .|> Z -> isnothing(Z.owned_generators) ? -1 : Z.generator_ids[Z.owned_generators]
     if USE_DIFF_GENERATORS_DEEPSPLIT[]
-        Zouts_dir = (Zout.∂Z, Zout.∂Z)
-        G_dir_idxs = (2, 3)
-    else
-        Zouts_dir = (Zout.Z₁, Zout.Z₂)
-        G_dir_idxs = (2, 2)
+        Zouts = (Zout.∂Z, Zout.∂Z)
     end
+    G_dir_idxs = attempt_find_index_position.(Zouts .|> Z -> Z.generator_ids, owned_generator_ids)
     
     s = [zeros(2, length(zonos[l.layer_idx].zonotope.∂Z.c)) for l in relu_layers]
     s_input = zeros(2, input_dim)
-    offset₁ = (0, 0)
+
     max_score = -Inf
     max_node = nothing
-
+    
+    offset₁ = (0, 0)
     for l₁ in L:-1:1
         diff_layer₁ = relu_layers[l₁]
         inputs₁ = get_zonos_at_pos(get_inputs(diff_layer₁), prop_state)
@@ -36,7 +39,7 @@ function deepsplit_heuristic(prop_state::PropState,
         num_instable₁ = count.(crossing₁)
         zero_gens = zeros.(1, num_instable₁)
         
-        ϵ = ifelse.(num_instable₁ .== 0, zero_gens, get_generators!.(Zouts_dir, G_dir_idxs, offset₁, num_instable₁))
+        ϵ = ifelse.(num_instable₁ .== 0, zero_gens, get_generators!.(Zouts, G_dir_idxs, offset₁, num_instable₁))
         for i in 1:2
             s[l₁][i:i, crossing₁[i]] .= sum(abs, ϵ[i], dims=1)
         end
@@ -50,7 +53,7 @@ function deepsplit_heuristic(prop_state::PropState,
             crossing₂ = (bc₂.crossing₁, bc₂.crossing₂)
             num_instable₂ = count.(crossing₂)
 
-            ϵ = ifelse.(num_instable₂ .== 0, zero_gens, get_generators!.(Zin₂, 2, offset₂, num_instable₁))
+            ϵ = ifelse.(num_instable₂ .== 0, zero_gens, get_owned_generators!.(Zin₂, offset₂, num_instable₁))
             α = relative_impact_func.(Zin₂, ϵ, crossing₂)
             for i in 1:2
                 s[l₁][i:i, crossing₁[i]] .+= sum(abs, α[i] .* s[l₂][i, :], dims=1)
@@ -85,21 +88,17 @@ function deepsplit_heuristic(prop_state::PropState,
 
     if isnothing(max_node) && USE_VERTICAL_SPLITTING[]
         net, n = Tuple(argmax(s[L]))
-        if s[L][net, n] > 0.0
-            max_score = s[L][net, n]
-            max_node = SplitNode(net, L, n, relu_layers[L])
-        end
+        max_score = s[L][net, n]
+        max_node = SplitNode(net, relu_layers[L].layer_idx, n, relu_layers[L])
     end
 
     @assert !isnothing(max_node)
-    @assert max_score > 0.0 || USE_DIFF_GENERATORS_DEEPSPLIT[]
 
     if VeryDiff.INCORPORATE_INPUT_SPLITTING[]
         net, n = Tuple(argmax(s_input))
         if s_input[net, n] > max_score
-            d = prop_state.task.distance_indices[n]
             max_score = s_input[net, n]
-            max_node = SplitNode(0, 0, d)
+            max_node = SplitNode(0, 0, n)
         end
     end
 
@@ -143,4 +142,8 @@ end
 
 function get_generators!(Z::Zonotope, idx::Int, offset::Int, num::Int) :: Matrix{Float64}
     return @view Z.Gs[idx][:, end - offset - num + 1 : end - offset]
+end
+
+function get_owned_generators!(Z::Zonotope, offset::Int, num::Int) :: Matrix{Float64}
+    return get_generators!(Z, Z.owned_generators, offset, num)
 end

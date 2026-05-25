@@ -173,5 +173,5 @@ function sort_split_nodes!(split_nodes::Vector{SplitNode}, Z::DiffZonotope) :: V
 end
 
 function is_unit_hypercube(box::InputBox) :: Bool
-    return mapreduce((l, u) -> all(x -> isone(-x), l) && all(x -> isone(x), u), &, box.lowers, box.uppers; init=false)
+    return all(l -> all(x -> isone(-x), l), box.lowers) && all(u -> all(x -> isone(x), u), box.uppers)
 end

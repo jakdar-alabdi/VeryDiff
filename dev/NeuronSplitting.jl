@@ -3,8 +3,9 @@ function deepsplit_verify_network(
     N₂::OnnxNet{LayerIdT,NShapeIn, NShapeOut}, 
     Zin::Zonotope, 
     property_check;
-    timeout=Inf) where {LayerIdT,NShapeIn,NShapeOut}
-    return deepsplit_verify_network(N₁, N₂, zono_bounds(Zin), property_check; timeout=Inf)
+    timeout=Inf, 
+    fuzz_testing=nothing) where {LayerIdT,NShapeIn,NShapeOut}
+    return deepsplit_verify_network(N₁, N₂, zono_bounds(Zin), property_check; timeout=timeout, fuzz_testing=fuzz_testing)
 end
 
 function deepsplit_verify_network(
@@ -38,7 +39,7 @@ function deepsplit_verify_network(
             @warn "VeryDiff assumes this is handled by the choice of an appropriate property!"
         end
 
-        veri_result, cex = deepsplit_verify_network(N, N₁, N₂, initial_task, property_check; timeout=timeout)
+        veri_result, cex = deepsplit_verify_network(N, N₁, N₂, initial_task, property_check; timeout=timeout, fuzz_testing=fuzz_testing)
 
         if !isnothing(cex)
             println("Found counterexample: $cex")
@@ -56,7 +57,7 @@ function deepsplit_verify_network(
     end
 end
 
-function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VerificationTask, property_check; timeout=Inf)
+function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VerificationTask, property_check; timeout=Inf, fuzz_testing=nothing)
     relative_impact_func = get_relative_impact_func()
 
     prop_state = PropState(true)
@@ -66,7 +67,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     
     first_task = true
     global VeryDiff.FIRST_ROUND[] = true
-        
+
     queue = Queue()
     push!(queue, initial_task)
     
@@ -75,6 +76,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
         task = pop!(queue)
         veri_result.final_δ_bound = task.distance_bound
         @info "Distance Bound: $(task.distance_bound)"
+        # @info "Split Nodes: $(map(n -> (n.network, n.layer, n.neuron), task.branch.split_nodes))"
         
         if !check_resources(start_time, timeout)
             empty!(queue)
@@ -104,7 +106,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             veri_result.initial_δ_bound = maximum(abs, bounds)
             veri_result.final_δ_bound = veri_result.initial_δ_bound
             first_task = false
-            task.branch.undetermined = trues(size(bounds))
+            task.branch.safe_out_dim = falses(size(bounds))
             println("Zono Bounds:")
             println(bounds[:, 1])
             println(bounds[:, 2])
@@ -121,13 +123,17 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
                 return veri_result, cex
             end
 
+            # if !isnothing(fuzz_testing)
+            #     fuzz_testing(N₁, N₂, prop_state, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance)
+            # end
+
             if prop_state.num_instable == 0 && VeryDiff.EQUIVALENCE_PROPERTY[] == VeryDiff.DeltaTop1Equivalence
                 veri_result.verification_time = time_ns() - start_time
                 return veri_result, nothing
             end
             @assert prop_state.num_instable > 0
 
-            split_nodes = prop_state.task.branch.split_nodes
+            split_nodes = task.branch.split_nodes
             if VeryDiff.USE_ZONO_CONTRACT[] && !isempty(split_nodes)
                 if isnothing(box)
                     box = InputBox(Zout)
@@ -140,14 +146,15 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             
             split_candidate = deepsplit_heuristic(prop_state, relu_layers, relative_impact_func)
             if split_candidate.layer == 0
+                @assert !iszero(task.distance[split_candidate.neuron])
                 if VeryDiff.USE_ZONO_CONTRACT[] && !isempty(split_nodes)
-                    task₁, task₂ = split_contract_zono(split_candidate.neuron, box, prop_state, verification_status, distance_bound)
+                    task₁, task₂ = split_contract_zono(split_candidate.neuron, box, task, prop_state, verification_status, distance_bound)
                 else
                     task₁, task₂ = split_zono(split_candidate.neuron, task, verification_status, distance_bound)
                 end
                 veri_result.num_input_splits += !isnothing(task₁) || !isnothing(task₂)
             else
-                task₁, task₂ = split_neuron(split_candidate, box, prop_state, verification_status, distance_bound)
+                task₁, task₂ = split_neuron(split_candidate, box, task, prop_state, verification_status, distance_bound)
                 veri_result.num_neuron_splits += !isnothing(task₁) || !isnothing(task₂)
             end
 
@@ -166,9 +173,9 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     return veri_result, nothing
 end
 
-function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, prop_state::PropState, verification_status, distance_bound::Float64)
+function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::VerificationTask, prop_state::PropState, verification_status, distance_bound::Float64)
     if !VeryDiff.PRE_CONTRACT[] && !isnothing(box) && !is_unit_hypercube(box)
-        transform_verification_task!(box, prop_state.task)
+        transform_verification_task!(box, task)
     end
 
     direction₁, direction₂ = -1, 1 # inactive, active
@@ -177,28 +184,14 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, prop_state:
     
     old_node_idx = nothing
     if VeryDiff.USE_VERTICAL_SPLITTING[]
-        split_nodes = prop_state.task.branch.split_nodes
-        old_node_idx = findfirst(n -> (n.network, n.layer, n.neuron) == (network, layer, neuron), split_nodes)
+        old_node_idx = findfirst(n -> same_split_node(node, n), task.branch.split_nodes)
         if !isnothing(old_node_idx)
-            old_node = split_nodes[old_node_idx]
-            if old_node.direction == 1
-                l̲, u̲ = old_node.bounds[1], old_node.bounds[2]
-                s₁, s₂ = l̲ / 2, u̲ / 2
-                bounds₁ = [l̲ s₁; s₂ u̲]
-                bounds₂ = [s₁ s₂]
-            else
-                direction₂ = -1
-                l̅, s̅₁ = old_node.bounds[1, 1], old_node.bounds[1, 2]
-                s̅₂, u̅ = old_node.bounds[2, 1], old_node.bounds[2, 2]
-                s₁, s₂ = (l̅ + s̅₁) / 2, (s̅₂ + u̅) / 2
-                bounds₁ = [l̅ s₁; s₂ u̅]
-                bounds₂ = [s₁ s̅₁; s̅₂ s₂]
-            end
+            direction₁, bounds₁, direction₂, bounds₂ = vertically_resplit_neuron(task.branch.split_nodes[old_node_idx])
         end
     end
 
     (;middle, distance, distance_indices, distance1_secondary, middle1_secondary, 
-    distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = prop_state.task
+    distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = task
     
     branch₁, branch₂ = branch, deepcopy(branch)
     node₁ = SplitNode(network, layer, neuron, diff_layer, direction₁, bounds₁)
@@ -235,18 +228,37 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, prop_state:
     return task₁, task₂
 end
 
-function split_contract_zono(d::Int, box::InputBox, prop_state::PropState, verification_status, distance_bound::Float64)
-    distance_d = findfirst(x -> x == d, prop_state.task.distance_indices)
-    @assert !isnothing(distance_d)
+function vertically_resplit_neuron(node::SplitNode)
+    if node.direction == 1
+        @assert length(node.bounds) == 2
+        l̲, u̲ = node.bounds[1], node.bounds[2]
+        s₁, s₂ = (l̲, u̲) ./ 2
+        bounds₁ = [l̲ s₁; s₂ u̲]
+        bounds₂ = [s₁ s₂]
+        return -1, bounds₁, 1, bounds₂
+    elseif node.direction == -1
+        @assert length(node.bounds) == 4
+        l̅, s̅₁ = node.bounds[1, 1], node.bounds[1, 2]
+        s̅₂, u̅ = node.bounds[2, 1], node.bounds[2, 2]
+        s₁, s₂ = (l̅ + s̅₁, s̅₂ + u̅) ./ 2
+        bounds₁ = [l̅ s₁; s₂ u̅]
+        bounds₂ = [s₁ s̅₁; s̅₂ s₂]
+        return -1, bounds₁, -1, bounds₂
+    end
+    throw("Node $((node.network, node.layer, node.neuron)) needs to already be split in order to split it again.")
+end
+
+function split_contract_zono(d::Int, box::InputBox, task::VerificationTask, prop_state::PropState, verification_status, distance_bound::Float64)
+    @assert d <= length(task.distance_indices)
     
     box₁, box₂ = box, InputBox(box)
     
-    cutting_point = (box.lowers[1][distance_d] + box.uppers[1][distance_d]) / 2
-    box₁.lowers[1][distance_d] = cutting_point
-    box₂.uppers[1][distance_d] = cutting_point
+    cutting_point = (box.lowers[1][d] + box.uppers[1][d]) / 2
+    box₁.lowers[1][d] = cutting_point
+    box₂.uppers[1][d] = cutting_point
 
     (;middle, distance, distance_indices, distance1_secondary, middle1_secondary, 
-    distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = prop_state.task
+    distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = task
 
     box₁ = contract_zono_all!(box₁, branch.split_nodes, prop_state)
     task₁ = nothing
@@ -273,7 +285,11 @@ function split_contract_zono(d::Int, box::InputBox, prop_state::PropState, verif
     return task₁, task₂
 end
 
-function check_resources(start_time::UInt64, timeout=Inf)
+function same_split_node(node₁::SplitNode, node₂::SplitNode) :: Bool
+    return node₁.network == node₂.network && node₁.layer == node₂.layer && node₁.neuron == node₂.neuron
+end
+
+function check_resources(start_time::UInt64, timeout=Inf) :: Bool
     timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
     if timeout_reached
         println("\nTIMEOUT REACHED")

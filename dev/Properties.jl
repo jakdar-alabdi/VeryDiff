@@ -6,12 +6,11 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
     return (N₁::Network, N₂::Network, prop_state::PropState) -> begin
         Zin = prop_state.zono_storage.zonotopes[1].zonotope
         Zout = prop_state.zono_storage.zonotopes[end].zonotope
-        mask = prop_state.task.branch.undetermined
+        safe_out_dim = prop_state.task.branch.safe_out_dim
         split_nodes = prop_state.task.branch.split_nodes
-        bounds_cache = prop_state.task_bounds.bounds_cache
         box = nothing
 
-        prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing; mask=mask)
+        prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing; safe_out_dim=safe_out_dim)
         if prop_satisfied || !isnothing(cex) || isempty(split_nodes)
             return prop_satisfied, cex, nothing, nothing, distance_bound, nothing
         end
@@ -30,54 +29,51 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
                 (;network, neuron, diff_layer, direction, bounds) = node
                 Z = VeryDiff.get_split_node_zono(node, prop_state)
                 indices = intersect_indices(Zout.∂Z.generator_ids, Z.generator_ids)
-                bc = bounds_cache[diff_layer.layer_idx]
-                if network == 1
-                    lower, upper = bc.lower₁[neuron], bc.upper₁[neuron]
-                else
-                    lower, upper = bc.lower₂[neuron], bc.upper₂[neuron]
+                affine_repr = AffExpr(Z.c[neuron])
+                for (G, i) in zip(Z.Gs, indices)
+                    add_to_expression!(affine_repr, G[neuron, :]'xs[i][1:size(G, 2)])
                 end
-                expr = sum(G[neuron, :]'xs[i][1:size(G, 2)] for (G, i) in zip(Z.Gs, indices)) + Z.c[neuron]
-                @constraint(model, lower <= expr <= upper)
-                # @constraint(model, direction * (sum(G[neuron, :]'xs[i][1:size(G, 2)] for (G, i) in zip(Z.Gs, indices)) + Z.c[neuron]) >= 0.0)
+                @constraint(model, direction * affine_repr >= 0.0)
             end
 
             _distance_bound = 0.0
-            for i in (1:size(mask, 1))[mask[:, 1] .|| mask[:, 2]]
-                for (j, σ) in [(1, -1), (2, 1)][mask[i, :]]
-                    @objective(model, Max, σ * (sum(G[i, :]'xs[k] for (k, G) in enumerate(Zout.∂Z.Gs)) + Zout.∂Z.c[i]))
+            for dim in findall(!, safe_out_dim)
+                dim_num, dim_bound = Tuple(dim)
+                σ = ifelse(dim_bound == 1, -1, 1)
+                @objective(model, Max, σ * (sum(G[dim_num, :]'xs[k] for (k, G) in enumerate(Zout.∂Z.Gs)) + Zout.∂Z.c[dim_num]))
+                optimize!(model)
+
+                numeric_foucs_opt = prop_state.num_instable == 0 && has_values(model) && abs(objective_value(model)) > epsilon
+                if numeric_foucs_opt
+                    set_optimizer_attribute(model, "NumericFocus", 3)
                     optimize!(model)
-
-                    numeric_foucs_opt = prop_state.num_instable == 0 && has_values(model) && abs(objective_value(model)) > epsilon
-                    if numeric_foucs_opt
-                        set_optimizer_attribute(model, "NumericFocus", 3)
-                        optimize!(model)
-                    end
-                    
-                    if is_solved_and_feasible(model)
-                        val = value.(xs[1])
-                        cex_input = Zin.Z₁.Gs[1] * val + Zin.Z₁.c
-                        sample_distance = get_sample_distance(N₁, N₂, cex_input)
-
-                        if prop_state.num_instable == 0 && any(mask)
-                            @info "[LP Solution] x = $(val)"
-                            @info "Zin(x) = $cex_input"
-                            @info "sample distance: $sample_distance"
-                            @info "obj. value: $(abs(objective_value(model)))"
-                        end
-
-                        if sample_distance > epsilon
-                            return false, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), nothing, nothing, distance_bound, nothing
-                        end
-                    end
-                    if has_values(model)
-                        δ = abs(objective_value(model))
-                        mask[i, j] &= δ > epsilon
-                        _distance_bound = max(_distance_bound, δ)
-                    end
-                    mask[i, j] &= termination_status(model) != MOI.INFEASIBLE
                 end
+                
+                if is_solved_and_feasible(model)
+                    val = value.(xs[1])
+                    cex_input = Zin.Z₁.Gs[1] * val + Zin.Z₁.c
+                    sample_distance = get_sample_distance(N₁, N₂, cex_input)
+
+                    # if prop_state.num_instable == 0 && any(!, safe_out_dim)
+                    #     @info "[LP Solution] x = $(val)"
+                    #     @info "Zin(x) = $cex_input"
+                    #     @info "sample distance: $sample_distance"
+                    #     @info "obj. value: $(abs(objective_value(model)))"
+                    # end
+
+                    if sample_distance > epsilon
+                        return false, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), nothing, nothing, distance_bound, nothing
+                    end
+                end
+                if has_values(model)
+                    δ = abs(objective_value(model))
+                    safe_out_dim[dim] |= δ <= epsilon
+                    _distance_bound = max(_distance_bound, δ)
+                end
+                safe_out_dim[dim] |= termination_status(model) == MOI.INFEASIBLE
             end
-            @assert !(prop_state.num_instable == 0 && any(mask))
+
+            @assert !(prop_state.num_instable == 0 && any(!, safe_out_dim))
             distance_bound = min(distance_bound, _distance_bound)
             
         elseif VeryDiff.POST_CONTRACT[]
@@ -87,7 +83,7 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
             end
             if !is_unit_hypercube(box)
                 transform_offset_diff_zono!(box, Zout)
-                prop_satisfied, cex, _, _, _distance_bound = property_check(N₁, N₂, Zin, Zout, nothing; mask=mask)
+                prop_satisfied, cex, _, _, _distance_bound = property_check(N₁, N₂, Zin, Zout, nothing; safe_out_dim=safe_out_dim)
                 if prop_satisfied || !isnothing(cex)
                     return prop_satisfied, cex, nothing, nothing, distance_bound, nothing
                 end
@@ -95,7 +91,7 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
             end
         end
 
-        return !any(mask), nothing, nothing, nothing, distance_bound, box
+        return all(safe_out_dim), nothing, nothing, nothing, distance_bound, box
     end
 end
 

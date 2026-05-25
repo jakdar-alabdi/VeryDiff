@@ -206,7 +206,7 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             distance_bound,
             work_share_new,
             verification_task.task_bounds,
-            deepcopy(verification_task.branch))
+            verification_task.branch)
         Z2 = VerificationTask(
             middle2_vec, distance2_vec,
             verification_task.distance_indices,
@@ -218,7 +218,7 @@ function split_zono(distance_d, verification_task :: VerificationTask, verificat
             distance_bound,
             work_share_new,
             deepcopy(verification_task.task_bounds),
-            verification_task.branch)
+            deepcopy(verification_task.branch))
         return Z1, Z2
     elseif distance_d <= size(verification_task.distance_indices,1) + size(verification_task.distance1_secondary,1)
         input_pos = distance_d - size(verification_task.distance_indices,1)
