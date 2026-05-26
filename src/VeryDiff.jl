@@ -119,7 +119,7 @@ include("../dev/NeuronSplitting.jl")
 include("../dev/ZonoContraction.jl")
 include("../dev/DeepSplitHeuristic.jl")
 
-include("../dev/testing/fuzzing.jl")
+# include("../dev/testing/fuzzing.jl")
 
 export Network,GeminiNetwork,Layer,Dense,ReLU,WrappedReLU
 export parse_network
