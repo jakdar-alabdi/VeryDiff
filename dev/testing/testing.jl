@@ -108,9 +108,9 @@ lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 
 # verifier = deepsplit_top1((true, false, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.VerticalSplitting, contract=VeryDiff.ZonoContractPost)
 # verifier = verydiff_top1()
-# verifier = deepsplit_epsilon((true, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.ZonoContractInter)
-verifier = verydiff_epsilon()
+verifier = deepsplit_epsilon((true, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.LPZonoContract)
+# verifier = verydiff_epsilon()
 
-run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
+run_tests_epsilon(benchmarks_dir, acas_csv_dir, "", verifier)
 # run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
 # run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)

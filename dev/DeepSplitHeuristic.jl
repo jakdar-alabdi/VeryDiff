@@ -13,7 +13,7 @@ function deepsplit_heuristic(prop_state::PropState,
     zonos = prop_state.zono_storage.zonotopes
     Zin = zonos[1].zonotope
     Zout = zonos[end].zonotope
-    input_dim = length(Zin.Z₁.c)
+    input_dim = length(prop_state.task.distance_indices)
     bounds_cache = prop_state.task_bounds.bounds_cache
 
     Zouts = (Zout.Z₁, Zout.Z₂)
@@ -67,6 +67,7 @@ function deepsplit_heuristic(prop_state::PropState,
             for i in 1:2
                 bounds_width = uppers[i][crossing₁[i]] - lowers[i][crossing₁[i]]
                 α = abs.(Zin₁[i].Gs[1][crossing₁[i], :]) ./ bounds_width
+                # println("$(size(α)), $(size(sum(α .* s[l₁][i, crossing₁[i]], dims=1))), $(size(s_input[i:i, :]))")
                 s_input[i:i, :] .+= INDIRECT_INPUT_MULTIPLIER[] * sum(α .* s[l₁][i, crossing₁[i]], dims=1)
             end
         end
