@@ -1,3 +1,4 @@
+import os
 import onnx
 from onnx import helper
 
@@ -60,6 +61,10 @@ def fuse_matmul_add_to_gemm(model_path, output_path):
 
     onnx.save(new_model, output_path)
 
-fuse_matmul_add_to_gemm("nets/mnist_relu_2_512.onnx", "nets/mnist_relu_2_512_gemm.onnx")
-fuse_matmul_add_to_gemm("nets/mnist_relu_3_100.onnx", "nets/mnist_relu_3_100_gemm.onnx")
-fuse_matmul_add_to_gemm("nets/mnist_relu_4_1024.onnx", "nets/mnist_relu_4_1024_gemm.onnx")
+currdir = os.curdir
+benchmarks_dir = f"{currdir}/../verydiff-experiments"
+nets_dir = f"{benchmarks_dir}/benchmarks/mnist-prune/nets"
+
+fuse_matmul_add_to_gemm(f"{nets_dir}/mnist_relu_2_512.onnx", f"{nets_dir}/mnist_relu_2_512_gemm.onnx")
+fuse_matmul_add_to_gemm(f"{nets_dir}/mnist_relu_3_100.onnx", f"{nets_dir}/mnist_relu_3_100_gemm.onnx")
+fuse_matmul_add_to_gemm(f"{nets_dir}/mnist_relu_4_1024.onnx", f"{nets_dir}/mnist_relu_4_1024_gemm.onnx")

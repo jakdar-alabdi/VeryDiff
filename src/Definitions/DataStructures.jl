@@ -59,13 +59,13 @@ struct InputBox
         InputBox(Z.generator_ids, size.(Z.Gs, 2))
     end
     function InputBox(box::InputBox)
-        # lowers = [copy(l) for l in box.lowers]
-        # uppers = [copy(u) for u in box.uppers]
-        # for i in 1:length(box.generator_ids)
-        #     lowers[i] .= box.lowers[i]
-        #     uppers[i] .= box.uppers[i]
-        # end
-        new(deepcopy(box.lowers), deepcopy(box.uppers), box.generator_ids)
+        lowers = [zeros(length(l)) for l in box.lowers]
+        uppers = [zeros(length(u)) for u in box.uppers]
+        for i in 1:length(box.generator_ids)
+            lowers[i] .= box.lowers[i]
+            uppers[i] .= box.uppers[i]
+        end
+        new(lowers, uppers, box.generator_ids)
     end
 end
 

@@ -75,9 +75,9 @@ function verify_network(
         split_heuristic,
         num_threads;
         timeout=timeout)
-    if verification_result == SAFE
+    if verification_result.status == SAFE
         println("SAFE")
-    elseif verification_result == UNSAFE
+    elseif verification_result.status == UNSAFE
         println("UNSAFE")
     else
         println("UNKNOWN")
@@ -87,18 +87,23 @@ function verify_network(
 end
 
 function worker_function(work_queue, threadid, N,N1,N2,property_check, split_heuristic, num_threads;timeout=Inf)
+    start_time = time_ns()
     try
         thread_result = worker_function_internal(work_queue, threadid,N,N1,N2,num_threads, property_check, split_heuristic, timeout=timeout)
         return thread_result
     catch e
         println("[Thread $(threadid)] Caught exception: $(e)")
         showerror(stdout, e, catch_backtrace())
-        thread_result = UNKNOWN
-        return thread_result
+        # thread_result = UNKNOWN
+        # return thread_result
+        veri_result = VerificationResult()
+        veri_result.verification_time = time_ns() - start_time
+        return veri_result
     end
 end
 function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, property_check, split_heuristic;timeout=Inf)
     starttime = time_ns()
+    veri_result = VerificationResult()
     prop_state = PropState(true)
     k = 0
     total_zonos=0
@@ -112,6 +117,7 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
     loop_time = @elapsed begin
     while !should_terminate
         verification_task = pop!(work_queue)
+        veri_result.final_δ_bound = verification_task.distance_bound
         prepare_prop_state!(prop_state, verification_task)
         if k == 0
             println("[Thread $(threadid)] Time to first task: $(round((time_ns()-starttime)/1e9;digits=2))s")
@@ -119,12 +125,15 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         total_zonos+=1
         Zin = prop_state.zono_storage.zonotopes[1].zonotope
         prop_state = propagate!(N,prop_state)
+        veri_result.num_propagations += 1
         Zout = prop_state.zono_storage.zonotopes[end].zonotope
         if first
             println("Zono Bounds:")
             bounds = zono_bounds(Zout.∂Z)
             println(bounds[:,1])
             println(bounds[:,2])
+            veri_result.initial_δ_bound = maximum(abs, bounds)
+            veri_result.final_δ_bound = veri_result.initial_δ_bound
             first=false
         end
         prop_satisfied, cex, heuristics_info, verification_status, distance_bound = property_check(N1, N2, Zin, Zout, verification_task.verification_status)
@@ -143,6 +152,7 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
                 push!(work_queue, Z1)
                 push!(work_queue, Z2)
                 generated_zonos+=2
+                veri_result.num_input_splits += 1
             end
         else
             total_work += verification_task.work_share
@@ -174,7 +184,10 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
     end
     println("[Thread $(threadid)] Total splits: $(splits)")
     print("Processed $(total_zonos) zonotopes (Work Done: $(round(100*total_work;digits=1))%); Generated $(generated_zonos) ($(loop_time/k)s/loop)\n")
-    return is_verified
+    veri_result.verification_time = time_ns() - starttime
+    veri_result.status = is_verified
+    # return is_verified
+    return veri_result
 end
 
 function split_zono(distance_d, verification_task :: VerificationTask, verification_status, distance_bound)

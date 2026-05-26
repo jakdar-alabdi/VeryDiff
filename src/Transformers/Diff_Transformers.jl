@@ -264,12 +264,12 @@ function propagate_layer!(
     ∂bounds[:, 1] .= max.(bounds₁[:, 1] .- bounds₂[:, 2], ∂bounds[:, 1], bounds_cache.∂lower)
     ∂bounds[:, 2] .= min.(bounds₁[:, 2] .- bounds₂[:, 1], ∂bounds[:, 2], bounds_cache.∂upper)
     
-    lower₁ = bounds_cache.lower₁ .= max.(bounds₁[:,1], bounds_cache.lower₁)
-    upper₁ = bounds_cache.upper₁ .= min.(bounds₁[:,2], bounds_cache.upper₁)
-    lower₂ = bounds_cache.lower₂ .= max.(bounds₂[:,1], bounds_cache.lower₂)
-    upper₂ = bounds_cache.upper₂ .= min.(bounds₂[:,2], bounds_cache.upper₂)
-    ∂lower = bounds_cache.∂lower .= max.(∂bounds[:,1], bounds_cache.∂lower)
-    ∂upper = bounds_cache.∂upper .= min.(∂bounds[:,2], bounds_cache.∂upper)
+    lower₁ = bounds_cache.lower₁ .= bounds₁[:,1]
+    upper₁ = bounds_cache.upper₁ .= bounds₁[:,2]
+    lower₂ = bounds_cache.lower₂ .= bounds₂[:,1]
+    upper₂ = bounds_cache.upper₂ .= bounds₂[:,2]
+    ∂lower = bounds_cache.∂lower .= ∂bounds[:,1]
+    ∂upper = bounds_cache.∂upper .= ∂bounds[:,2]
     #@info "Bounds Cache: Z₁=[$(lower₁), $(upper₁)], Z₂=[$(lower₂), $(upper₂)], ∂Z=[$(∂lower), $(∂upper)]"
 
     (

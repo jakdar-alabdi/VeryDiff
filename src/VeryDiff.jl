@@ -69,6 +69,8 @@ function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool}; prop=Epsil
     global INTER_CONTRACT[] = USE_ZONO_CONTRACT[] && (contract in [ZonoContractInter, LPZonoContract])
     global POST_CONTRACT[] = USE_ZONO_CONTRACT[] && (contract in [ZonoContract, ZonoContractPost])
     global PRE_CONTRACT[] = USE_ZONO_CONTRACT[] && (contract in [ZonoContract, ZonoContractPre])
+    global FIRST_ROUND[] = true
+    global NEW_HEURISTIC[] = !USE_NEURON_SPLITTING[]
 end
 
 function get_config()
@@ -92,10 +94,21 @@ function get_config()
     elseif USE_VERTICAL_SPLITTING[]
         config *= "VS"
     end
-
-    config = "$config-$(DEEPSPLIT_HEURISTIC_MODE[])"
-    config *= ifelse(INCORPORATE_INPUT_SPLITTING[], "-Input", "")
-    config *= ifelse(USE_DIFF_GENERATORS_DEEPSPLIT[], "-DiffZono", "")
+    if DEEPSPLIT_HEURISTIC_MODE[] == ZonoBiased
+        config *= "-ZB"
+    elseif DEEPSPLIT_HEURISTIC_MODE[] == ZonoUnbiased
+        config *= "-ZU"
+    elseif DEEPSPLIT_HEURISTIC_MODE[] == DeepSplitBiased
+        config *= "-DB"
+    else
+        config *= "-DU"
+    end
+    if INCORPORATE_INPUT_SPLITTING[]
+        config *= "-Input"
+    end
+    if USE_DIFF_GENERATORS_DEEPSPLIT[]
+        config *= "-DiffZono"
+    end
     return config
 end
 
@@ -119,6 +132,10 @@ include("../dev/NeuronSplitting.jl")
 include("../dev/ZonoContraction.jl")
 include("../dev/DeepSplitHeuristic.jl")
 
+include("../dev/experiments/acas.jl")
+include("../dev/experiments/mnist.jl")
+include("../dev/experiments/lhc.jl")
+include("../dev/experiments/run.jl")
 # include("../dev/testing/fuzzing.jl")
 
 export Network,GeminiNetwork,Layer,Dense,ReLU,WrappedReLU

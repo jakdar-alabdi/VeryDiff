@@ -18,7 +18,7 @@ function deepsplit_verify_network(
 
     start_time = time_ns()
     try
-        VeryDiff.NEW_HEURISTIC[] = false
+        global NEW_HEURISTIC[] = false
 
         lower = @view bounds[:, 1]
         upper = @view bounds[:, 2]

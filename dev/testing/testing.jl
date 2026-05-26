@@ -15,10 +15,10 @@ function verydiff_epsilon()
         f, n_inputs, _ = get_ast(spec_file)
         property_check = VeryDiff.get_epsilon_property(epsilon)
         VeryDiff.set_neuron_splitting_config((false, false, false))
-        VeryDiff.NEW_HEURISTIC[] = true
         println("\nUsing $(VeryDiff.get_config()) as verifier\n")
         for (bounds, _, _, _) in f
-            status = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout)
+            veri_result = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout)
+            println(veri_result)
         end
     end
 end
@@ -32,7 +32,8 @@ function verydiff_top1()
         VeryDiff.NEW_HEURISTIC[] = true
         println("\nUsing $(VeryDiff.get_config()) as verifier\n")
         for (bounds, _, _, _) in f
-            status = verify_network(N₁, N₂, bounds, property_check, top1_configure_split_heuristic(1); timeout=timeout)
+            veri_result = verify_network(N₁, N₂, bounds, property_check, top1_configure_split_heuristic(1); timeout=timeout)
+            println(veri_result)
         end
     end
 end
@@ -79,7 +80,7 @@ function deepsplit_epsilon(config::Tuple{Bool, Bool, Bool}; mode=VeryDiff.ZonoBi
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_epsilon_property_with_neuron_splitting(epsilon)
         for (bounds, _, _, _) in f
-            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout, fuzz_testing=VeryDiff.fuzz_testing)
+            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
             println(veri_result)
         end
     end
