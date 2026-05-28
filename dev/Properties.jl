@@ -36,45 +36,77 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
                 @constraint(model, direction * affine_repr >= 0.0)
             end
 
-            _distance_bound = 0.0
-            for dim in findall(!, safe_out_dim)
-                dim_num, dim_bound = Tuple(dim)
-                σ = ifelse(dim_bound == 1, -1, 1)
-                @objective(model, Max, σ * (sum(G[dim_num, :]'xs[k] for (k, G) in enumerate(Zout.∂Z.Gs)) + Zout.∂Z.c[dim_num]))
-                optimize!(model)
+            @objective(model, Max, 0.0)
+            optimize!(model)
 
-                numeric_foucs_opt = prop_state.num_instable == 0 && has_values(model) && abs(objective_value(model)) > epsilon
-                if numeric_foucs_opt
-                    set_optimizer_attribute(model, "NumericFocus", 3)
+            if termination_status(model) == MOI.INFEASIBLE
+                safe_out_dim .= true
+            else
+                _distance_bound = 0.0
+                for dim in findall(!, safe_out_dim)
+                    dim_num, dim_bound = Tuple(dim)
+                    σ = ifelse(dim_bound == 1, -1, 1)
+                    @objective(model, Max, σ * (sum(G[dim_num, :]'xs[k] for (k, G) in enumerate(Zout.∂Z.Gs)) + Zout.∂Z.c[dim_num]))
                     optimize!(model)
-                end
-                
-                if is_solved_and_feasible(model)
-                    val = value.(xs[1])
-                    cex_input = Zin.Z₁.Gs[1] * val + Zin.Z₁.c
-                    sample_distance = get_sample_distance(N₁, N₂, cex_input)
-
-                    # if prop_state.num_instable == 0 && any(!, safe_out_dim)
-                    #     @info "[LP Solution] x = $(val)"
-                    #     @info "Zin(x) = $cex_input"
-                    #     @info "sample distance: $sample_distance"
-                    #     @info "obj. value: $(abs(objective_value(model)))"
-                    # end
-
-                    if sample_distance > epsilon
-                        return false, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), nothing, nothing, distance_bound, nothing
+    
+                    numeric_foucs_opt = prop_state.num_instable == 0 && has_values(model) && abs(objective_value(model)) > epsilon
+                    if numeric_foucs_opt
+                        set_optimizer_attribute(model, "NumericFocus", 3)
+                        optimize!(model)
                     end
+                    
+                    if is_solved_and_feasible(model)
+                        val = value.(xs[1])
+                        cex_input = Zin.Z₁.Gs[1] * val + Zin.Z₁.c
+                        sample_distance = get_sample_distance(N₁, N₂, cex_input)
+                        δ = abs(objective_value(model))
+    
+                        if δ > epsilon && prop_state.num_instable == 0 && any(!, safe_out_dim)
+                            @info "---------------------------------------------"
+                            @info "[LP Solution] x = $(val)"
+                            @info "Zin(x) = $cex_input"
+                            @info "sample distance: $sample_distance"
+                            @info "obj. value: $(abs(objective_value(model)))"
+                            for node in split_nodes
+                                (;network, layer, neuron, diff_layer, direction, bounds) = node
+                                Z = VeryDiff.get_split_node_zono(node, prop_state)
+                                indices = intersect_indices(Zout.∂Z.generator_ids, Z.generator_ids)
+                                v = Z.c[neuron]
+                                for (G, i) in zip(Z.Gs, indices)
+                                    v += G[neuron, :]'value(xs[i])[1:size(G, 2)]
+                                end
+                                v *= direction
+                                if v < 0.0
+                                    @info "split node: $((network, layer, neuron, direction)), $v"
+                                end
+                            end
+                        end
+    
+                        if sample_distance > epsilon
+                            return false, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), nothing, nothing, distance_bound, nothing
+                        end
+                    end
+                    if has_values(model)
+                        δ = abs(objective_value(model))
+                        safe_out_dim[dim] |= δ <= epsilon
+                        _distance_bound = max(_distance_bound, δ)
+                    end
+                    safe_out_dim[dim] |= termination_status(model) == MOI.INFEASIBLE
                 end
-                if has_values(model)
-                    δ = abs(objective_value(model))
-                    safe_out_dim[dim] |= δ <= epsilon
-                    _distance_bound = max(_distance_bound, δ)
-                end
-                safe_out_dim[dim] |= termination_status(model) == MOI.INFEASIBLE
-            end
 
-            @assert !(prop_state.num_instable == 0 && any(!, safe_out_dim))
-            distance_bound = min(distance_bound, _distance_bound)
+                if prop_state.num_instable == 0 && any(!, safe_out_dim)
+                    (;middle, distance, distance_indices) = prop_state.task
+                    Z = Zonotope([G₁ - G₂ for (G₁, G₂) in zip(Zout.Z₁.Gs, Zout.Z₂.Gs)], Zout.Z₁.c - Zout.Z₂.c, nothing, Zout.Z₁.generator_ids, nothing)
+                    @info "bounds(Zin): $(zono_bounds(Zin.Z₁))"
+                    @info "bounds(task): $([(middle[distance_indices] .- distance) (middle[distance_indices] .+ distance)])"
+                    @info "bounds(Z₁ - Z₂): $(zono_bounds(Z))"
+                    @info "bounds(∂Z): $(zono_bounds(Zout.∂Z))"
+                    @info "split nodes: $(map(n -> (n.network, n.layer, n.neuron, n.direction), prop_state.task.branch.split_nodes))"
+                end
+
+                @assert !(prop_state.num_instable == 0 && any(!, safe_out_dim))
+                distance_bound = min(distance_bound, _distance_bound)
+            end
             
         elseif VeryDiff.POST_CONTRACT[]
             box = contract_zono_all!(InputBox(Zout), split_nodes, prop_state) 
