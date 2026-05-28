@@ -46,49 +46,32 @@ function _init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXRelu{S1}, ONN
     new_gen₁ = count(bounds₁[:,1] .< 0.0 .&& bounds₁[:,2] .> 0.0)
     new_gen₂ = count(bounds₂[:,1] .< 0.0 .&& bounds₂[:,2] .> 0.0)
     ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
-    # Z₁ = init_relu_zonotope(PS, input_zono_cache, input_zono.Z₁, new_gen₁, diff_layer.layer_idx)
-    # Z₂ = init_relu_zonotope(PS, input_zono_cache, input_zono.Z₂, new_gen₂, diff_layer.layer_idx)
-    # generators_d = Matrix{Float64}[]
-    generators₁, generators₂, ∂generators = Matrix{Float64}[], Matrix{Float64}[], Matrix{Float64}[]
-    # Three way merge of generators: All generators from ∂Z + all from new Z₁ + all from new Z₂
-    # First build union of generator ids
+    
     generator_ids = union(input_zono.∂Z.generator_ids, union(Z₁.generator_ids, Z₂.generator_ids))
-    # owned_generator_id = nothing
-    # if diff_layer.layer_idx == input_zono_cache.first_usage && !isnothing(input_zono.∂Z.owned_generators)
-    #     owned_generator_id = input_zono.∂Z.generator_ids[input_zono.∂Z.owned_generators]
-    # end
+    new_generator_ids = SortedVector{Int}()
+    
     owned_generator_id₁, owned_generator_id₂, ∂owned_generator_id = nothing, nothing, nothing
     if diff_layer.layer_idx == input_zono_cache.first_usage
         if !isnothing(input_zono.Z₁.owned_generators)
-            owned_generator_id₁ = input_zono.Z₁.generator_ids[input_zono.Z₂.owned_generators]
+            owned_generator_id₁ = input_zono.Z₁.generator_ids[input_zono.Z₁.owned_generators]
+        end
+        if !isnothing(input_zono.Z₂.owned_generators)
+            owned_generator_id₂ = input_zono.Z₂.generator_ids[input_zono.Z₂.owned_generators]
         end
         if !isnothing(input_zono.∂Z.owned_generators)
-            owned_generator_id = input_zono.∂Z.generator_ids[input_zono.∂Z.owned_generators]
-        end
-        if !isnothing(input_zono.∂Z.owned_generators)
-            owned_generator_id = input_zono.∂Z.generator_ids[input_zono.∂Z.owned_generators]
+            ∂owned_generator_id = input_zono.∂Z.generator_ids[input_zono.∂Z.owned_generators]
         end
     end
-
+    
+    generators₁, generators₂, ∂generators = Matrix{Float64}[], Matrix{Float64}[], Matrix{Float64}[]
     # Now iterate over generator ids and figure out where the generators come from
     # Prefer Z₁ and Z₂ over ∂Z when there are overlaps because those might have new generators
-    for gid in generator_ids
-        if gid in Z₂.generator_ids
-            idx = find_index_position(Z₂.generator_ids, gid)
-            new_g = zeros(size(Z₂.Gs[idx],1), size(Z₂.Gs[idx],2))
-            push!(generators_d, new_g)
-        elseif gid in Z₁.generator_ids
-            idx = find_index_position(Z₁.generator_ids, gid)
-            new_g = zeros(size(Z₁.Gs[idx],1), size(Z₁.Gs[idx],2))
-            push!(generators_d, new_g)
-        else
-            idx = find_index_position(input_zono.∂Z.generator_ids, gid)
-            columns = size(input_zono.∂Z.Gs[idx],2)
-            if gid == owned_generator_id
-                columns += ∂new_gen
-            end
-            new_g = zeros(size(input_zono.∂Z.Gs[idx],1), columns)
-            push!(generators_d, new_g)
+    Zins = Zonotope[input_zono.Z₁, input_zono.Z₂, input_zono.∂Z]
+    new_gens = [new_gen₁, new_gen₂, ∂new_gen]
+    owned_generator_ids = [owned_generator_id₁, owned_generator_id₂, ∂owned_generator_id]
+    for (i, gid) in enumerate(generator_ids)
+        if isnothing(owned_generator_id₁) || i <= owned_generator_id₁
+            
         end
     end
     if isnothing(owned_generator_id)

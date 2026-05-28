@@ -75,7 +75,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     while !isempty(queue)
         task = pop!(queue)
         veri_result.final_δ_bound = task.distance_bound
-        @info "Distance Bound: $(task.distance_bound)"
+        # @info "Distance Bound: $(task.distance_bound)"
         # @info "Split Nodes: $(map(n -> (n.network, n.layer, n.neuron), task.branch.split_nodes))"
         
         if !check_resources(start_time, timeout)
@@ -110,6 +110,10 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             println("Zono Bounds:")
             println(bounds[:, 1])
             println(bounds[:, 2])
+            bounds = zono_bounds(Zin.Z₁)
+            @info "bounds(Zin): $(bounds)"
+            original_lower = bounds[:, 1]
+            original_upper = bounds[:, 2]
         end
         
         prop_satisfied, cex, _, verification_status, distance_bound, box = property_check(N₁, N₂, prop_state)
