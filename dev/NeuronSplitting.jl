@@ -75,7 +75,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     while !isempty(queue)
         task = pop!(queue)
         veri_result.final_δ_bound = task.distance_bound
-        # @info "Distance Bound: $(task.distance_bound)"
+        @info "Distance Bound: $(task.distance_bound)"
         # @info "Split Nodes: $(map(n -> (n.network, n.layer, n.neuron), task.branch.split_nodes))"
         
         if !check_resources(start_time, timeout)
@@ -110,15 +110,11 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             println("Zono Bounds:")
             println(bounds[:, 1])
             println(bounds[:, 2])
-            bounds = zono_bounds(Zin.Z₁)
-            @info "bounds(Zin): $(bounds)"
-            original_lower = bounds[:, 1]
-            original_upper = bounds[:, 2]
         end
         
         prop_satisfied, cex, _, verification_status, distance_bound, box = property_check(N₁, N₂, prop_state)
-        distance_bound = min(distance_bound, task.distance_bound)
         global VeryDiff.FIRST_ROUND[] = false
+        distance_bound = min(distance_bound, task.distance_bound)
     
         if !prop_satisfied
             if !isnothing(cex)
@@ -128,16 +124,23 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             end
 
             # if !isnothing(fuzz_testing)
-            #     fuzz_testing(N₁, N₂, prop_state, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance)
+            #     fuzz_testing(N₁, N₂, task, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance)
             # end
 
-            if prop_state.num_instable == 0 && VeryDiff.EQUIVALENCE_PROPERTY[] == VeryDiff.DeltaTop1Equivalence
+            split_nodes = task.branch.split_nodes
+
+            if prop_state.num_instable == 0
+                fuzz_testing(N₁, N₂, task, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance, num_samples=10000)
+                @warn "Can not establish the property."
+                @warn "Can not refine the (sub-)problem further (all nodes were split)."
+                @warn "For VerticalSplitting or (δ-)Top-1 this is currently unavoidable."
+                @info "bounds(Zin): $(zono_bounds(Zin.Z₁))"
+                @info "bounds(∂Z): $(zono_bounds(Zout.∂Z))"
+                @info "Split Nodes: $(map(n -> (n.network, n.layer, n.neuron, n.direction), split_nodes))"
                 veri_result.verification_time = time_ns() - start_time
                 return veri_result, nothing
             end
-            @assert prop_state.num_instable > 0
 
-            split_nodes = task.branch.split_nodes
             if VeryDiff.USE_ZONO_CONTRACT[] && !isempty(split_nodes)
                 if isnothing(box)
                     box = InputBox(Zout)
@@ -200,7 +203,7 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
     branch₁, branch₂ = branch, deepcopy(branch)
     node₁ = SplitNode(network, layer, neuron, diff_layer, direction₁, bounds₁)
     node₂ = SplitNode(network, layer, neuron, diff_layer, direction₂, bounds₂)
-    if isnothing(old_node_idx)     
+    if isnothing(old_node_idx)
         push!(branch₁.split_nodes, node₁)
         push!(branch₂.split_nodes, node₂)
     else

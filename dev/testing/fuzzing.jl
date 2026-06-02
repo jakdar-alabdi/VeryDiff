@@ -4,66 +4,25 @@ using Gurobi, JuMP
 
 include("random_networks.jl")
 
-function fuzz_testing(N₁::Network, N₂::Network, prop_state::PropState, provable_distance_bound::Float64; distance_metric=nothing)
-    Zin = prop_state.zono_storage.zonotopes[1].zonotope
-    Zout = prop_state.zono_storage.zonotopes[end].zonotope
-    bounds = zono_bounds(Zin.Z₁)
-    lower = @view bounds[:, 1]
-    upper = @view bounds[:, 2]
+function fuzz_testing(N₁::Network, N₂::Network, task::VeryDiff.VerificationTask, distance_bound::Float64; distance_metric=nothing, num_samples=100)
+    (;distance, middle, distance_indices) = task
+    lower = middle[distance_indices] - distance
+    upper = middle[distance_indices] + distance
     width = upper - lower
     input_dim = length(lower)
-    # @info "Provable distance bound: $provable_distance_bound"
+    @info "Distance Bound: $distance_bound"
     next_seed = rand(1:999999)
     # @info "Next seed: $(next_seed)"
     Random.seed!(next_seed)
     x = zeros(input_dim)
-    for _ in 1:100
-        x .= lower .+ width .* rand(input_dim)
+    for _ in 1:num_samples
+        x .= clamp.(lower .+ width .* rand(input_dim), lower, upper)
         # @info "Random input: $x"
         sample_distance = distance_metric(N₁, N₂, x)
         # @info "Sample distance: $sample_distance"
-        @assert sample_distance <= provable_distance_bound
+        # @assert sample_distance <= distance_bound || isapprox(sample_distance, distance_bound; atol=1e-6) "Found counterexample $(x) with sample distance $(sample_distance) > $distance_bound."
+        @assert sample_distance <= distance_bound "Found counterexample $(x) with sample distance $(sample_distance) > $distance_bound."
     end
-    
-    if VeryDiff.USE_VERTICAL_SPLITTING[]
-        split_nodes = filter(node -> node.direction == -1 && !isnothing(node.bounds), prop_state.task.branch.split_nodes)
-        if !isempty(split_nodes)
-            model = Model(() -> Gurobi.Optimizer(VeryDiff.Properties.GRB_ENV[]))
-            set_time_limit_sec(model, 10)
-            
-            xs = [@variable(model, [1:size(G, 2)], lower_bound=-1.0, upper_bound=1.0) for G in Zout.∂Z.Gs]
-
-            for node in split_nodes
-                (;network, neuron, diff_layer, direction, bounds) = node
-                Z = VeryDiff.get_split_node_zono(node, prop_state)
-                indices = VeryDiff.intersect_indices(Zout.∂Z.generator_ids, Z.generator_ids)
-                affine_repr = AffExpr(Z.c[neuron])
-                for (G, i) in zip(Z.Gs, indices)
-                    add_to_expression!(affine_repr, G[neuron, :]'xs[i][1:size(G, 2)])
-                end
-                @constraint(model, affine_repr >= bounds[2, 1])
-            end
-
-            @objective(model, Max, 0)
-            optimize!(model)
-
-            if termination_status(model) != MOI.INFEASIBLE
-                for i in 1:length(Zout.∂Z.c)
-                    for σ in [-1, 1]
-                        @objective(model, Max, σ * (sum(G[i, :]'xs[k] for (k, G) in enumerate(Zout.∂Z.Gs)) + Zout.∂Z.c[i]))
-                        optimize!(model)                
-                        if is_solved_and_feasible(model)
-                            val = value.(xs[1])
-                            cex_input = Zin.Z₁.Gs[1] * val + Zin.Z₁.c
-                            sample_distance = distance_metric(N₁, N₂, cex_input)                
-                            @assert sample_distance <= provable_distance_bound "Found counterexample $(cex_input) with sample distance $(sample_distance) and LP value $(val), this seems like a bug."
-                        end
-                    end
-                end
-            end
-        end
-    end
-
 end
 
 function start_fuzz_testing()

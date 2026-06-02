@@ -28,8 +28,9 @@ function propagate!(N :: GeminiNetwork, P :: PropState)
             P.task_bounds.bounds_cache[diff_layer.layer_idx] = bounds_cache
         end
         # @debug "Processing DiffLayer at index $(diff_layer.layer_idx) with bounds cache initialized=$(bounds_cache.initialized)"
-        split_nodes_idxs = findall(node -> node.diff_layer == diff_layer, P.task.branch.split_nodes)
-        split_nodes = @view P.task.branch.split_nodes[split_nodes_idxs]
+        # split_nodes_idxs = findall(node -> node.diff_layer == diff_layer, P.task.branch.split_nodes)
+        # split_nodes = @view P.task.branch.split_nodes[split_nodes_idxs]
+        split_nodes = filter(node -> node.diff_layer == diff_layer, P.task.branch.split_nodes)
         data = NeuronSplittingLayerData(diff_layer.layer_idx, 0, false, P.task, split_nodes)
         propagate_layer!(outputs, diff_layer, input_zonotopes; bounds_cache=bounds_cache, data=data)
         P.num_instable += data.num_instable

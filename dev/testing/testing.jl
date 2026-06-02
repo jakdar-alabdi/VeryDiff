@@ -1,7 +1,9 @@
-using Pkg
-Pkg.activate("./")
+# using Pkg
+# Pkg.activate("./")
 using VeryDiff
 using VNNLib
+
+include("fuzzing.jl")
 
 function parse_networks(nn_file₁::String, nn_file₂::String)
     println("Parsing $(basename(nn_file₁))...")
@@ -19,7 +21,7 @@ function verydiff_epsilon()
         VeryDiff.set_neuron_splitting_config((false, false, false))
         println("\nUsing $(VeryDiff.get_config()) as verifier\n")
         for (bounds, _, _, _) in f
-            veri_result = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout)
+            veri_result = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout, fuzz_testing=fuzz_testing)
             println(veri_result)
         end
     end
@@ -82,7 +84,7 @@ function deepsplit_epsilon(config::Tuple{Bool, Bool, Bool}; mode=VeryDiff.ZonoBi
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_epsilon_property_with_neuron_splitting(epsilon)
         for (bounds, _, _, _) in f
-            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
+            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout, fuzz_testing=fuzz_testing)
             println(veri_result)
         end
     end
@@ -96,7 +98,7 @@ function deepsplit_top1(config::Tuple{Bool, Bool, Bool}; mode=VeryDiff.ZonoBiase
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_top1_property_with_neuron_splitting(delta)
         for (bounds, _, _, _) in f
-            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
+            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout, fuzz_testing=fuzz_testing)
             println(veri_result)
         end
     end
@@ -108,11 +110,11 @@ acas_csv_dir = joinpath(cur_dir, "acas-prune.csv")
 mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
 lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 
-# verifier = deepsplit_top1((true, false, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.VerticalSplitting, contract=VeryDiff.ZonoContractPost)
+verifier = deepsplit_top1((true, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.ZonoContractInter)
 # verifier = verydiff_top1()
-verifier = deepsplit_epsilon((true, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.ZonoContractInter)
+# verifier = deepsplit_epsilon((true, true, true); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.ZonoContraction, contract=VeryDiff.LPZonoContract)
 # verifier = verydiff_epsilon()
 
-run_tests_epsilon(benchmarks_dir, acas_csv_dir, "", verifier)
-# run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
+# run_tests_epsilon(benchmarks_dir, acas_csv_dir, "", verifier)
+run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
 # run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)

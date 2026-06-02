@@ -6,7 +6,8 @@ function verify_network(
     property_check,
     split_heuristic;
     timeout=Inf,
-    init_eps=0.0) where {LayerIdT,NShapeIn,NShapeOut}
+    init_eps=0.0,
+    fuzz_testing=nothing) where {LayerIdT,NShapeIn,NShapeOut}
     global FIRST_ROUND[] = true
     verification_result = nothing
     # Prepare Zonotope Initialization
@@ -74,7 +75,8 @@ function verify_network(
         property_check,
         split_heuristic,
         num_threads;
-        timeout=timeout)
+        timeout=timeout,
+        fuzz_testing=fuzz_testing)
     if verification_result.status == SAFE
         println("SAFE")
     elseif verification_result.status == UNSAFE
@@ -86,10 +88,10 @@ function verify_network(
     return verification_result
 end
 
-function worker_function(work_queue, threadid, N,N1,N2,property_check, split_heuristic, num_threads;timeout=Inf)
+function worker_function(work_queue, threadid, N,N1,N2,property_check, split_heuristic, num_threads;timeout=Inf, fuzz_testing=nothing)
     start_time = time_ns()
     try
-        thread_result = worker_function_internal(work_queue, threadid,N,N1,N2,num_threads, property_check, split_heuristic, timeout=timeout)
+        thread_result = worker_function_internal(work_queue, threadid,N,N1,N2,num_threads, property_check, split_heuristic, timeout=timeout, fuzz_testing=fuzz_testing)
         return thread_result
     catch e
         println("[Thread $(threadid)] Caught exception: $(e)")
@@ -101,7 +103,7 @@ function worker_function(work_queue, threadid, N,N1,N2,property_check, split_heu
         return veri_result
     end
 end
-function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, property_check, split_heuristic;timeout=Inf)
+function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, property_check, split_heuristic;timeout=Inf, fuzz_testing=nothing)
     starttime = time_ns()
     veri_result = VerificationResult()
     prop_state = PropState(true)
@@ -127,6 +129,10 @@ function worker_function_internal(work_queue, threadid, N,N1,N2,num_threads, pro
         prop_state = propagate!(N,prop_state)
         veri_result.num_propagations += 1
         Zout = prop_state.zono_storage.zonotopes[end].zonotope
+        if !isnothing(fuzz_testing)
+            distance_bound = maximum(abs.(zono_bounds(Zout.∂Z)))
+            fuzz_testing(N1, N2, verification_task, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance)
+        end
         if first
             println("Zono Bounds:")
             bounds = zono_bounds(Zout.∂Z)

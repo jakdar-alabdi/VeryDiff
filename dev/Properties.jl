@@ -1,8 +1,6 @@
 function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
     property_check = get_epsilon_property(epsilon)
 
-    VeryDiff.EQUIVALENCE_PROPERTY[] = VeryDiff.EpsilonEquivalence
-
     return (N₁::Network, N₂::Network, prop_state::PropState) -> begin
         Zin = prop_state.zono_storage.zonotopes[1].zonotope
         Zout = prop_state.zono_storage.zonotopes[end].zonotope
@@ -94,16 +92,6 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
                     safe_out_dim[dim] |= termination_status(model) == MOI.INFEASIBLE
                 end
 
-                if prop_state.num_instable == 0 && any(!, safe_out_dim)
-                    (;middle, distance, distance_indices) = prop_state.task
-                    Z = Zonotope([G₁ - G₂ for (G₁, G₂) in zip(Zout.Z₁.Gs, Zout.Z₂.Gs)], Zout.Z₁.c - Zout.Z₂.c, nothing, Zout.Z₁.generator_ids, nothing)
-                    @info "bounds(Zin): $(zono_bounds(Zin.Z₁))"
-                    @info "bounds(task): $([(middle[distance_indices] .- distance) (middle[distance_indices] .+ distance)])"
-                    @info "bounds(Z₁ - Z₂): $(zono_bounds(Z))"
-                    @info "bounds(∂Z): $(zono_bounds(Zout.∂Z))"
-                    @info "split nodes: $(map(n -> (n.network, n.layer, n.neuron, n.direction), prop_state.task.branch.split_nodes))"
-                end
-
                 @assert !(prop_state.num_instable == 0 && any(!, safe_out_dim))
                 distance_bound = min(distance_bound, _distance_bound)
             end
@@ -129,7 +117,6 @@ end
 
 function get_top1_property_with_neuron_splitting(delta::Float64)
     property_check = get_top1_property(;delta=delta)
-    VeryDiff.EQUIVALENCE_PROPERTY[] = VeryDiff.DeltaTop1Equivalence
 
     return (N₁::Network, N₂::Network, prop_state::PropState) -> begin
         Zin = prop_state.zono_storage.zonotopes[1].zonotope

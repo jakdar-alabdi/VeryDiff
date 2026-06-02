@@ -20,9 +20,6 @@ end
 
 const FIRST_ROUND = Ref{Bool}(true)
 
-@enum EquivalenceProperty EpsilonEquivalence DeltaTop1Equivalence
-global const EQUIVALENCE_PROPERTY = Ref{EquivalenceProperty}(EpsilonEquivalence)
-
 """If true, neuron splitting is utilized to refine the bounds of the output Zonotopes"""
 global const USE_NEURON_SPLITTING = Ref{Bool}(false)
 
@@ -56,8 +53,7 @@ global const POST_CONTRACT = Ref{Bool}(true)
 global const INTER_CONTRACT = Ref{Bool}(false)
 global const PRE_CONTRACT = Ref{Bool}(false)
 
-function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool}; prop=EpsilonEquivalence, mode=ZonoBiased, approach=LP, contract=ZonoContract)
-    global EQUIVALENCE_PROPERTY[] = prop
+function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool}; mode=ZonoBiased, approach=LP, contract=ZonoContract)
     global USE_NEURON_SPLITTING[] = config[1]
     global USE_DIFF_GENERATORS_DEEPSPLIT[] = config[2]
     global INCORPORATE_INPUT_SPLITTING[] = config[3]
@@ -78,9 +74,7 @@ function get_config()
         return "VeryDiff"
     end
     config = ""
-    if USE_LP[]
-        config *= "LP"
-    elseif USE_ZONO_CONTRACT[]
+    if USE_ZONO_CONTRACT[]
         config *= "ZC"
         if USE_LP_ZONO_CONTRACT[]
             config = "LP-" * config
@@ -91,6 +85,8 @@ function get_config()
         elseif PRE_CONTRACT[] && !POST_CONTRACT[]
             config *= "-Pre"
         end
+    elseif USE_LP[]
+        config *= "LP"
     elseif USE_VERTICAL_SPLITTING[]
         config *= "VS"
     end

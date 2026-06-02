@@ -172,16 +172,60 @@ function propagate_layer!(
 
     @assert !isnothing(bounds_cache)
 
-    if !isnothing(data) && VeryDiff.INTER_CONTRACT[] && !isempty(data.split_nodes)
-        sort_split_nodes!(data.split_nodes, Zin)
-        box = contract_zono_all!(InputBox(Zin), data.split_nodes, Zin)
-        if isnothing(box)
-            data.is_unsatisfiable = true
-            return
+    split_nodes₁, split_nodes₂ = nothing, nothing
+    if VeryDiff.USE_NEURON_SPLITTING[] && !isnothing(data) && !isempty(data.split_nodes)
+        split_nodes₁ = filter(n -> n.network == 1, data.split_nodes)
+        split_nodes₂ = filter(n -> n.network == 2, data.split_nodes)
+
+        bounds₁ = zono_bounds(Zin.Z₁)
+        bounds₂ = zono_bounds(Zin.Z₂)
+        ∂bounds = zono_bounds(Zin.∂Z)
+
+        # Replace potential rows in Z₂ by Z₁ - ∂Z
+        for (;neuron, direction) in split_nodes₁
+            replace_row = begin
+                if direction == 1
+                    bounds₂[neuron, 1] <= -∂bounds[neuron, 2]
+                else
+                    bounds₂[neuron, 2] >= -∂bounds[neuron, 1]
+                end
+            end
+            if replace_row
+                for (G₁, G₂, ∂G) in zip(Zin.Z₁.Gs, Zin.Z₂.Gs, Zin.∂Z.Gs)
+                    G₂[neuron, :] .= G₁[neuron, :] .- ∂G[neuron, :]
+                end
+                Zin.Z₂.c[neuron] = Zin.Z₁.c[neuron] - Zin.∂Z.c[neuron]
+            end
         end
-        if !is_unit_hypercube(box)
-            transform_offset_diff_zono!(box, Zin)
-            transform_verification_task!(box, data.task)
+
+        # Replace potential rows in Z₁ by Z₂ - ∂Z
+        for (;neuron, direction) in split_nodes₂
+            replace_row = begin
+                if direction == 1
+                   bounds₁[neuron, 1] <= ∂bounds[neuron, 1]
+                else
+                   bounds₁[neuron, 2] >= ∂bounds[neuron, 2]
+                end
+            end
+            if replace_row
+                for (G₁, G₂, ∂G) in zip(Zin.Z₁.Gs, Zin.Z₂.Gs, Zin.∂Z.Gs)
+                    G₁[neuron, :] .= G₂[neuron, :] .+ ∂G[neuron, :]
+                end
+                Zin.Z₁.c[neuron] = Zin.Z₂.c[neuron] + Zin.∂Z.c[neuron]
+            end
+        end
+
+        if VeryDiff.INTER_CONTRACT[]
+            sort_split_nodes!(data.split_nodes, Zin)
+            box = contract_zono_all!(InputBox(Zin), data.split_nodes, Zin)
+            if isnothing(box)
+                data.is_unsatisfiable = true
+                return
+            end
+            if !is_unit_hypercube(box)
+                transform_offset_diff_zono!(box, Zin)
+                transform_verification_task!(box, data.task)
+            end
         end
     end
 
@@ -202,7 +246,6 @@ function propagate_layer!(
         bounds_cache.initialized = true
     end
 
-    split_nodes₁, split_nodes₂ = nothing, nothing
     if VeryDiff.USE_NEURON_SPLITTING[]
         if !isnothing(data) && !isempty(data.split_nodes)
             bounds = (bounds₁, bounds₂)
@@ -245,15 +288,12 @@ function propagate_layer!(
             else
                 for (;network, neuron, direction) in data.split_nodes
                     if direction == 1
-                        bounds[network][neuron, 1] = max(bounds[network][neuron, 1], 0.0)
+                        bounds[network][neuron, 1] = 0.0
                     else
-                        bounds[network][neuron, 2] = min(bounds[network][neuron, 2], 0.0)
+                        bounds[network][neuron, 2] = 0.0
                     end
                 end
             end
-
-            split_nodes₁ = @view data.split_nodes[findall(n -> n.network == 1, data.split_nodes)]
-            split_nodes₂ = @view data.split_nodes[findall(n -> n.network == 2, data.split_nodes)]
         end
     end
 
@@ -338,7 +378,8 @@ function propagate_layer!(
     ∂gen_sizes[idx2] += new_gen₂
     Zout_proto = nothing # Avoid missuse
     # @info "ReLU DiffZonotope Generators: Z₁=$(gen_sizes₁), Z₂=$(gen_sizes₂), ∂Z=$(∂gen_sizes)"
-    Zout = get_zonotope!(ZoutRef, gen_sizes₁, gen_sizes₂, ∂gen_sizes)
+    # Zout = get_zonotope!(ZoutRef, gen_sizes₁, gen_sizes₂, ∂gen_sizes)
+    Zout = get_zonotope!(ZoutRef, ∂gen_sizes, ∂gen_sizes, ∂gen_sizes)
     post_indices₁ = intersect_indices(Zout.∂Z.generator_ids, Zout.Z₁.generator_ids)
     post_indices₂ = intersect_indices(Zout.∂Z.generator_ids, Zout.Z₂.generator_ids)
 
