@@ -53,10 +53,17 @@ global const POST_CONTRACT = Ref{Bool}(true)
 global const INTER_CONTRACT = Ref{Bool}(false)
 global const PRE_CONTRACT = Ref{Bool}(false)
 
-function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool}; mode=ZonoBiased, approach=LP, contract=ZonoContract)
-    global USE_NEURON_SPLITTING[] = config[1]
-    global USE_DIFF_GENERATORS_DEEPSPLIT[] = config[2]
-    global INCORPORATE_INPUT_SPLITTING[] = config[3]
+global const USE_ZONO_ROW_SUBSTITUTION = Ref{Bool}(false)
+global const INCORPORATE_SPLIT_BOUNDS = Ref{Bool}(false)
+global const INCORPORATE_DIFF_BOUNDS = Ref{Bool}(false)
+
+function set_neuron_splitting_config(heursitic_config::Tuple{Bool, Bool, Bool}, split_bounds_config::Tuple{Bool, Bool, Bool}; mode=ZonoBiased, approach=LP, contract=ZonoContract)
+    global USE_NEURON_SPLITTING[] = heursitic_config[1]
+    global USE_DIFF_GENERATORS_DEEPSPLIT[] = heursitic_config[2]
+    global INCORPORATE_INPUT_SPLITTING[] = heursitic_config[3]
+    global USE_ZONO_ROW_SUBSTITUTION[] = split_bounds_config[1]
+    global INCORPORATE_SPLIT_BOUNDS[] = split_bounds_config[2]
+    global INCORPORATE_DIFF_BOUNDS[] = split_bounds_config[3]
     global DEEPSPLIT_HEURISTIC_MODE[] = mode
     global USE_ZONO_CONTRACT[] = USE_NEURON_SPLITTING[] && approach == ZonoContraction
     global USE_LP_ZONO_CONTRACT[] = USE_ZONO_CONTRACT[] && contract == LPZonoContract
@@ -70,40 +77,47 @@ function set_neuron_splitting_config(config::Tuple{Bool, Bool, Bool}; mode=ZonoB
 end
 
 function get_config()
-    if !USE_NEURON_SPLITTING[]
-        return "VeryDiff"
-    end
     config = ""
-    if USE_ZONO_CONTRACT[]
-        config *= "ZC"
-        if USE_LP_ZONO_CONTRACT[]
-            config = "LP-" * config
-        elseif INTER_CONTRACT[]
-            config *= "-Inter"
-        elseif POST_CONTRACT[] && !PRE_CONTRACT[]
-            config *= "-Post"
-        elseif PRE_CONTRACT[] && !POST_CONTRACT[]
-            config *= "-Pre"
-        end
-    elseif USE_LP[]
-        config *= "LP"
-    elseif USE_VERTICAL_SPLITTING[]
-        config *= "VS"
-    end
-    if DEEPSPLIT_HEURISTIC_MODE[] == ZonoBiased
-        config *= "-ZB"
-    elseif DEEPSPLIT_HEURISTIC_MODE[] == ZonoUnbiased
-        config *= "-ZU"
-    elseif DEEPSPLIT_HEURISTIC_MODE[] == DeepSplitBiased
-        config *= "-DB"
+    if !USE_NEURON_SPLITTING[]
+        config *= "VeryDiff"
     else
-        config *= "-DU"
+        if USE_ZONO_CONTRACT[]
+            config *= "ZC"
+            if USE_LP_ZONO_CONTRACT[]
+                config = "LP-" * config
+            elseif INTER_CONTRACT[]
+                config *= "-Inter"
+            elseif POST_CONTRACT[] && !PRE_CONTRACT[]
+                config *= "-Post"
+            elseif PRE_CONTRACT[] && !POST_CONTRACT[]
+                config *= "-Pre"
+            end
+        elseif USE_LP[]
+            config *= "LP"
+        elseif USE_VERTICAL_SPLITTING[]
+            config *= "VS"
+        end
+        if DEEPSPLIT_HEURISTIC_MODE[] == ZonoBiased
+            config *= "-ZB"
+        elseif DEEPSPLIT_HEURISTIC_MODE[] == ZonoUnbiased
+            config *= "-ZU"
+        elseif DEEPSPLIT_HEURISTIC_MODE[] == DeepSplitBiased
+            config *= "-DB"
+        else
+            config *= "-DU"
+        end
+        if INCORPORATE_INPUT_SPLITTING[]
+            config *= "-Input"
+        end
+        if USE_DIFF_GENERATORS_DEEPSPLIT[]
+            config *= "-DiffZono"
+        end
     end
-    if INCORPORATE_INPUT_SPLITTING[]
-        config *= "-Input"
+    if INCORPORATE_SPLIT_BOUNDS[]
+        config *= "-SB"
     end
-    if USE_DIFF_GENERATORS_DEEPSPLIT[]
-        config *= "-DiffZono"
+    if INCORPORATE_DIFF_BOUNDS[]
+        config *= "-DB"
     end
     return config
 end

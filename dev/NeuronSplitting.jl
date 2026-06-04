@@ -68,6 +68,8 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     first_task = true
     global VeryDiff.FIRST_ROUND[] = true
 
+    # has_similar_split = (node, nodes) -> !isnothing(findfirst(n -> node !== n && (node.layer, node.neuron) == (n.layer, n.neuron), nodes))
+
     queue = Queue()
     push!(queue, initial_task)
     
@@ -77,7 +79,9 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
         veri_result.final_δ_bound = task.distance_bound
         @info "Distance Bound: $(task.distance_bound)"
         # @info "Split Nodes: $(map(n -> (n.network, n.layer, n.neuron), task.branch.split_nodes))"
-        
+        # num_similar_splits = count(n -> has_similar_split(n, task.branch.split_nodes), task.branch.split_nodes) ÷ 2
+        # @info "Num Similar Splits: $(num_similar_splits)"
+
         if !check_resources(start_time, timeout)
             empty!(queue)
             GC.gc()
@@ -130,7 +134,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             split_nodes = task.branch.split_nodes
 
             if prop_state.num_instable == 0
-                fuzz_testing(N₁, N₂, task, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance, num_samples=10000)
+                # fuzz_testing(N₁, N₂, task, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance, num_samples=10000)
                 @warn "Can not establish the property."
                 @warn "Can not refine the (sub-)problem further (all nodes were split)."
                 @warn "For VerticalSplitting or (δ-)Top-1 this is currently unavoidable."
