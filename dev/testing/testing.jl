@@ -43,15 +43,16 @@ function verydiff_top1(split_bounds_config::Tuple{Bool, Bool, Bool})
 end
 
 function deepsplit_epsilon(
-    heuristic_config::Tuple{Bool, Bool, Bool},
-    split_bounds_config::Tuple{Bool, Bool, Bool}; 
-    mode=VeryDiff.ZonoBiased, 
-    approach=VeryDiff.LP, 
-    contract=VeryDiff.ZonoContract)
+    heuristic_config :: Tuple{Bool, Bool, Bool} = (true, false, false),
+    split_bounds_config :: Tuple{Bool, Bool, Bool} = (false, false, false),
+    heuristic_approach :: VeryDiff.DeepSplitHeuristicApproach = VeryDiff.DeepSplitUnbiased,
+    neuron_splitting_approach :: VeryDiff.NeuronSplittingApproach = VeryDiff.LP,
+    zono_contract_approach :: VeryDiff.ZonoContractApproach = VeryDiff.ZonoContract
+    )
     return (nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String; save=true) -> begin
         N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
         f, n_inputs, _ = get_ast(spec_file)
-        VeryDiff.set_neuron_splitting_config(heuristic_config, split_bounds_config; mode=mode, approach=approach, contract=contract)
+        VeryDiff.set_neuron_splitting_config(heuristic_config, split_bounds_config, heuristic_approach, neuron_splitting_approach, zono_contract_approach)
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_epsilon_property_with_neuron_splitting(epsilon)
         for (bounds, _, _, _) in f
@@ -62,15 +63,16 @@ function deepsplit_epsilon(
 end
 
 function deepsplit_top1(
-    heuristic_config::Tuple{Bool, Bool, Bool},
-    split_bounds_config::Tuple{Bool, Bool, Bool}; 
-    mode=VeryDiff.ZonoBiased, 
-    approach=VeryDiff.LP, 
-    contract=VeryDiff.ZonoContract)
+    heuristic_config :: Tuple{Bool, Bool, Bool} = (true, false, false),
+    split_bounds_config :: Tuple{Bool, Bool, Bool} = (false, false, false),
+    heuristic_approach :: VeryDiff.DeepSplitHeuristicApproach = VeryDiff.DeepSplitUnbiased,
+    neuron_splitting_approach :: VeryDiff.NeuronSplittingApproach = VeryDiff.LP,
+    zono_contract_approach :: VeryDiff.ZonoContractApproach = VeryDiff.ZonoContract
+    )
     return (nn_file₁::String, nn_file₂::String, spec_file::String, delta::Float64, timeout::Int64, result_out_dir::String; save=true) -> begin
         N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
         f, n_inputs, _ = get_ast(spec_file)
-        VeryDiff.set_neuron_splitting_config(heuristic_config, split_bounds_config; mode=mode, approach=approach, contract=contract)
+        VeryDiff.set_neuron_splitting_config(heuristic_config, split_bounds_config, heuristic_approach, neuron_splitting_approach, zono_contract_approach)
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_top1_property_with_neuron_splitting(delta)
         for (bounds, _, _, _) in f
@@ -123,18 +125,18 @@ lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 
 # verifier = deepsplit_top1(
 #     (true, true, true),
-#     (false, true, true);
-#     mode=VeryDiff.DeepSplitUnbiased,
-#     approach=VeryDiff.ZonoContraction,
-#     contract=VeryDiff.ZonoContractInter
+#     (false, true, true),
+#     VeryDiff.DeepSplitUnbiased,
+#     VeryDiff.ZonoContraction,
+#     VeryDiff.ZonoContractInter
 #     )
 # verifier = verydiff_top1((false, true, true))
 verifier = deepsplit_epsilon(
     (true, true, true),
-    (false, true, true);
-    mode=VeryDiff.DeepSplitUnbiased,
-    approach=VeryDiff.ZonoContraction,
-    contract=VeryDiff.LPZonoContract
+    (false, true, true),
+    VeryDiff.DeepSplitUnbiased,
+    VeryDiff.ZonoContraction,
+    VeryDiff.LPZonoContract
     )
 # verifier = verydiff_epsilon((false, true, true))
 

@@ -107,11 +107,11 @@ function deepsplit_heuristic(prop_state::PropState,
 end
 
 function get_relative_impact_func()
-    if DEEPSPLIT_HEURISTIC_MODE[] == ZonoBiased
+    if DEEPSPLIT_HEURISTIC_APPROACH[] == ZonoBiased
         zono_biased_relative_impact
-    elseif DEEPSPLIT_HEURISTIC_MODE[] == ZonoUnbiased
+    elseif DEEPSPLIT_HEURISTIC_APPROACH[] == ZonoUnbiased
         zono_unbiased_relative_impact
-    elseif DEEPSPLIT_HEURISTIC_MODE[] == DeepSplitBiased
+    elseif DEEPSPLIT_HEURISTIC_APPROACH[] == DeepSplitBiased
         deepsplit_biased_relative_impact
     else
         deepsplit_unbiased_relative_impact
