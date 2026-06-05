@@ -21,7 +21,7 @@ function verydiff_epsilon(split_bounds_config::Tuple{Bool, Bool, Bool})
         VeryDiff.set_neuron_splitting_config((false, false, false), split_bounds_config)
         println("\nUsing $(VeryDiff.get_config()) as verifier\n")
         for (bounds, _, _, _) in f
-            veri_result = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout, fuzz_testing=nothing)
+            veri_result = verify_network(N₁, N₂, bounds, property_check, epsilon_split_heuristic; timeout=timeout)
             println(veri_result)
         end
     end
@@ -56,7 +56,7 @@ function deepsplit_epsilon(
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_epsilon_property_with_neuron_splitting(epsilon)
         for (bounds, _, _, _) in f
-            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout, fuzz_testing=nothing)
+            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
             println(veri_result)
         end
     end
@@ -76,7 +76,7 @@ function deepsplit_top1(
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_top1_property_with_neuron_splitting(delta)
         for (bounds, _, _, _) in f
-            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout, fuzz_testing=nothing)
+            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
             println(veri_result)
         end
     end
@@ -131,14 +131,14 @@ lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 #     VeryDiff.ZonoContractInter
 #     )
 # verifier = verydiff_top1((false, true, true))
-verifier = deepsplit_epsilon(
-    (true, true, true),
-    (false, true, true),
-    VeryDiff.DeepSplitUnbiased,
-    VeryDiff.ZonoContraction,
-    VeryDiff.LPZonoContract
-    )
-# verifier = verydiff_epsilon((false, true, true))
+# verifier = deepsplit_epsilon(
+#     (true, true, true),
+#     (false, true, true),
+#     VeryDiff.DeepSplitUnbiased,
+#     VeryDiff.ZonoContraction,
+#     VeryDiff.LPZonoContract
+#     )
+verifier = verydiff_epsilon((false, false, false))
 
 run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
 # run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
