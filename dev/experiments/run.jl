@@ -23,7 +23,7 @@ function save_results(out_dir::String, net_name::String, spec_name::String, veri
     end
 end
 
-function verydiff_epsilon(nn_file₁::String, nn_file₂::String, spec_file::String, delta::Float64, timeout::Int64, result_out_dir::String; save=true)
+function verydiff_epsilon(nn_file₁::String, nn_file₂::String, spec_file::String, epsilon::Float64, timeout::Int64, result_out_dir::String; save=true)
     N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
     f, n_inputs, _ = get_ast(spec_file)
     property_check = get_epsilon_property(epsilon)
