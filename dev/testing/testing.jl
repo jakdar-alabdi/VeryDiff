@@ -133,9 +133,9 @@ lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 # verifier = verydiff_top1((false, true, true))
 verifier = deepsplit_epsilon(
     (true, true, true),
-    (true, true, true),
+    (false, true, true),
     VeryDiff.DeepSplitUnbiased,
-    VeryDiff.LP,
+    VeryDiff.ZonoContraction,
     VeryDiff.LPZonoContract
 )
 # verifier = verydiff_epsilon((true, true, false))

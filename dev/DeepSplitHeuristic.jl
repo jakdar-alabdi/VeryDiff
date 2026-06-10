@@ -87,15 +87,25 @@ function deepsplit_heuristic(prop_state::PropState,
         offset₁ = offset₁ .+ num_instable₁
     end
 
-    if isnothing(max_node) && USE_VERTICAL_SPLITTING[]
-        net, n = Tuple(argmax(s[L]))
-        max_score = s[L][net, n]
-        max_node = SplitNode(net, relu_layers[L].layer_idx, n, relu_layers[L])
+    if isnothing(max_node) && USE_VERTICAL_SPLITTING[] # ⇔ no instable neurons at layers < L
+        diff_layer = relu_layers[L]
+        bc = bounds_cache[diff_layer.layer_idx]
+        crossing = (bc.crossing₁, bc.crossing₂)
+        for (i, instable) in enumerate(findall.(crossing))
+            if isempty(instable)
+                continue
+            end
+            n = argmax(j -> s[L][i, j], instable)
+            if s[L][i, n] > max_score
+                max_score = s[L][i, n]
+                max_node = SplitNode(i, diff_layer.layer_idx, n, diff_layer)
+            end
+        end
     end
 
     @assert !isnothing(max_node)
 
-    if VeryDiff.INCORPORATE_INPUT_SPLITTING[]
+    if INCORPORATE_INPUT_SPLITTING[]
         net, n = Tuple(argmax(s_input))
         if s_input[net, n] > max_score
             max_score = s_input[net, n]

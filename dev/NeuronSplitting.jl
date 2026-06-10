@@ -129,14 +129,9 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
                 return veri_result, cex
             end
 
-            # if !isnothing(fuzz_testing)
-            #     fuzz_testing(N₁, N₂, task, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance)
-            # end
-
             split_nodes = task.branch.split_nodes
 
             if prop_state.num_instable == 0
-                # fuzz_testing(N₁, N₂, task, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance, num_samples=10000)
                 @warn "Can not establish the property."
                 @warn "Can not refine the (sub-)problem further (all nodes were split)."
                 @warn "For VerticalSplitting or (δ-)Top-1 this is currently unavoidable."
@@ -159,7 +154,6 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             
             split_candidate = deepsplit_heuristic(prop_state, relu_layers, relative_impact_func)
             if split_candidate.layer == 0
-                @assert !iszero(task.distance[split_candidate.neuron])
                 if VeryDiff.USE_ZONO_CONTRACT[] && !isempty(split_nodes)
                     task₁, task₂ = split_contract_zono(split_candidate.neuron, box, task, prop_state, verification_status, distance_bound)
                 else
@@ -272,25 +266,26 @@ function split_contract_zono(d::Int, box::InputBox, task::VerificationTask, prop
 
     (;middle, distance, distance_indices, distance1_secondary, middle1_secondary, 
     distance2_secondary, middle2_secondary, work_share, task_bounds, branch) = task
-
+    
     box₁ = contract_zono_all!(box₁, branch.split_nodes, prop_state)
-    task₁ = nothing
+    box₂ = contract_zono_all!(box₂, branch.split_nodes, prop_state)
+
+    task₁, task₂ = nothing, nothing
+
     if !isnothing(box₁)
+        f = ifelse(isnothing(box₂), identity, deepcopy)
         task₁ = VerificationTask(
-            middle, distance, distance_indices, distance1_secondary, middle1_secondary, distance2_secondary, 
-            middle2_secondary, verification_status, distance_bound, work_share / 2, task_bounds, branch
+            f(middle), f(distance), f(distance_indices), f(distance1_secondary), 
+            f(middle1_secondary), f(distance2_secondary), f(middle2_secondary), 
+            f(verification_status), distance_bound, work_share / 2, f(task_bounds), f(branch)
         )
         task₁ = transform_verification_task!(box₁, task₁)
     end
 
-    box₂ = contract_zono_all!(box₂, branch.split_nodes, prop_state)
-    task₂ = nothing
     if !isnothing(box₂)
-        f = ifelse(isnothing(task₁), identity, deepcopy)
         task₂ = VerificationTask(
-            f(middle), f(distance), f(distance_indices), f(distance1_secondary), 
-            f(middle1_secondary), f(distance2_secondary), f(middle2_secondary), 
-            f(verification_status), distance_bound, work_share / 2, f(task_bounds), f(branch)
+            middle, distance, distance_indices, distance1_secondary, middle1_secondary, distance2_secondary, 
+            middle2_secondary, verification_status, distance_bound, work_share / 2, task_bounds, branch
         )
         task₂ = transform_verification_task!(box₂, task₂)
     end
