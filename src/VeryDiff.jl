@@ -119,6 +119,9 @@ function get_config()
             config *= "-DiffZono"
         end
     end
+    if USE_ZONO_ROW_SUBSTITUTION[]
+       config *= "-RS" 
+    end
     if INCORPORATE_SPLIT_BOUNDS[]
         config *= "-SB"
     end

@@ -172,7 +172,12 @@ function propagate_layer!(
 
     @assert !isnothing(bounds_cache)
 
-    alt_bounds₁, alt_bounds₂ = nothing, nothing
+    # Compute Bounds
+    bounds₁ = zono_bounds(Zin.Z₁)
+    bounds₂ = zono_bounds(Zin.Z₂)
+    ∂bounds = zono_bounds(Zin.∂Z)
+
+    alt_bounds₁, alt_bounds₂ = bounds₁, bounds₂
     if VeryDiff.INCORPORATE_SPLIT_BOUNDS[]
         Ẑ₁ = Zonotope(
             Zin.Z₂.Gs .+ Zin.∂Z.Gs,
@@ -190,9 +195,23 @@ function propagate_layer!(
             )
         alt_bounds₁ = zono_bounds(Ẑ₁)
         alt_bounds₂ = zono_bounds(Ẑ₂)
+
+        if VeryDiff.USE_ZONO_ROW_SUBSTITUTION[]
+            crossing₁ = bounds₁[:, 1] .< 0.0 .&& bounds₁[:, 2] .> 0.0
+            crossing₂ = bounds₂[:, 1] .< 0.0 .&& bounds₂[:, 2] .> 0.0
+            replace_row₁ = crossing₁ .&& (minimum(abs, alt_bounds₁, dims=2) .< minimum(abs, bounds₁, dims=2))[:]
+            replace_row₂ = crossing₂ .&& (minimum(abs, alt_bounds₂, dims=2) .< minimum(abs, bounds₂, dims=2))[:]
+            # @info "Num row replacement: $(count(replace_row₁) + count(replace_row₂))"
+            for (G, Ĝ) in zip(Zin.Z₁.Gs, Ẑ₁.Gs)
+                G[replace_row₁, :] .= Ĝ[replace_row₁, :]
+            end
+            for (G, Ĝ) in zip(Zin.Z₂.Gs, Ẑ₂.Gs)
+                G[replace_row₂, :] .= Ĝ[replace_row₂, :]
+            end
+        end
     end
 
-    ∂alt_bounds = nothing
+    ∂alt_bounds = ∂bounds
     if VeryDiff.INCORPORATE_DIFF_BOUNDS[]
         ∂Ẑ = Zonotope(
             Zin.Z₁.Gs .- Zin.Z₂.Gs,
@@ -202,50 +221,19 @@ function propagate_layer!(
             Zin.∂Z.owned_generators
             )
         ∂alt_bounds = zono_bounds(∂Ẑ)
+        if VeryDiff.USE_ZONO_ROW_SUBSTITUTION[]
+            ∂crossing = ∂bounds[:, 1] .< 0.0 .&& ∂bounds[:, 2] .> 0.0
+            ∂replace_row = ∂crossing .&& (minimum(abs, ∂alt_bounds, dims=2) .< minimum(abs, ∂bounds, dims=2))[:]
+            for (G, Ĝ) in zip(Zin.∂Z.Gs, ∂Ẑ.Gs)
+                G[∂replace_row, :] .= Ĝ[∂replace_row, :]
+            end
+        end
     end
 
     split_nodes₁, split_nodes₂ = nothing, nothing
     if VeryDiff.USE_NEURON_SPLITTING[] && !isnothing(data) && !isempty(data.split_nodes)
         split_nodes₁ = filter(n -> n.network == 1, data.split_nodes)
         split_nodes₂ = filter(n -> n.network == 2, data.split_nodes)
-
-        # bounds₁ = zono_bounds(Zin.Z₁)
-        # bounds₂ = zono_bounds(Zin.Z₂)
-        # ∂bounds = zono_bounds(Zin.∂Z)
-
-        # # Replace potential rows in Z₂ by Z₁ - ∂Z
-        # for (;neuron, direction) in split_nodes₁
-        #     replace_row = begin
-        #         if direction == 1
-        #             bounds₂[neuron, 1] <= -∂bounds[neuron, 2]
-        #         else
-        #             bounds₂[neuron, 2] >= -∂bounds[neuron, 1]
-        #         end
-        #     end
-        #     if replace_row
-        #         for (G₁, G₂, ∂G) in zip(Zin.Z₁.Gs, Zin.Z₂.Gs, Zin.∂Z.Gs)
-        #             G₂[neuron, :] .= G₁[neuron, :] .- ∂G[neuron, :]
-        #         end
-        #         Zin.Z₂.c[neuron] = Zin.Z₁.c[neuron] - Zin.∂Z.c[neuron]
-        #     end
-        # end
-
-        # # Replace potential rows in Z₁ by Z₂ - ∂Z
-        # for (;neuron, direction) in split_nodes₂
-        #     replace_row = begin
-        #         if direction == 1
-        #            bounds₁[neuron, 1] <= ∂bounds[neuron, 1]
-        #         else
-        #            bounds₁[neuron, 2] >= ∂bounds[neuron, 2]
-        #         end
-        #     end
-        #     if replace_row
-        #         for (G₁, G₂, ∂G) in zip(Zin.Z₁.Gs, Zin.Z₂.Gs, Zin.∂Z.Gs)
-        #             G₁[neuron, :] .= G₂[neuron, :] .+ ∂G[neuron, :]
-        #         end
-        #         Zin.Z₁.c[neuron] = Zin.Z₂.c[neuron] + Zin.∂Z.c[neuron]
-        #     end
-        # end
 
         if VeryDiff.INTER_CONTRACT[]
             sort_split_nodes!(data.split_nodes, Zin)
@@ -257,21 +245,11 @@ function propagate_layer!(
             if !is_unit_hypercube(box)
                 transform_offset_diff_zono!(box, Zin)
                 transform_verification_task!(box, data.task)
+                bounds₁ = zono_bounds(Zin.Z₁)
+                bounds₂ = zono_bounds(Zin.Z₂)
+                ∂bounds = zono_bounds(Zin.∂Z)
             end
         end
-    end
-
-    # Compute Bounds
-    bounds₁ = zono_bounds(Zin.Z₁)
-    bounds₂ = zono_bounds(Zin.Z₂)
-    ∂bounds = zono_bounds(Zin.∂Z)
-
-    if !VeryDiff.INCORPORATE_SPLIT_BOUNDS[]
-        alt_bounds₁ = bounds₁
-        alt_bounds₂ = bounds₂
-    end
-    if !VeryDiff.INCORPORATE_DIFF_BOUNDS[]
-        ∂alt_bounds = ∂bounds
     end
     
     if !bounds_cache.initialized
@@ -336,13 +314,6 @@ function propagate_layer!(
             end
         end
     end
-
-    # bounds₁[:, 1] .= max.(bounds₂[:, 1] .+ ∂bounds[:, 1], bounds₁[:, 1], bounds_cache.lower₁)
-    # bounds₁[:, 2] .= min.(bounds₂[:, 2] .+ ∂bounds[:, 2], bounds₁[:, 2], bounds_cache.upper₁)
-    # bounds₂[:, 1] .= max.(bounds₁[:, 1] .- ∂bounds[:, 2], bounds₂[:, 1], bounds_cache.lower₂)
-    # bounds₂[:, 2] .= min.(bounds₁[:, 2] .- ∂bounds[:, 1], bounds₂[:, 2], bounds_cache.upper₂)
-    # ∂bounds[:, 1] .= max.(bounds₁[:, 1] .- bounds₂[:, 2], ∂bounds[:, 1], bounds_cache.∂lower)
-    # ∂bounds[:, 2] .= min.(bounds₁[:, 2] .- bounds₂[:, 1], ∂bounds[:, 2], bounds_cache.∂upper)
 
     bounds₁[:, 1] .= max.(bounds₂[:, 1] .+ ∂bounds[:, 1], alt_bounds₂[:, 1] .+ ∂alt_bounds[:, 1], alt_bounds₁[:, 1], bounds₁[:, 1], bounds_cache.lower₁)
     bounds₁[:, 2] .= min.(bounds₂[:, 2] .+ ∂bounds[:, 2], alt_bounds₂[:, 2] .+ ∂alt_bounds[:, 2], alt_bounds₁[:, 2], bounds₁[:, 2], bounds_cache.upper₁)

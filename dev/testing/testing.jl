@@ -129,16 +129,16 @@ lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 #     VeryDiff.DeepSplitUnbiased,
 #     VeryDiff.ZonoContraction,
 #     VeryDiff.ZonoContractInter
-#     )
+# )
 # verifier = verydiff_top1((false, true, true))
-# verifier = deepsplit_epsilon(
-#     (true, true, true),
-#     (false, true, true),
-#     VeryDiff.DeepSplitUnbiased,
-#     VeryDiff.ZonoContraction,
-#     VeryDiff.LPZonoContract
-#     )
-verifier = verydiff_epsilon((false, false, false))
+verifier = deepsplit_epsilon(
+    (true, true, true),
+    (true, true, true),
+    VeryDiff.DeepSplitUnbiased,
+    VeryDiff.LP,
+    VeryDiff.LPZonoContract
+)
+# verifier = verydiff_epsilon((true, true, false))
 
 run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
 # run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)

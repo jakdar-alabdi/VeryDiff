@@ -80,7 +80,9 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
         @info "Distance Bound: $(task.distance_bound)"
         # @info "Split Nodes: $(map(n -> (n.network, n.layer, n.neuron), task.branch.split_nodes))"
         # num_similar_splits = count(n -> has_similar_split(n, task.branch.split_nodes), task.branch.split_nodes) ÷ 2
-        # @info "Num Similar Splits: $(num_similar_splits)"
+        # num_constraints = length(task.branch.split_nodes)
+        # num_instable = prop_state.num_instable
+        # @info "Num Similar Splits: $num_similar_splits, Num Constraints: $num_constraints, Num Instable: $num_instable, Distance Bound: $(task.distance_bound)"
 
         if !check_resources(start_time, timeout)
             empty!(queue)
@@ -195,7 +197,7 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
     
     old_node_idx = nothing
     if VeryDiff.USE_VERTICAL_SPLITTING[]
-        old_node_idx = findfirst(n -> same_split_node(node, n), task.branch.split_nodes)
+        old_node_idx = findfirst(n -> is_same_split_node(node, n), task.branch.split_nodes)
         if !isnothing(old_node_idx)
             direction₁, bounds₁, direction₂, bounds₂ = vertically_resplit_neuron(task.branch.split_nodes[old_node_idx])
         end
@@ -296,7 +298,7 @@ function split_contract_zono(d::Int, box::InputBox, task::VerificationTask, prop
     return task₁, task₂
 end
 
-function same_split_node(node₁::SplitNode, node₂::SplitNode) :: Bool
+function is_same_split_node(node₁::SplitNode, node₂::SplitNode) :: Bool
     return node₁.network == node₂.network && node₁.layer == node₂.layer && node₁.neuron == node₂.neuron
 end
 
@@ -311,8 +313,8 @@ end
 function get_relu_layers(N::GeminiNetwork) :: Vector{DiffLayer{
         VeryDiff.VNNLib.OnnxParser.ONNXRelu{S1},
         VeryDiff.VNNLib.OnnxParser.ONNXRelu{S2},
-        VeryDiff.VNNLib.OnnxParser.ONNXRelu{S3}} where {S1,S2,S3}}
-
+        VeryDiff.VNNLib.OnnxParser.ONNXRelu{S3}
+    } where {S1,S2,S3}}
     isdiffrelu = l -> l isa VeryDiff.Definitions.DiffLayer{VNNLib.OnnxParser.ONNXRelu{S1},VNNLib.OnnxParser.ONNXRelu{S2},VNNLib.OnnxParser.ONNXRelu{S3}} where {S1,S2,S3}
     relu_layers_pos = findall(isdiffrelu, get_layers(N))
     return @view get_layers(N)[relu_layers_pos]
