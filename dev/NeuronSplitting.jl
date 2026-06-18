@@ -63,7 +63,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     prop_state = PropState(true)
     veri_result = VerificationResult()
 
-    relu_layers = get_relu_layers(N)
+    relu_diff_layers = get_relu_diff_layers(N)
     
     first_task = true
     global VeryDiff.FIRST_ROUND[] = true
@@ -155,7 +155,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
                 end
             end
             
-            split_candidate = deepsplit_heuristic(prop_state, relu_layers, relative_impact_func)
+            split_candidate = deepsplit_heuristic(prop_state, relu_diff_layers, relative_impact_func)
             if split_candidate.layer == 0
                 if VeryDiff.USE_ZONO_CONTRACT[] && !isempty(split_nodes)
                     task₁, task₂ = split_contract_zono(split_candidate.neuron, box, task, prop_state, verification_status, distance_bound)
@@ -177,14 +177,15 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
         end
 
         k += 1
-        if k % 100 == 0 && !isnothing(fuzz_testing) && !isempty(queue)
-            num_similar_splits = count(n -> has_similar_split(n, task.branch.split_nodes), task.branch.split_nodes) ÷ 2
-            num_constraints = length(task.branch.split_nodes)
-            num_instable = prop_state.num_instable
-            println("Num Similar Splits: $num_similar_splits, Num Splits: $num_constraints, Num Instable: $num_instable, Distance Bound: $(task.distance_bound)")
+        if k % 50 == 0 && !isnothing(fuzz_testing) && !isempty(queue)
+            # num_similar_splits = count(n -> has_similar_split(n, task.branch.split_nodes), task.branch.split_nodes) ÷ 2
+            # num_constraints = length(task.branch.split_nodes)
+            # num_instable = prop_state.num_instable
+            # println("Num Similar Splits: $num_similar_splits, Num Splits: $num_constraints, Num Instable: $num_instable, Distance Bound: $(task.distance_bound)")
             next_task = peek_queue(queue)
-            provable_distance_bound = next_task.distance_bound
-            fuzz_testing(N₁, N₂, Zin_original.Z₁, provable_distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance)
+            distance_bound = next_task.distance_bound
+            @info "Distance Bound: $(distance_bound)"
+            fuzz_testing(N₁, N₂, Zin_original.Z₁, distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance)
         end
 
         reset_ps!(prop_state)
@@ -312,24 +313,6 @@ function is_same_split_node(node₁::SplitNode, node₂::SplitNode) :: Bool
     return node₁.network == node₂.network && node₁.layer == node₂.layer && node₁.neuron == node₂.neuron
 end
 
-function check_resources(start_time::UInt64, timeout=Inf) :: Bool
-    timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
-    if timeout_reached
-        println("\nTIMEOUT REACHED")
-    end
-    return !timeout_reached
-end
-
-function get_relu_layers(N::GeminiNetwork) :: Vector{DiffLayer{
-        VeryDiff.VNNLib.OnnxParser.ONNXRelu{S1},
-        VeryDiff.VNNLib.OnnxParser.ONNXRelu{S2},
-        VeryDiff.VNNLib.OnnxParser.ONNXRelu{S3}
-    } where {S1,S2,S3}}
-    isdiffrelu = l -> l isa VeryDiff.Definitions.DiffLayer{VNNLib.OnnxParser.ONNXRelu{S1},VNNLib.OnnxParser.ONNXRelu{S2},VNNLib.OnnxParser.ONNXRelu{S3}} where {S1,S2,S3}
-    relu_layers_pos = findall(isdiffrelu, get_layers(N))
-    return @view get_layers(N)[relu_layers_pos]
-end
-
 function get_split_node_diffzono(node::SplitNode, prop_state::PropState) :: DiffZonotope
     inputs = get_zonos_at_pos(get_inputs(node.diff_layer), prop_state)
     return get_zonotope(inputs[1])
@@ -338,4 +321,12 @@ end
 function get_split_node_zono(node::SplitNode, prop_state::PropState) :: Zonotope
     DZ = get_split_node_diffzono(node, prop_state)
     return ifelse(node.network == 1, DZ.Z₁, DZ.Z₂)
+end
+
+function check_resources(start_time::UInt64, timeout=Inf) :: Bool
+    timeout_reached = (time_ns() - start_time) / 1.0e9 > timeout
+    if timeout_reached
+        println("\nTIMEOUT REACHED")
+    end
+    return !timeout_reached
 end

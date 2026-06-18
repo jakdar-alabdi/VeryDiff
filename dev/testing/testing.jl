@@ -140,23 +140,22 @@ verifier = deepsplit_epsilon(
 )
 # verifier = verydiff_epsilon((true, true, false))
 
-
-original_stdout = stdout
-original_stderr = stderr
-out_dir = "$(@__DIR__)/similar_splits/"
+# original_stdout = stdout
+# original_stderr = stderr
+# out_dir = "$(@__DIR__)/similar_splits/"
 # mkdir(out_dir)
-open(joinpath(out_dir, "mnist_10_local_15.log"), "w") do f
-    redirect_stdout(f)
-    redirect_stderr(f)
-    try
-        run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
-    catch e
-        showerror(stdout, e, catch_backtrace())
-    end
-    redirect_stdout(original_stdout)
-    redirect_stderr(original_stderr)
-end
+# open(joinpath(out_dir, "mnist_10_local_15.log"), "w") do f
+#     redirect_stdout(f)
+#     redirect_stderr(f)
+#     try
+#         run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
+#     catch e
+#         showerror(stdout, e, catch_backtrace())
+#     end
+#     redirect_stdout(original_stdout)
+#     redirect_stderr(original_stderr)
+# end
 
-# run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
+run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
 # run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
 # run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)

@@ -198,6 +198,15 @@ function get_layers(N::GeminiNetwork)
     return N.diff_layers
 end
 
+function is_relu_diff_layer(L :: DiffLayer{<:Node,<:Node,<:Node}) :: Bool
+    return L isa DiffLayer{ONNXRelu{S1},ONNXRelu{S2},ONNXRelu{S3}} where {S1,S2,S3}
+end
+
+function get_relu_diff_layers(N :: GeminiNetwork) :: Vector{DiffLayer{ONNXRelu{S1},ONNXRelu{S2},ONNXRelu{S3}} where {S1,S2,S3}}
+    relu_diff_layers_pos = findall(is_relu_diff_layer, get_layers(N))
+    return @view get_layers(N)[relu_diff_layers_pos]
+end
+
 struct Network{LayerIdT,NShapeIn,NShapeOut}
     model :: OnnxNet{LayerIdT,NShapeIn,NShapeOut}
     input_id :: LayerIdT

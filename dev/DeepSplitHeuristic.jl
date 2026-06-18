@@ -1,5 +1,5 @@
 function deepsplit_heuristic(prop_state::PropState, 
-    relu_layers :: Vector{
+    relu_diff_layers :: Vector{
         DiffLayer{
             VeryDiff.VNNLib.OnnxParser.ONNXRelu{S1}, 
             VeryDiff.VNNLib.OnnxParser.ONNXRelu{S2}, 
@@ -9,7 +9,7 @@ function deepsplit_heuristic(prop_state::PropState,
 
     @assert prop_state.num_instable > 0
 
-    L = length(relu_layers)
+    L = length(relu_diff_layers)
     zonos = prop_state.zono_storage.zonotopes
     Zin = zonos[1].zonotope
     Zout = zonos[end].zonotope
@@ -23,7 +23,7 @@ function deepsplit_heuristic(prop_state::PropState,
     end
     G_dir_idxs = attempt_find_index_position.(Zouts .|> Z -> Z.generator_ids, owned_generator_ids)
     
-    s = [zeros(2, length(zonos[l.layer_idx].zonotope.∂Z.c)) for l in relu_layers]
+    s = [zeros(2, length(zonos[l.layer_idx].zonotope.∂Z.c)) for l in relu_diff_layers]
     s_input = zeros(2, input_dim)
 
     max_score = -Inf
@@ -31,7 +31,7 @@ function deepsplit_heuristic(prop_state::PropState,
     
     offset₁ = (0, 0)
     for l₁ in L:-1:1
-        diff_layer₁ = relu_layers[l₁]
+        diff_layer₁ = relu_diff_layers[l₁]
         inputs₁ = get_zonos_at_pos(get_inputs(diff_layer₁), prop_state)
         Zin₁ = get_zonotope(inputs₁[1]) |> DZ -> (DZ.Z₁, DZ.Z₂)
         bc₁ = bounds_cache[diff_layer₁.layer_idx]
@@ -46,7 +46,7 @@ function deepsplit_heuristic(prop_state::PropState,
         
         offset₂ = (0, 0)
         for l₂ in (l₁ + 1):L
-            diff_layer₂ = relu_layers[l₂]
+            diff_layer₂ = relu_diff_layers[l₂]
             inputs₂ = get_zonos_at_pos(get_inputs(diff_layer₂), prop_state)
             Zin₂ = get_zonotope(inputs₂[1]) |> DZ -> (DZ.Z₁, DZ.Z₂)
             bc₂ = bounds_cache[diff_layer₂.layer_idx]
@@ -88,7 +88,7 @@ function deepsplit_heuristic(prop_state::PropState,
     end
 
     if isnothing(max_node) && USE_VERTICAL_SPLITTING[] # ⇔ no instable neurons at layers < L
-        diff_layer = relu_layers[L]
+        diff_layer = relu_diff_layers[L]
         bc = bounds_cache[diff_layer.layer_idx]
         crossing = (bc.crossing₁, bc.crossing₂)
         for (i, instable) in enumerate(findall.(crossing))

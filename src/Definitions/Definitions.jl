@@ -20,7 +20,7 @@ export Zonotope,DiffZonotope,BoundsCache,CachedZonotope,ZonotopeStorage
 export resize_zonotope_storage!
 export VerificationTask, PropState, reset_ps!, first_pass, get_zonotope, get_layer, get_zonotope!, get_free_generator_id!
 export SortedVector, union, intersect_indices, find_index_position, attempt_find_index_position
-export parse_network, get_layers, get_inputs, get_outputs, get_layer1, get_diff_layer, get_layer2
+export parse_network, get_layers, get_inputs, get_outputs, get_layer1, get_diff_layer, get_layer2, get_relu_diff_layers
 export configure_first_usage!, prepare_prop_state!, zonos_initialized
 export updateGenerators!, updateGeneratorsMul!, updateGeneratorsAdd!, updateGeneratorsAddMul!, updateGeneratorsSub!, updateGeneratorsSubMul!
 export zono_optimize, zono_bounds, zono_get_max_vector
