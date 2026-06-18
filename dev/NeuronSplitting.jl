@@ -17,7 +17,7 @@ function deepsplit_verify_network(
     fuzz_testing=nothing) where {LayerIdT,NShapeIn,NShapeOut}
 
     start_time = time_ns()
-    try
+    # try
         global NEW_HEURISTIC[] = false
 
         lower = @view bounds[:, 1]
@@ -48,13 +48,13 @@ function deepsplit_verify_network(
         println("Verification Status: $(veri_result.status)")
 
         return veri_result
-    catch e
-        println("Caught an exception:")
-        showerror(stderr, e, catch_backtrace())
-        veri_result = VerificationResult()
-        veri_result.verification_time = time_ns() - start_time
-        return veri_result
-    end
+    # catch e
+    #     println("Caught an exception:")
+    #     showerror(stderr, e, catch_backtrace())
+    #     veri_result = VerificationResult()
+    #     veri_result.verification_time = time_ns() - start_time
+    #     return veri_result
+    # end
 end
 
 function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network, initial_task::VerificationTask, property_check; timeout=Inf, fuzz_testing=nothing)
@@ -67,8 +67,10 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     
     first_task = true
     global VeryDiff.FIRST_ROUND[] = true
+    Zin_original = nothing
 
-    # has_similar_split = (node, nodes) -> !isnothing(findfirst(n -> node !== n && (node.layer, node.neuron) == (n.layer, n.neuron), nodes))
+    has_similar_split = (node, nodes) -> !isnothing(findfirst(n -> node !== n && (node.layer, node.neuron) == (n.layer, n.neuron), nodes))
+    k = 0
 
     queue = Queue()
     push!(queue, initial_task)
@@ -77,7 +79,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     while !isempty(queue)
         task = pop!(queue)
         veri_result.final_δ_bound = task.distance_bound
-        @info "Distance Bound: $(task.distance_bound)"
+        # @info "Distance Bound: $(task.distance_bound)"
         # @info "Split Nodes: $(map(n -> (n.network, n.layer, n.neuron), task.branch.split_nodes))"
         # num_similar_splits = count(n -> has_similar_split(n, task.branch.split_nodes), task.branch.split_nodes) ÷ 2
         # num_constraints = length(task.branch.split_nodes)
@@ -116,6 +118,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             println("Zono Bounds:")
             println(bounds[:, 1])
             println(bounds[:, 2])
+            Zin_original = Zin
         end
         
         prop_satisfied, cex, _, verification_status, distance_bound, box = property_check(N₁, N₂, prop_state)
@@ -171,6 +174,17 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
             if !isnothing(task₂)
                 push!(queue, task₂)
             end
+        end
+
+        k += 1
+        if k % 100 == 0 && !isnothing(fuzz_testing) && !isempty(queue)
+            num_similar_splits = count(n -> has_similar_split(n, task.branch.split_nodes), task.branch.split_nodes) ÷ 2
+            num_constraints = length(task.branch.split_nodes)
+            num_instable = prop_state.num_instable
+            println("Num Similar Splits: $num_similar_splits, Num Splits: $num_constraints, Num Instable: $num_instable, Distance Bound: $(task.distance_bound)")
+            next_task = peek_queue(queue)
+            provable_distance_bound = next_task.distance_bound
+            fuzz_testing(N₁, N₂, Zin_original.Z₁, provable_distance_bound; distance_metric=VeryDiff.Properties.get_sample_distance)
         end
 
         reset_ps!(prop_state)
@@ -236,6 +250,7 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
 end
 
 function vertically_resplit_neuron(node::SplitNode)
+    println("Resplit Node $((node.network, node.layer, node.neuron, node.direction))")
     if node.direction == 1
         @assert length(node.bounds) == 2
         l̲, u̲ = node.bounds[1], node.bounds[2]

@@ -1,4 +1,6 @@
 import os
+# os.add_dll_directory(r"C:\\Windows\\SysWOW64\\msvcr71.dll")
+# os.add_dll_directory(r"C:\\Windows\\SysWOW64\\msvcp71.dll")
 import onnx
 from onnx import helper
 

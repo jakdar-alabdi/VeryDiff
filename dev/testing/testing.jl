@@ -56,7 +56,7 @@ function deepsplit_epsilon(
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_epsilon_property_with_neuron_splitting(epsilon)
         for (bounds, _, _, _) in f
-            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
+            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout, fuzz_testing=fuzz_testing)
             println(veri_result)
         end
     end
@@ -119,9 +119,9 @@ end
 
 cur_dir = @__DIR__
 benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
-acas_csv_dir = joinpath(cur_dir, "acas-prune.csv")
-mnist_csv_dir = joinpath(cur_dir, "mnist-prune.csv")
-lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
+acas_csv_dir = joinpath(cur_dir, "specs", "acas-prune.csv")
+mnist_csv_dir = joinpath(cur_dir, "specs", "mnist-prune.csv")
+lhc_csv_dir = joinpath(cur_dir, "specs", "lhc.csv")
 
 # verifier = deepsplit_top1(
 #     (true, true, true),
@@ -133,13 +133,30 @@ lhc_csv_dir = joinpath(cur_dir, "lhc.csv")
 # verifier = verydiff_top1((false, true, true))
 verifier = deepsplit_epsilon(
     (true, true, true),
-    (false, true, true),
+    (false, false, false),
     VeryDiff.DeepSplitUnbiased,
     VeryDiff.ZonoContraction,
     VeryDiff.LPZonoContract
 )
 # verifier = verydiff_epsilon((true, true, false))
 
-run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
+
+original_stdout = stdout
+original_stderr = stderr
+out_dir = "$(@__DIR__)/similar_splits/"
+# mkdir(out_dir)
+open(joinpath(out_dir, "mnist_10_local_15.log"), "w") do f
+    redirect_stdout(f)
+    redirect_stderr(f)
+    try
+        run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
+    catch e
+        showerror(stdout, e, catch_backtrace())
+    end
+    redirect_stdout(original_stdout)
+    redirect_stderr(original_stderr)
+end
+
+# run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
 # run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)
 # run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)

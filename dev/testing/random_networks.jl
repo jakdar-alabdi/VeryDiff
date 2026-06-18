@@ -1,6 +1,6 @@
 # using VeryDiff
-# using VNNLib
-# import VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu, ONNXAddConst
+using VNNLib
+import VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu, ONNXAddConst
 
 function create_random_dense_layer(input_id::String, output_id::String, layer_name::String, rows::Int, columns::Int)
     W₁ = 0.1 * randn(rows, columns)
@@ -13,7 +13,7 @@ function create_random_dense_layer(input_id::String, output_id::String, layer_na
     zero_one_components = randn(rows, columns) .< -3.0
     W₁[zero_one_components] .= 0.0
 
-    layer_type = rand(2:4)
+    layer_type = 3# rand(1:4)
     if layer_type == 1
         @info "Independent layer"
         # New random weights and biases
@@ -56,7 +56,7 @@ function create_random_addconst_layer(input_id::String, output_id::String, layer
         c₁[1] = 0.1
     end
 
-    layer_type = rand(1:4)
+    layer_type = 3 #rand(1:4)
     if layer_type == 1
         @info "Independent layer"
         # New random weights and biases

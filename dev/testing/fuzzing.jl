@@ -4,47 +4,47 @@ using Gurobi, JuMP
 
 include("random_networks.jl")
 
-function fuzz_testing(N₁::Network, N₂::Network, task::VeryDiff.VerificationTask, distance_bound::Float64; distance_metric=nothing, num_samples=100)
-    (;distance, middle, distance_indices) = task
-    lower = middle[distance_indices] - distance
-    upper = middle[distance_indices] + distance
+
+Random.seed!(1042)
+
+function fuzz_testing(N₁::Network, N₂::Network, Zin::VeryDiff.Zonotope, distance_bound::Float64; distance_metric=nothing, num_samples=100)
+    bounds = VeryDiff.zono_bounds(Zin)
+    lower = @view bounds[:, 1]
+    upper = @view bounds[:, 2]
     width = upper - lower
     input_dim = length(lower)
-    @info "Distance Bound: $distance_bound"
-    next_seed = rand(1:999999)
-    # @info "Next seed: $(next_seed)"
-    Random.seed!(next_seed)
+    num_samples = 10_000#rand(1000:100_000)
     x = zeros(input_dim)
     for _ in 1:num_samples
         x .= clamp.(lower .+ width .* rand(input_dim), lower, upper)
-        # @info "Random input: $x"
         sample_distance = distance_metric(N₁, N₂, x)
-        # @info "Sample distance: $sample_distance"
-        # @assert sample_distance <= distance_bound || isapprox(sample_distance, distance_bound; atol=1e-6) "Found counterexample $(x) with sample distance $(sample_distance) > $distance_bound."
         @assert sample_distance <= distance_bound "Found counterexample $(x) with sample distance $(sample_distance) > $distance_bound."
     end
 end
 
 function start_fuzz_testing()
     VeryDiff.NEW_HEURISTIC[] = false
-    # Random.seed!(42)
-    # Random.seed!(169370)
-    # Random.seed!(986905)
-    # Random.seed!(299535)
-    # Random.seed!(250891)
-    Random.seed!(1234)
-    timeout = 30
+    timeout = 120
     num_iter = 0
     max_iters = 100
 
     fuzz_testing_func = nothing
     if VeryDiff.NEW_HEURISTIC[]
-        VeryDiff.set_neuron_splitting_config((false, false, false))
+        VeryDiff.set_neuron_splitting_config(
+            (false, false, false), 
+            (false, false, false),
+        )
         property_check_func = VeryDiff.get_epsilon_property
         verifier = verify_network
     else
         fuzz_testing_func = fuzz_testing
-        VeryDiff.set_neuron_splitting_config((true, false, false); mode=VeryDiff.DeepSplitUnbiased, approach=VeryDiff.VerticalSplitting, contract=VeryDiff.ZonoContractInter)
+        VeryDiff.set_neuron_splitting_config(
+            (true, true, true), 
+            (false, false, false), 
+            VeryDiff.DeepSplitUnbiased, 
+            VeryDiff.ZonoContraction, 
+            VeryDiff.ZonoContractInter
+        )
         property_check_func = VeryDiff.get_epsilon_property_with_neuron_splitting
         verifier = deepsplit_verify_network
     end
@@ -60,13 +60,12 @@ function start_fuzz_testing()
         next_seed = rand(1:999999)
         @info "Next seed: $(next_seed)"
         Random.seed!(next_seed)
-        # Random.seed!(777864)
 
         num_layers = 3 * rand(2:10)
         @info "Num layers: $num_layers"
-        input_dim = rand(2:50)
+        input_dim = rand(50:150)
         @info "Input dimension: $input_dim"
-        output_dim = rand(2:50)
+        output_dim = rand(5:50)
         @info "Output dimension: $output_dim"
 
         N₁, N₂ = create_random_networks(num_layers, input_dim, output_dim)
@@ -95,17 +94,17 @@ function start_fuzz_testing()
 end
 
     
-original_stdout = stdout
-original_stderr = stderr
-out_dir = "$(@__DIR__)/fuzzing_logs/"
-open(joinpath(out_dir, "fuzzing.log"), "w") do f
-    redirect_stdout(f)
-    redirect_stderr(f)
-    try
-        start_fuzz_testing()
-    catch e
-        showerror(stdout, e, catch_backtrace())
-    end
-    redirect_stdout(original_stdout)
-    redirect_stderr(original_stderr)
-end
+# original_stdout = stdout
+# original_stderr = stderr
+# out_dir = "$(@__DIR__)/fuzzing_logs/"
+# open(joinpath(out_dir, "fuzzing.log"), "w") do f
+#     redirect_stdout(f)
+#     redirect_stderr(f)
+#     try
+#         start_fuzz_testing()
+#     catch e
+#         showerror(stdout, e, catch_backtrace())
+#     end
+#     redirect_stdout(original_stdout)
+#     redirect_stderr(original_stderr)
+# end
