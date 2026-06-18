@@ -16,38 +16,38 @@ function deepsplit_verify_network(
     timeout=Inf, 
     fuzz_testing=nothing) where {LayerIdT,NShapeIn,NShapeOut}
 
-    start_time = time_ns()
+    # start_time = time_ns()
     # try
-        global NEW_HEURISTIC[] = false
+    global NEW_HEURISTIC[] = false
 
-        lower = @view bounds[:, 1]
-        upper = @view bounds[:, 2]
-        mid = (upper .+ lower) ./ 2
-        distance = mid .- lower
-        non_zero_indices = findall((!).(iszero.(distance)))
-        distance = distance[non_zero_indices]
-        
-        initial_task = VerificationTask(mid, distance, non_zero_indices, nothing, nothing, nothing, nothing, nothing, Inf64, 1.0, Branch())
+    lower = @view bounds[:, 1]
+    upper = @view bounds[:, 2]
+    mid = (upper .+ lower) ./ 2
+    distance = mid .- lower
+    non_zero_indices = findall((!).(iszero.(distance)))
+    distance = distance[non_zero_indices]
+    
+    initial_task = VerificationTask(mid, distance, non_zero_indices, nothing, nothing, nothing, nothing, nothing, Inf64, 1.0, Branch())
 
-        N = GeminiNetwork(N₁, N₂)
-        N₁ = executable_network(N₁)
-        N₂ = executable_network(N₂)
+    N = GeminiNetwork(N₁, N₂)
+    N₁ = executable_network(N₁)
+    N₂ = executable_network(N₂)
 
-        if N.diff_layers[end] isa VeryDiff.Definitions.DiffLayer{VNNLib.OnnxParser.ONNXSoftmax{S},VNNLib.OnnxParser.ONNXSoftmax{S},VNNLib.OnnxParser.ONNXSoftmax{S}} where S
-            pop!(N.diff_layers)
-            @warn "Removed final Softmax layer from differential network for verification."
-            @warn "VeryDiff assumes this is handled by the choice of an appropriate property!"
-        end
+    if N.diff_layers[end] isa VeryDiff.Definitions.DiffLayer{VNNLib.OnnxParser.ONNXSoftmax{S},VNNLib.OnnxParser.ONNXSoftmax{S},VNNLib.OnnxParser.ONNXSoftmax{S}} where S
+        pop!(N.diff_layers)
+        @warn "Removed final Softmax layer from differential network for verification."
+        @warn "VeryDiff assumes this is handled by the choice of an appropriate property!"
+    end
 
-        veri_result, cex = deepsplit_verify_network(N, N₁, N₂, initial_task, property_check; timeout=timeout, fuzz_testing=fuzz_testing)
+    veri_result, cex = deepsplit_verify_network(N, N₁, N₂, initial_task, property_check; timeout=timeout, fuzz_testing=fuzz_testing)
 
-        if !isnothing(cex)
-            println("Found counterexample: $cex")
-        end
-        println("Initial δ-bound: $(veri_result.initial_δ_bound), Final δ-bound: $(veri_result.final_δ_bound)")
-        println("Verification Status: $(veri_result.status)")
+    if !isnothing(cex)
+        println("Found counterexample: $cex")
+    end
+    println("Initial δ-bound: $(veri_result.initial_δ_bound), Final δ-bound: $(veri_result.final_δ_bound)")
+    println("Verification Status: $(veri_result.status)")
 
-        return veri_result
+    return veri_result
     # catch e
     #     println("Caught an exception:")
     #     showerror(stderr, e, catch_backtrace())
@@ -251,7 +251,7 @@ function split_neuron(node::SplitNode, box::Union{Nothing,InputBox}, task::Verif
 end
 
 function vertically_resplit_neuron(node::SplitNode)
-    println("Resplit Node $((node.network, node.layer, node.neuron, node.direction))")
+    # println("Resplit Node $((node.network, node.layer, node.neuron, node.direction))")
     if node.direction == 1
         @assert length(node.bounds) == 2
         l̲, u̲ = node.bounds[1], node.bounds[2]

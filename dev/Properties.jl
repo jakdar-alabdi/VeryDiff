@@ -9,7 +9,7 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
         box = nothing
 
         prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing; safe_out_dim=safe_out_dim)
-        if prop_satisfied || !isnothing(cex) || isempty(split_nodes)
+        if prop_satisfied || !isnothing(cex) || isempty(split_nodes) || VeryDiff.USE_VERTICAL_SPLITTING[]
             return prop_satisfied, cex, nothing, nothing, distance_bound, nothing
         end
 
@@ -17,7 +17,7 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
             sort_split_nodes!(split_nodes, prop_state)
         end
 
-        if VeryDiff.USE_LP[] || !VeryDiff.USE_VERTICAL_SPLITTING[] && prop_state.num_instable == 0
+        if VeryDiff.USE_LP[] || prop_state.num_instable == 0
             model = Model(() -> Gurobi.Optimizer(GRB_ENV[]))
             set_time_limit_sec(model, 10)
             
@@ -58,28 +58,6 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
                         cex_input = Zin.Z₁.Gs[1] * val + Zin.Z₁.c
                         sample_distance = get_sample_distance(N₁, N₂, cex_input)
                         δ = abs(objective_value(model))
-    
-                        if δ > epsilon && prop_state.num_instable == 0 && any(!, safe_out_dim)
-                            @info "---------------------------------------------"
-                            @info "[LP Solution] x = $(val)"
-                            @info "Zin(x) = $cex_input"
-                            @info "sample distance: $sample_distance"
-                            @info "obj. value: $(abs(objective_value(model)))"
-                            for node in split_nodes
-                                (;network, layer, neuron, diff_layer, direction, bounds) = node
-                                Z = VeryDiff.get_split_node_zono(node, prop_state)
-                                indices = intersect_indices(Zout.∂Z.generator_ids, Z.generator_ids)
-                                v = Z.c[neuron]
-                                for (G, i) in zip(Z.Gs, indices)
-                                    v += G[neuron, :]'value(xs[i])[1:size(G, 2)]
-                                end
-                                v *= direction
-                                if v < 0.0
-                                    @info "split node: $((network, layer, neuron, direction)), $v"
-                                end
-                            end
-                        end
-    
                         if sample_distance > epsilon
                             return false, (cex_input, (N₁(cex_input), N₂(cex_input), sample_distance)), nothing, nothing, distance_bound, nothing
                         end

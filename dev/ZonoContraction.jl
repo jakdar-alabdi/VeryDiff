@@ -68,10 +68,6 @@ function transform_offset_zono!(box::InputBox, Z::Zonotope) :: Zonotope
     return Z
 end
 
-function transform_offset_zono(box::InputBox, Z::Zonotope) :: Zonotope
-    return transform_offset_zono!(box, deepcopy(Z))
-end
-
 function transform_offset_diff_zono!(box::InputBox, Z::DiffZonotope) :: DiffZonotope
     transform_offset_zono!(box, Z.Z₁)
     transform_offset_zono!(box, Z.Z₂)
@@ -104,26 +100,11 @@ function transform_verification_task!(box::InputBox, task::VerificationTask) :: 
     return task
 end
 
-function transform_verification_task(box::InputBox, task::VerificationTask) :: VerificationTask
-    return transform_verification_task!(box, deepcopy(task))
-end
-
 function contract_to_verification_task!(box::InputBox, node::SplitNode, Z::Zonotope, task::VerificationTask) :: Union{Nothing,VerificationTask}
     box = contract_zono!(box, node, Z)
     if !isnothing(box)
         if !is_unit_hypercube(box)
             return transform_verification_task!(box, task)
-        end
-        return task
-    end
-    return nothing
-end
-
-function contract_to_verification_task(box::InputBox, node::SplitNode, Z::Zonotope, task::VerificationTask) :: Union{Nothing,VerificationTask}
-    box = contract_zono!(box, node, Z)
-    if !isnothing(box)
-        if !is_unit_hypercube(box)
-            return transform_verification_task(box, task)
         end
         return task
     end

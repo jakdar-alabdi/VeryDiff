@@ -85,21 +85,22 @@ function deepsplit_top1(nn_file₁::String, nn_file₂::String, spec_file::Strin
 end
 
 function run_experiments_pool4()
-    println("\nRunning ACAS all...")
+    println("\nRunning MNIST all...")
 
-    run_func = run_acas_all_epsilon("acas-prune.csv", "experiments_final/")
-
-    set_neuron_splitting_config((true, true, true), (false, false, false), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    run_func = run_mnist_all_epsilon("mnist-prune.csv", "experiments_final/")
+    
+    set_neuron_splitting_config((true, true, true), (true, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config((true, false, false), (true, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
     run_func(deepsplit_epsilon, get_config())
     
-    set_neuron_splitting_config((true, true, true), (false, false, false), DeepSplitUnbiased, ZonoContraction, ZonoContractInter)
+    set_neuron_splitting_config((true, true, true), (true, false, true), DeepSplitUnbiased, LP)
+    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config((true, false, false), (true, false, true), DeepSplitUnbiased, LP)
     run_func(deepsplit_epsilon, get_config())
     
-    set_neuron_splitting_config((true, true, true), (false, false, false), DeepSplitUnbiased, ZonoContraction, ZonoContractPost)
-    run_func(deepsplit_epsilon, get_config())
-    
-    set_neuron_splitting_config((true, true, true), (false, false, false), DeepSplitUnbiased, ZonoContraction, ZonoContract)
-    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config((false, false, false), (true, false, true))
+    run_func(verydiff_epsilon, get_config())
 end
 
 function run_experiments_pool5()
@@ -107,19 +108,16 @@ function run_experiments_pool5()
 
     run_func = run_mnist_all_epsilon("mnist-prune.csv", "experiments_final/")
     
-    set_neuron_splitting_config((true, true, true), (false, true, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    set_neuron_splitting_config((true, true, true), (false, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
     run_func(deepsplit_epsilon, get_config())
-    set_neuron_splitting_config((true, true, true), (false, true, false), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
-    run_func(deepsplit_epsilon, get_config())
-    set_neuron_splitting_config((true, true, true), (false, false, false), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    set_neuron_splitting_config((true, false, false), (false, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
     run_func(deepsplit_epsilon, get_config())
     
-    set_neuron_splitting_config((true, true, true), (false, false, false), DeepSplitUnbiased, ZonoContraction, ZonoContractInter)
+    set_neuron_splitting_config((true, true, true), (false, false, true), DeepSplitUnbiased, LP)
+    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config((true, false, false), (false, false, true), DeepSplitUnbiased, LP)
     run_func(deepsplit_epsilon, get_config())
     
-    set_neuron_splitting_config((true, true, true), (false, false, false), DeepSplitUnbiased, ZonoContraction, ZonoContractPost)
-    run_func(deepsplit_epsilon, get_config())
-    
-    set_neuron_splitting_config((true, true, true), (false, false, false), DeepSplitUnbiased, ZonoContraction, ZonoContract)
-    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config((false, false, false), (false, false, true))
+    run_func(verydiff_epsilon, get_config())
 end
