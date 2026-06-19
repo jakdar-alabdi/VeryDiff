@@ -35,6 +35,7 @@ function verydiff_epsilon(nn_file₁::String, nn_file₂::String, spec_file::Str
         if save
             save_results(result_out_dir, net_name, spec_name, veri_result)
         end
+        println("\n$veri_result")
     end
 end
 
@@ -50,6 +51,7 @@ function verydiff_top1(nn_file₁::String, nn_file₂::String, spec_file::String
         if save
             save_results(result_out_dir, net_name, spec_name, veri_result)
         end
+        println("\n$veri_result")
     end
 end
 
@@ -65,6 +67,7 @@ function deepsplit_epsilon(nn_file₁::String, nn_file₂::String, spec_file::St
         if save
             save_results(result_out_dir, net_name, spec_name, veri_result)
         end
+        println("\n$veri_result")
     end
 end
 
@@ -81,43 +84,50 @@ function deepsplit_top1(nn_file₁::String, nn_file₂::String, spec_file::Strin
         if save
             save_results(result_out_dir, net_name, spec_name, veri_result)
         end
+        println("\n$veri_result")
     end
 end
 
-function run_experiments_pool4()
-    println("\nRunning MNIST all...")
+function run_experiments_acas_epsilon(specs_file::String; heuristic_config=(true, false, false), run_verydiff=false)
+    println("\nRunning ACAS all...")
+    run_func = run_acas_all_epsilon(specs_file, "experiments_final/")
+    
+    set_neuron_splitting_config(heuristic_config, (false, false, false), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config(heuristic_config, (true, true, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    run_func(deepsplit_epsilon, get_config())
+    
+    set_neuron_splitting_config(heuristic_config, (false, false, false), DeepSplitUnbiased, LP)
+    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config(heuristic_config, (true, true, true), DeepSplitUnbiased, LP)
+    run_func(deepsplit_epsilon, get_config())
 
-    run_func = run_mnist_all_epsilon("mnist-prune.csv", "experiments_final/")
-    
-    set_neuron_splitting_config((true, true, true), (true, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
-    run_func(deepsplit_epsilon, get_config())
-    set_neuron_splitting_config((true, false, false), (true, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
-    run_func(deepsplit_epsilon, get_config())
-    
-    set_neuron_splitting_config((true, true, true), (true, false, true), DeepSplitUnbiased, LP)
-    run_func(deepsplit_epsilon, get_config())
-    set_neuron_splitting_config((true, false, false), (true, false, true), DeepSplitUnbiased, LP)
-    run_func(deepsplit_epsilon, get_config())
-    
-    set_neuron_splitting_config((false, false, false), (true, false, true))
-    run_func(verydiff_epsilon, get_config())
+    if run_verydiff
+        set_neuron_splitting_config((false, false, false), (false, false, false))
+        run_func(verydiff_epsilon, get_config())
+        set_neuron_splitting_config((false, false, false), (true, true, true))
+        run_func(verydiff_epsilon, get_config())
+    end
 end
 
-function run_experiments_pool5()
+function run_experiments_mnist_epsilon(specs_file::String; heuristic_config=(true, false, false), run_verydiff=false)
     println("\nRunning MNIST all...")
+    run_func = run_mnist_all_epsilon(specs_file, "experiments_final/")
+    
+    set_neuron_splitting_config(heuristic_config, (false, false, false), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config(heuristic_config, (true, true, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    run_func(deepsplit_epsilon, get_config())
+    
+    set_neuron_splitting_config(heuristic_config, (false, false, false), DeepSplitUnbiased, LP)
+    run_func(deepsplit_epsilon, get_config())
+    set_neuron_splitting_config(heuristic_config, (true, true, true), DeepSplitUnbiased, LP)
+    run_func(deepsplit_epsilon, get_config())
 
-    run_func = run_mnist_all_epsilon("mnist-prune.csv", "experiments_final/")
-    
-    set_neuron_splitting_config((true, true, true), (false, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
-    run_func(deepsplit_epsilon, get_config())
-    set_neuron_splitting_config((true, false, false), (false, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
-    run_func(deepsplit_epsilon, get_config())
-    
-    set_neuron_splitting_config((true, true, true), (false, false, true), DeepSplitUnbiased, LP)
-    run_func(deepsplit_epsilon, get_config())
-    set_neuron_splitting_config((true, false, false), (false, false, true), DeepSplitUnbiased, LP)
-    run_func(deepsplit_epsilon, get_config())
-    
-    set_neuron_splitting_config((false, false, false), (false, false, true))
-    run_func(verydiff_epsilon, get_config())
+    if run_verydiff
+        set_neuron_splitting_config((false, false, false), (false, false, false))
+        run_func(verydiff_epsilon, get_config())
+        set_neuron_splitting_config((false, false, false), (true, true, true))
+        run_func(verydiff_epsilon, get_config())
+    end
 end
