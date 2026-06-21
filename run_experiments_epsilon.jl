@@ -12,7 +12,7 @@ if benchmark == "MNIST"
 elseif benchmark == "ACAS"
     run_func = VeryDiff.run_experiments_acas_epsilon
 else
-    throw("Benchmark $(benchmark) not recognized.")
+    throw("Benchmark $(benchmark) was not recognized.")
 end
 
 if config == "NEURON"
@@ -24,7 +24,7 @@ elseif config == "DIFF"
 elseif config == "INPUT-DIFF"
     heuristic_config = (true, true, true)
 else
-    throw("Heuristic configuration $(config) not recognized.")
+    throw("Heuristic configuration $(config) was not recognized.")
 end
 
 run_func(specs_file; heuristic_config=heuristic_config, run_verydiff=run_verydiff)
