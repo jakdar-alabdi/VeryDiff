@@ -79,7 +79,7 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
     while !isempty(queue)
         task = pop!(queue)
         veri_result.final_δ_bound = task.distance_bound
-        # @info "Distance Bound: $(task.distance_bound)"
+        @info "Distance Bound: $(task.distance_bound)"
         # @info "Split Nodes: $(map(n -> (n.network, n.layer, n.neuron), task.branch.split_nodes))"
         # num_similar_splits = count(n -> has_similar_split(n, task.branch.split_nodes), task.branch.split_nodes) ÷ 2
         # num_constraints = length(task.branch.split_nodes)
@@ -102,12 +102,6 @@ function deepsplit_verify_network(N::GeminiNetwork, N₁::Network, N₂::Network
         if prop_state.is_unsatisfiable
             continue
         end
-
-        # @info "Z₁.Gs sizes: $(size.(Zout.Z₁.Gs, 2))"
-        # @info "Z₂.Gs sizes: $(size.(Zout.Z₂.Gs, 2))"
-        # @info "∂Z.Gs sizes: $(size.(Zout.∂Z.Gs, 2))"
-        # @info "NumInstable: $(prop_state.num_instable)"
-        # @assert (size(Zout.∂Z.Gs[2], 2) + size(Zout.∂Z.Gs[3], 2)) == prop_state.num_instable
 
         if first_task
             bounds = zono_bounds(Zout.∂Z)

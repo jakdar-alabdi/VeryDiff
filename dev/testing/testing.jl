@@ -56,7 +56,7 @@ function deepsplit_epsilon(
         println("\nUsing $(VeryDiff.get_config())...\n")
         property_check = VeryDiff.get_epsilon_property_with_neuron_splitting(epsilon)
         for (bounds, _, _, _) in f
-            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout, fuzz_testing=fuzz_testing)
+            veri_result = deepsplit_verify_network(N₁, N₂, bounds, property_check; timeout=timeout)
             println(veri_result)
         end
     end
@@ -132,11 +132,11 @@ lhc_csv_dir = joinpath(cur_dir, "specs", "lhc.csv")
 # )
 # verifier = verydiff_top1((false, true, true))
 verifier = deepsplit_epsilon(
-    (true, true, true),
-    (false, false, false),
+    (true, false, false),
+    (true, false, true),
     VeryDiff.DeepSplitUnbiased,
     VeryDiff.ZonoContraction,
-    VeryDiff.LPZonoContract
+    VeryDiff.ZonoContract
 )
 # verifier = verydiff_epsilon((true, true, false))
 
