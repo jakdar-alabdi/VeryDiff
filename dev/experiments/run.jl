@@ -117,7 +117,10 @@ function run_experiments_mnist_epsilon(specs_file::String; heuristic_config=(tru
     # set_neuron_splitting_config(heuristic_config, (true, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
     # run_func(deepsplit_epsilon, get_config())
     
-    set_neuron_splitting_config(heuristic_config, (true, false, true), DeepSplitUnbiased, LP)
+    set_neuron_splitting_config(heuristic_config, (false, false, false), DeepSplitUnbiased, LP)
+    run_func(deepsplit_epsilon, get_config())
+
+    set_neuron_splitting_config(heuristic_config, (false, false, true), DeepSplitUnbiased, LP)
     run_func(deepsplit_epsilon, get_config())
 
     if run_verydiff
