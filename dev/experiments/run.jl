@@ -124,7 +124,7 @@ function run_experiments_mnist_epsilon(specs_file::String; heuristic_config=(tru
     # run_func(deepsplit_epsilon, get_config())
 
     if run_verydiff
-        set_neuron_splitting_config((false, false, false), (true, false, true))
+        set_neuron_splitting_config((false, false, false), (false, false, true))
         run_func(verydiff_epsilon, get_config())
     end
 end
