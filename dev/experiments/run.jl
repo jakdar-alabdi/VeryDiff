@@ -74,7 +74,6 @@ end
 function deepsplit_top1(nn_file₁::String, nn_file₂::String, spec_file::String, delta::Float64, timeout::Int64, result_out_dir::String; save=true)
     N₁, N₂ = parse_networks(nn_file₁, nn_file₂)
     f, n_inputs, _ = get_ast(spec_file)
-    set_neuron_splitting_config(heuristic_config, split_bounds_config, mode, approach, contract)
     property_check = Properties.get_top1_property_with_neuron_splitting(delta)
     println("Using $(get_config())...")
     for (bounds, _, _, _) in f
@@ -92,20 +91,20 @@ function run_experiments_acas_epsilon(specs_file::String; heuristic_config=(true
     println("\nRunning ACAS all...")
     run_func = run_acas_all_epsilon(specs_file, "experiments_final/")
     
-    set_neuron_splitting_config(heuristic_config, (false, false, false), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    set_config(heuristic_config, (false, false, false), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
     run_func(deepsplit_epsilon, get_config())
-    set_neuron_splitting_config(heuristic_config, (true, true, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    set_config(heuristic_config, (true, true, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
     run_func(deepsplit_epsilon, get_config())
     
-    set_neuron_splitting_config(heuristic_config, (false, false, false), DeepSplitUnbiased, LP)
+    set_config(heuristic_config, (false, false, false), DeepSplitUnbiased, LP)
     run_func(deepsplit_epsilon, get_config())
-    set_neuron_splitting_config(heuristic_config, (true, true, true), DeepSplitUnbiased, LP)
+    set_config(heuristic_config, (true, true, true), DeepSplitUnbiased, LP)
     run_func(deepsplit_epsilon, get_config())
 
     if run_verydiff
-        set_neuron_splitting_config((false, false, false), (false, false, false))
+        set_config((false, false, false), (false, false, false))
         run_func(verydiff_epsilon, get_config())
-        set_neuron_splitting_config((false, false, false), (true, true, true))
+        set_config((false, false, false), (true, true, true))
         run_func(verydiff_epsilon, get_config())
     end
 end
@@ -114,17 +113,17 @@ function run_experiments_mnist_epsilon(specs_file::String; heuristic_config=(tru
     println("\nRunning MNIST all...")
     run_func = run_mnist_all_epsilon(specs_file, "experiments_final/")
     
-    # set_neuron_splitting_config(heuristic_config, (true, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
+    # set_config(heuristic_config, (true, false, true), DeepSplitUnbiased, ZonoContraction, LPZonoContract)
     # run_func(deepsplit_epsilon, get_config())
     
-    # set_neuron_splitting_config(heuristic_config, (false, false, false), DeepSplitUnbiased, LP)
+    # set_config(heuristic_config, (false, false, false), DeepSplitUnbiased, LP)
     # run_func(deepsplit_epsilon, get_config())
 
-    # set_neuron_splitting_config(heuristic_config, (false, false, true), DeepSplitUnbiased, LP)
+    # set_config(heuristic_config, (false, false, true), DeepSplitUnbiased, LP)
     # run_func(deepsplit_epsilon, get_config())
 
     if run_verydiff
-        set_neuron_splitting_config((false, false, false), (false, false, true))
+        set_config((false, false, false), (false, false, true))
         run_func(verydiff_epsilon, get_config())
     end
 end

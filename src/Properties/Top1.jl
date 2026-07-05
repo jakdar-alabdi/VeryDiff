@@ -71,7 +71,9 @@ function get_top1_property(;delta=zero(Float64),naive=false)
             @variable(model,-1.0 <= x[1:var_num] <= 1.0)
 
             if !isnothing(prop_state)
-                for node in prop_state.task.branch.split_nodes
+                split_nodes = prop_state.task.branch.split_nodes
+                bounds_cache = prop_state.task_bounds.bounds_cache
+                for node in split_nodes
                     (;network, neuron, diff_layer, direction, bounds) = node
                     Z = VeryDiff.get_split_node_zono(node, prop_state)
                     indices = intersect_indices(common_generator_indices, Z.generator_ids)
@@ -81,7 +83,17 @@ function get_top1_property(;delta=zero(Float64),naive=false)
                         offset_end = offset_start + size(G, 2) - 1
                         add_to_expression!(affine_repr, G[neuron, :]'x[offset_start:offset_end])
                     end
-                    @constraint(model, direction * affine_repr >= 0.0)
+                    if VeryDiff.USE_CACHED_BOUNDS_IN_LP[]
+                        diff_layer_bounds = bounds_cache[diff_layer.layer_idx]
+                        lower, upper = if network == 1
+                            (diff_layer_bounds.lower₁[node.neuron], diff_layer_bounds.upper₁[node.neuron])
+                        else
+                            (diff_layer_bounds.lower₂[node.neuron], diff_layer_bounds.upper₂[node.neuron])
+                        end
+                        @constraint(model, lower <= affine_repr <= upper)
+                    else
+                        @constraint(model, direction * affine_repr >= 0.0)
+                    end
                 end
             end
             

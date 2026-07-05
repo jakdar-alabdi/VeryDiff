@@ -30,7 +30,7 @@ function start_fuzz_testing()
 
     fuzz_testing_func = nothing
     if VeryDiff.NEW_HEURISTIC[]
-        VeryDiff.set_neuron_splitting_config(
+        VeryDiff.set_config(
             (false, false, false), 
             (false, false, false),
         )
@@ -38,7 +38,7 @@ function start_fuzz_testing()
         verifier = verify_network
     else
         fuzz_testing_func = fuzz_testing
-        VeryDiff.set_neuron_splitting_config(
+        VeryDiff.set_config(
             (true, false, false), 
             (false, false, false), 
             VeryDiff.DeepSplitUnbiased, 

@@ -6,6 +6,7 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
         Zout = prop_state.zono_storage.zonotopes[end].zonotope
         safe_out_dim = prop_state.task.branch.safe_out_dim
         split_nodes = prop_state.task.branch.split_nodes
+        bounds_cache = prop_state.task_bounds.bounds_cache
         box = nothing
 
         prop_satisfied, cex, _, _, distance_bound = property_check(N₁, N₂, Zin, Zout, nothing; safe_out_dim=safe_out_dim)
@@ -24,14 +25,24 @@ function get_epsilon_property_with_neuron_splitting(epsilon::Float64)
             xs = [@variable(model, [1:size(G, 2)], lower_bound=-1.0, upper_bound=1.0) for G in Zout.∂Z.Gs]
 
             for node in split_nodes
-                (;network, neuron, diff_layer, direction, bounds) = node
+                (;network, neuron, diff_layer, direction) = node
                 Z = VeryDiff.get_split_node_zono(node, prop_state)
                 indices = intersect_indices(Zout.∂Z.generator_ids, Z.generator_ids)
                 affine_repr = AffExpr(Z.c[neuron])
                 for (G, i) in zip(Z.Gs, indices)
                     add_to_expression!(affine_repr, G[neuron, :]'xs[i][1:size(G, 2)])
                 end
-                @constraint(model, direction * affine_repr >= 0.0)
+                if VeryDiff.USE_CACHED_BOUNDS_IN_LP[]
+                    diff_layer_bounds = bounds_cache[diff_layer.layer_idx]
+                    lower, upper = if network == 1
+                        (diff_layer_bounds.lower₁[node.neuron], diff_layer_bounds.upper₁[node.neuron])
+                    else
+                        (diff_layer_bounds.lower₂[node.neuron], diff_layer_bounds.upper₂[node.neuron])
+                    end
+                    @constraint(model, lower <= affine_repr <= upper)
+                else
+                    @constraint(model, direction * affine_repr >= 0.0)
+                end
             end
 
             @objective(model, Max, 0.0)

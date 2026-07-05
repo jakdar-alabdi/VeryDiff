@@ -26,8 +26,6 @@ global const USE_NEURON_SPLITTING = Ref{Bool}(false)
 """All the approaches used in VeryDiff to split a neuron"""
 @enum NeuronSplittingApproach LP ZonoContraction VerticalSplitting
 
-# global const NEURON_SPLITTING_APPROACH = Ref{NeuronSplittingApproach}(LP)
-
 """Use the generators of the Differential Zonotope for the heuristic instead of the corresponding NN's Zonotope"""
 global const USE_DIFF_GENERATORS_DEEPSPLIT = Ref{Bool}(false)
 
@@ -43,7 +41,6 @@ global const DEEPSPLIT_HEURISTIC_APPROACH = Ref{DeepSplitHeuristicApproach}(Zono
 
 """Different modes for the contraction of Zonotopes"""
 @enum ZonoContractApproach ZonoContract ZonoContractPre ZonoContractPost ZonoContractInter LPZonoContract
-# global const ZONO_CONTRACT_APPROACH = Ref{ZonoContractApproach}(ZonoContract)
 
 global const USE_LP = Ref{Bool}(true)
 global const USE_ZONO_CONTRACT = Ref{Bool}(false)
@@ -53,24 +50,30 @@ global const POST_CONTRACT = Ref{Bool}(true)
 global const INTER_CONTRACT = Ref{Bool}(false)
 global const PRE_CONTRACT = Ref{Bool}(false)
 
-global const USE_ZONO_ROW_SUBSTITUTION = Ref{Bool}(false)
-global const INCORPORATE_SPLIT_BOUNDS = Ref{Bool}(false)
-global const INCORPORATE_DIFF_BOUNDS = Ref{Bool}(false)
+global const USE_CACHED_BOUNDS_IN_LP = Ref{Bool}(true)
 
-function set_neuron_splitting_config(
+global const USE_ZONO_ROW_SUBST = Ref{Bool}(false)
+global const INCORPORATE_CONCRETE_SPLIT_BOUNDS = Ref{Bool}(true)
+global const INCORPORATE_RELATIONAL_SPLIT_BOUNDS = Ref{Bool}(false)
+global const INCORPORATE_RELATIONAL_DIFF_BOUNDS = Ref{Bool}(false)
+
+function set_config(
     heuristic_config :: Tuple{Bool, Bool, Bool} = (true, false, false),
-    split_bounds_config :: Tuple{Bool, Bool, Bool} = (false, false, false),
+    split_bounds_config :: Tuple{Bool, Bool, Bool, Bool} = (false, true, false, false),
+    use_cached_bounds_in_lp :: Bool = true,
     heuristic_approach :: DeepSplitHeuristicApproach = DeepSplitUnbiased,
     neuron_splitting_approach :: NeuronSplittingApproach = LP,
     zono_contract_approach :: ZonoContractApproach = ZonoContract
-    )
+)
     global USE_NEURON_SPLITTING[] = heuristic_config[1]
     global USE_DIFF_GENERATORS_DEEPSPLIT[] = heuristic_config[2]
     global INCORPORATE_INPUT_SPLITTING[] = heuristic_config[3]
-    global USE_ZONO_ROW_SUBSTITUTION[] = split_bounds_config[1]
-    global INCORPORATE_SPLIT_BOUNDS[] = split_bounds_config[2]
-    global INCORPORATE_DIFF_BOUNDS[] = split_bounds_config[3]
     global DEEPSPLIT_HEURISTIC_APPROACH[] = heuristic_approach
+    global USE_CACHED_BOUNDS_IN_LP[] = use_cached_bounds_in_lp
+    global USE_ZONO_ROW_SUBST[] = split_bounds_config[1]
+    global INCORPORATE_CONCRETE_SPLIT_BOUNDS[] = split_bounds_config[2]
+    global INCORPORATE_RELATIONAL_SPLIT_BOUNDS[] = split_bounds_config[3]
+    global INCORPORATE_RELATIONAL_DIFF_BOUNDS[] = split_bounds_config[4]
     global USE_ZONO_CONTRACT[] = USE_NEURON_SPLITTING[] && neuron_splitting_approach == ZonoContraction
     global USE_LP_ZONO_CONTRACT[] = USE_ZONO_CONTRACT[] && zono_contract_approach == LPZonoContract
     global USE_LP[] = USE_LP_ZONO_CONTRACT[] || USE_NEURON_SPLITTING[] && neuron_splitting_approach == LP
@@ -78,7 +81,6 @@ function set_neuron_splitting_config(
     global INTER_CONTRACT[] = USE_ZONO_CONTRACT[] && (zono_contract_approach in [ZonoContractInter, LPZonoContract])
     global POST_CONTRACT[] = USE_ZONO_CONTRACT[] && (zono_contract_approach in [ZonoContract, ZonoContractPost])
     global PRE_CONTRACT[] = USE_ZONO_CONTRACT[] && (zono_contract_approach in [ZonoContract, ZonoContractPre])
-    global FIRST_ROUND[] = true
     global NEW_HEURISTIC[] = !USE_NEURON_SPLITTING[]
 end
 
@@ -103,6 +105,9 @@ function get_config()
         elseif USE_VERTICAL_SPLITTING[]
             config *= "VS"
         end
+        if USE_LP[] && USE_CACHED_BOUNDS_IN_LP[]
+            config *= "-CB"
+        end
         if DEEPSPLIT_HEURISTIC_APPROACH[] == ZonoBiased
             config *= "-ZB"
         elseif DEEPSPLIT_HEURISTIC_APPROACH[] == ZonoUnbiased
@@ -119,14 +124,17 @@ function get_config()
             config *= "-DiffZono"
         end
     end
-    if USE_ZONO_ROW_SUBSTITUTION[]
-       config *= "-RS" 
+    if USE_ZONO_ROW_SUBST[]
+       config *= "-RS"
     end
-    if INCORPORATE_SPLIT_BOUNDS[]
-        config *= "-SB"
+    if INCORPORATE_CONCRETE_SPLIT_BOUNDS[]
+        config *= "-CSB"
     end
-    if INCORPORATE_DIFF_BOUNDS[]
-        config *= "-DB"
+    if INCORPORATE_RELATIONAL_SPLIT_BOUNDS[]
+        config *= "-RSB"
+    end
+    if INCORPORATE_RELATIONAL_DIFF_BOUNDS[]
+        config *= "-RDB"
     end
     return config
 end

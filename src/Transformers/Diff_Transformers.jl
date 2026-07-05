@@ -178,25 +178,25 @@ function propagate_layer!(
     ∂bounds = zono_bounds(Zin.∂Z)
 
     alt_bounds₁, alt_bounds₂ = bounds₁, bounds₂
-    if VeryDiff.INCORPORATE_SPLIT_BOUNDS[]
+    if VeryDiff.INCORPORATE_RELATIONAL_SPLIT_BOUNDS[]
         Ẑ₁ = Zonotope(
             Zin.Z₂.Gs .+ Zin.∂Z.Gs,
             Zin.Z₂.c + Zin.∂Z.c,
             Zin.Z₁.influence,
             Zin.Z₁.generator_ids,
             Zin.Z₁.owned_generators
-            )
+        )
         Ẑ₂ = Zonotope(
             Zin.Z₁.Gs .- Zin.∂Z.Gs,
             Zin.Z₁.c - Zin.∂Z.c,
             Zin.Z₂.influence,
             Zin.Z₂.generator_ids,
             Zin.Z₂.owned_generators
-            )
+        )
         alt_bounds₁ = zono_bounds(Ẑ₁)
         alt_bounds₂ = zono_bounds(Ẑ₂)
 
-        if VeryDiff.USE_ZONO_ROW_SUBSTITUTION[]
+        if VeryDiff.USE_ZONO_ROW_SUBST[]
             crossing₁ = bounds₁[:, 1] .< 0.0 .&& bounds₁[:, 2] .> 0.0
             crossing₂ = bounds₂[:, 1] .< 0.0 .&& bounds₂[:, 2] .> 0.0
             replace_row₁ = crossing₁ .&& (minimum(abs, alt_bounds₁, dims=2) .< minimum(abs, bounds₁, dims=2))[:]
@@ -212,16 +212,16 @@ function propagate_layer!(
     end
 
     ∂alt_bounds = ∂bounds
-    if VeryDiff.INCORPORATE_DIFF_BOUNDS[]
+    if VeryDiff.INCORPORATE_RELATIONAL_DIFF_BOUNDS[]
         ∂Ẑ = Zonotope(
             Zin.Z₁.Gs .- Zin.Z₂.Gs,
             Zin.Z₁.c - Zin.Z₂.c,
             Zin.∂Z.influence,
             Zin.∂Z.generator_ids,
             Zin.∂Z.owned_generators
-            )
+        )
         ∂alt_bounds = zono_bounds(∂Ẑ)
-        if VeryDiff.USE_ZONO_ROW_SUBSTITUTION[]
+        if VeryDiff.USE_ZONO_ROW_SUBST[]
             ∂crossing = ∂bounds[:, 1] .< 0.0 .&& ∂bounds[:, 2] .> 0.0
             ∂replace_row = ∂crossing .&& (minimum(abs, ∂alt_bounds, dims=2) .< minimum(abs, ∂bounds, dims=2))[:]
             for (G, Ĝ) in zip(Zin.∂Z.Gs, ∂Ẑ.Gs)
@@ -314,20 +314,34 @@ function propagate_layer!(
             end
         end
     end
-
-    bounds₁[:, 1] .= max.(bounds₂[:, 1] .+ ∂bounds[:, 1], alt_bounds₂[:, 1] .+ ∂alt_bounds[:, 1], alt_bounds₁[:, 1], bounds₁[:, 1], bounds_cache.lower₁)
-    bounds₁[:, 2] .= min.(bounds₂[:, 2] .+ ∂bounds[:, 2], alt_bounds₂[:, 2] .+ ∂alt_bounds[:, 2], alt_bounds₁[:, 2], bounds₁[:, 2], bounds_cache.upper₁)
-    bounds₂[:, 1] .= max.(bounds₁[:, 1] .- ∂bounds[:, 2], alt_bounds₁[:, 1] .- ∂alt_bounds[:, 2], alt_bounds₂[:, 1], bounds₂[:, 1], bounds_cache.lower₂)
-    bounds₂[:, 2] .= min.(bounds₁[:, 2] .- ∂bounds[:, 1], alt_bounds₁[:, 2] .- ∂alt_bounds[:, 1], alt_bounds₂[:, 2], bounds₂[:, 2], bounds_cache.upper₂)
-    ∂bounds[:, 1] .= max.(bounds₁[:, 1] .- bounds₂[:, 2], alt_bounds₁[:, 1] .- alt_bounds₂[:, 2], ∂alt_bounds[:, 1], ∂bounds[:, 1], bounds_cache.∂lower)
-    ∂bounds[:, 2] .= min.(bounds₁[:, 2] .- bounds₂[:, 1], alt_bounds₁[:, 2] .- alt_bounds₂[:, 1], ∂alt_bounds[:, 2], ∂bounds[:, 2], bounds_cache.∂upper)
     
-    lower₁ = bounds_cache.lower₁ .= bounds₁[:,1]
-    upper₁ = bounds_cache.upper₁ .= bounds₁[:,2]
-    lower₂ = bounds_cache.lower₂ .= bounds₂[:,1]
-    upper₂ = bounds_cache.upper₂ .= bounds₂[:,2]
-    ∂lower = bounds_cache.∂lower .= ∂bounds[:,1]
-    ∂upper = bounds_cache.∂upper .= ∂bounds[:,2]
+    if VeryDiff.INCORPORATE_RELATIONAL_SPLIT_BOUNDS[]
+        bounds₁[:, 1] .= max.(bounds₁[:, 1], alt_bounds₁[:, 1])
+        bounds₁[:, 2] .= min.(bounds₁[:, 2], alt_bounds₁[:, 2])
+        bounds₂[:, 1] .= max.(bounds₂[:, 1], alt_bounds₂[:, 1])
+        bounds₂[:, 2] .= min.(bounds₂[:, 2], alt_bounds₂[:, 2])
+    end
+
+    if VeryDiff.INCORPORATE_RELATIONAL_DIFF_BOUNDS[]
+        ∂bounds[:, 1] .= max.(∂bounds[:, 1], ∂alt_bounds[:, 1])
+        ∂bounds[:, 2] .= min.(∂bounds[:, 2], ∂alt_bounds[:, 2])
+    end
+
+    if VeryDiff.INCORPORATE_CONCRETE_SPLIT_BOUNDS[]
+        bounds₁[:, 1] .= max.(bounds₁[:, 1], bounds₂[:, 1] .+ ∂bounds[:, 1])
+        bounds₁[:, 2] .= min.(bounds₁[:, 2], bounds₂[:, 2] .+ ∂bounds[:, 2])
+        bounds₂[:, 1] .= max.(bounds₂[:, 1], bounds₁[:, 1] .- ∂bounds[:, 2])
+        bounds₂[:, 2] .= min.(bounds₂[:, 2], bounds₁[:, 2] .- ∂bounds[:, 1])
+        ∂bounds[:, 1] .= max.(∂bounds[:, 1], bounds₁[:, 1] .- bounds₂[:, 2])
+        ∂bounds[:, 2] .= min.(∂bounds[:, 2], bounds₁[:, 2] .- bounds₂[:, 1])
+    end
+    
+    lower₁ = bounds_cache.lower₁ .= bounds₁[:,1] .= max.(bounds₁[:, 1], bounds_cache.lower₁)
+    upper₁ = bounds_cache.upper₁ .= bounds₁[:,2] .= min.(bounds₁[:, 2], bounds_cache.upper₁)
+    lower₂ = bounds_cache.lower₂ .= bounds₂[:,1] .= max.(bounds₂[:, 1], bounds_cache.lower₂)
+    upper₂ = bounds_cache.upper₂ .= bounds₂[:,2] .= min.(bounds₂[:, 2], bounds_cache.upper₂)
+    ∂lower = bounds_cache.∂lower .= ∂bounds[:,1] .= max.(∂bounds[:, 1], bounds_cache.∂lower)
+    ∂upper = bounds_cache.∂upper .= ∂bounds[:,2] .= min.(∂bounds[:, 2], bounds_cache.∂upper)
     #@info "Bounds Cache: Z₁=[$(lower₁), $(upper₁)], Z₂=[$(lower₂), $(upper₂)], ∂Z=[$(∂lower), $(∂upper)]"
 
     (
