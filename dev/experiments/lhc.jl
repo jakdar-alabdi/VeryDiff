@@ -1,19 +1,19 @@
 cur_dir = @__DIR__
 benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
 
-function _run_lhc_all_top1(specs_csv_file::String, warmup_specs_csv_file::String, log_dir::String, run_name::String, eval_func)
+function _run_lhc_all_top1(specs_file::String, warmup_specs_file::String, out_dir::String, run_name::String, eval_func)
     
     println("Configuration: $run_name")
     println("\nWarmup...")
     
-    open(warmup_specs_csv_file, "r") do f
+    open(warmup_specs_file, "r") do f
         while !eof(f)
-            spec = split(readline(f), ",")
-            nn_file₁ = "$benchmarks_dir/$(spec[1])"
-            nn_file₂ = "$benchmarks_dir/$(spec[2])"
-            spec_file = "$benchmarks_dir/$(spec[3])"
-            delta = parse(Float64, string(spec[4]))
-            timeout = parse(Int64, string(spec[5]))
+	        query = split(readline(f), ",")
+            nn_file₁ = joinpath(benchmarks_dir, query[1])
+            nn_file₂ = joinpath(benchmarks_dir, query[2])
+            spec_file = joinpath(benchmarks_dir, query[3])
+            delta = parse(Float64, string(query[4]))
+            timeout = parse(Int64, string(query[5]))
 
             println("\nNN₁: $(basename(nn_file₁))")
             println("NN₂: $(basename(nn_file₂))")
@@ -35,26 +35,44 @@ function _run_lhc_all_top1(specs_csv_file::String, warmup_specs_csv_file::String
     end
 
     println("\nWarmup End")
+        
+    config_dir = joinpath(out_dir, run_name)
+    if !isdir(config_dir)
+        mkpath(config_dir)
+    end
+    first_line = true
+    specs_file_name = replace(basename(specs_file), "-prune" => "", ".csv" => "")
     
-    open(specs_csv_file, "r") do f
+    open(specs_file, "r") do f
         while !eof(f)
-            # sleep(20)
-	        spec = split(readline(f), ",")
-            nn_file₁ = "$benchmarks_dir/$(spec[1])"
-            nn_file₂ = "$benchmarks_dir/$(spec[2])"
-            spec_file = "$benchmarks_dir/$(spec[3])"
-            timeout = parse(Int64, string(spec[end]))
+	        query = split(readline(f), ",")
+            nn_file₁ = joinpath(benchmarks_dir, query[1])
+            nn_file₂ = joinpath(benchmarks_dir, query[2])
+            spec_file = joinpath(benchmarks_dir, query[3])
+            timeout = parse(Int64, string(query[end]))
 
-            for delta in spec[4:end-1]
+            for delta in query[4:end-1]
                 delta = parse(Float64, string(delta))
                 
+                lhc_name = "$specs_file_name-top1-$delta-$timeout"
                 net_name = replace(basename(nn_file₂), ".onnx" => "")
-                lhc_name = "lhc-top1-$delta-$timeout"
-                out_dir = joinpath(log_dir, run_name, lhc_name, net_name)
-                mkpath(out_dir)
                 spec_file_name = replace(basename(spec_file), ".vnnlib" => "")
-                log_file_name = joinpath(out_dir, "$spec_file_name.log")
-                csv_file_name = joinpath(log_dir, run_name, lhc_name, "results.csv")
+
+                lhc_out_dir = joinpath(config_dir, lhc_name)
+                if first_line
+                    rm(lhc_out_dir, force=true, recursive=true)
+                    mkpath(lhc_out_dir)
+                end
+                
+                net_out_dir = joinpath(lhc_out_dir, net_name)
+                if !isdir(net_out_dir)
+                    mkdir(net_out_dir)
+                end
+
+                log_file = joinpath(lhc_out_dir, net_name, "$spec_file_name.log")
+                touch(log_file)
+                results_file = joinpath(lhc_out_dir, "results.csv")
+                touch(results_file)
                 
                 println("\nNN₁: $(basename(nn_file₁))")
                 println("NN₂: $(basename(nn_file₂))")
@@ -62,12 +80,12 @@ function _run_lhc_all_top1(specs_csv_file::String, warmup_specs_csv_file::String
                 
                 original_stdout = stdout
                 original_stderr = stderr
-                open(log_file_name, "w") do f
+                open(log_file, "w") do f
                     redirect_stdout(f)
                     redirect_stderr(f)
                     flush(stdout)
                     flush(stderr)
-                    eval_func(nn_file₁, nn_file₂, spec_file, delta, timeout, csv_file_name; save=true)
+                    eval_func(nn_file₁, nn_file₂, spec_file, delta, timeout, results_file; save=true)
                     flush(stdout)
                     flush(stderr)
                     GC.gc()
@@ -75,6 +93,8 @@ function _run_lhc_all_top1(specs_csv_file::String, warmup_specs_csv_file::String
                     redirect_stderr(original_stderr)
                 end
             end
+
+            first_line = false
         end
     end
 end

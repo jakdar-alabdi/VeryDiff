@@ -8,12 +8,12 @@ function _run_mnist_all_epsilon(specs_file::String, warmup_specs_file::String, o
     
     open(warmup_specs_file, "r") do f
         while !eof(f)
-            spec = split(readline(f), ",")
-            nn_file₁ = "$benchmarks_dir/$(spec[1])"
-            nn_file₂ = "$benchmarks_dir/$(spec[2])"
-            spec_file = "$benchmarks_dir/$(spec[3])"
-            epsilon = parse(Float64, string(spec[4]))
-            timeout = parse(Int64, string(spec[5]))
+	        query = split(readline(f), ",")
+            nn_file₁ = joinpath(benchmarks_dir, query[1])
+            nn_file₂ = joinpath(benchmarks_dir, query[2])
+            spec_file = joinpath(benchmarks_dir, query[3])
+            epsilon = parse(Float64, string(query[4]))
+            timeout = parse(Int64, string(query[5]))
 
             println("\nNN₁: $(basename(nn_file₁))")
             println("NN₂: $(basename(nn_file₂))")
@@ -41,28 +41,37 @@ function _run_mnist_all_epsilon(specs_file::String, warmup_specs_file::String, o
         mkpath(config_dir)
     end
     first_line = true
-    specs_name = replace(basename(specs_file), "-prune" => "", ".csv" => "")
+    specs_file_name = replace(basename(specs_file), "-prune" => "", ".csv" => "")
+    
     open(specs_file, "r") do f
         while !eof(f)
-	        spec = split(readline(f), ",")
-            nn_file₁ = "$benchmarks_dir/$(spec[1])"
-            nn_file₂ = "$benchmarks_dir/$(spec[2])"
-            spec_file = "$benchmarks_dir/$(spec[3])"
-            epsilon = parse(Float64, string(spec[4]))
-            timeout = parse(Int64, string(spec[5]))
+	        query = split(readline(f), ",")
+            nn_file₁ = joinpath(benchmarks_dir, query[1])
+            nn_file₂ = joinpath(benchmarks_dir, query[2])
+            spec_file = joinpath(benchmarks_dir, query[3])
+            epsilon = parse(Float64, string(query[4]))
+            timeout = parse(Int64, string(query[5]))
 
-            mnist_name = "$specs_name-$epsilon-$timeout"
+            mnist_name = "$specs_file_name-$epsilon-$timeout"
+            net_name = replace(basename(nn_file₂), ".onnx" => "", "mnist_relu_" => "")
             spec_file_name = replace(basename(spec_file), ".vnnlib" => "")
-            log_file_dir = joinpath(config_dir, mnist_name)
+            
+            mnist_out_dir = joinpath(config_dir, mnist_name)
             if first_line
-                rm(log_file_dir, force=true)
-                first_line = false
+                rm(mnist_out_dir, force=true, recursive=true)
+                mkpath(mnist_out_dir)
             end
             
-            net_name = replace(basename(nn_file₂), ".onnx" => "", "mnist_relu_" => "")
-            log_file = joinpath(log_file_dir, net_name, "$spec_file_name.log")
-            results_file = joinpath(config_dir, mnist_name, "results.csv")
+            net_out_dir = joinpath(mnist_out_dir, net_name)
+            if !isdir(net_out_dir)
+                mkdir(net_out_dir)
+            end
             
+            log_file = joinpath(net_out_dir, "$spec_file_name.log")
+            touch(log_file)
+            results_file = joinpath(mnist_out_dir, "results.csv")
+            touch(results_file)
+
             println("\nNN₁: $(basename(nn_file₁))")
             println("NN₂: $(basename(nn_file₂))")
             println("Prop: $(basename(spec_file))")
@@ -81,6 +90,8 @@ function _run_mnist_all_epsilon(specs_file::String, warmup_specs_file::String, o
                 redirect_stdout(original_stdout)
                 redirect_stderr(original_stderr)
             end
+
+            first_line = false
         end
     end
 end
