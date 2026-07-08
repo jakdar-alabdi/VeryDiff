@@ -34,6 +34,33 @@ using VeryDiff, Plots
 #     y = hcat([nn(Vector(xi)) for xi in eachcol(x)]...)
 # end
 
+function box_to_zono(box::Matrix{Float64})
+    α = (box[:, 2] - box[:, 1]) ./ 2
+    β = (box[:, 2] + box[:, 1]) ./ 2
+    ids = VeryDiff.SortedVector{Int}()
+    push!(ids, 1)
+    return Zonotope([Matrix(Diagonal(α))], β, nothing, ids, 1)
+end
+
+function box_to_inputbox(box::Matrix{Float64})
+    Z = box_to_zono(box)
+    VeryDiff.InputBox(Z)
+end
+
+function inputbox_to_box(box::VeryDiff.InputBox)
+    return [reduce(vcat, box.lowers) reduce(vcat, box.uppers)]
+end
+
+function inputbox_to_zono(box::VeryDiff.InputBox)
+    return box_to_zono(inputbox_to_box(box))
+end
+
+function to_new_zono(G::Matrix{Float64}, c::Vector{Float64})
+    ids = VeryDiff.SortedVector{Int}()
+    push!(ids, 1)
+    return Zonotope([G], c, nothing, ids, 1)
+end
+
 """
 Returns a closed list of the boundary vertices of a 2D zonotope.
 

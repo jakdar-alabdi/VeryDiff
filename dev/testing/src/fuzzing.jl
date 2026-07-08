@@ -1,9 +1,10 @@
+using Pkg
+Pkg.activate("./dev/Testing")
+using Testing
 using VeryDiff
 using Random
-using Gurobi, JuMP
 
 include("random_networks.jl")
-
 
 Random.seed!(1042)
 
@@ -32,7 +33,8 @@ function start_fuzz_testing()
     if VeryDiff.NEW_HEURISTIC[]
         VeryDiff.set_config(
             (false, false, false), 
-            (false, false, false),
+            (false, false, false, false),
+            false
         )
         property_check_func = VeryDiff.get_epsilon_property
         verifier = verify_network
@@ -40,7 +42,8 @@ function start_fuzz_testing()
         fuzz_testing_func = fuzz_testing
         VeryDiff.set_config(
             (true, false, false), 
-            (false, false, false), 
+            (false, false, false, false),
+            false, 
             VeryDiff.DeepSplitUnbiased, 
             VeryDiff.ZonoContraction, 
             VeryDiff.LPZonoContract
@@ -106,4 +109,4 @@ function start_fuzz_testing()
     end
 end
 
-# start_fuzz_testing()
+start_fuzz_testing()

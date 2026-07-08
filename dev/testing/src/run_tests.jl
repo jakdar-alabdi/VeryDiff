@@ -1,13 +1,12 @@
-# using Pkg
-# Pkg.activate("./")
+using Pkg
+Pkg.activate("./dev/Testing")
+using Testing
 using VeryDiff
-using VNNLib
-
-include("fuzzing.jl")
+import VeryDiff.Definitions.VNNLib: load_onnx_model, get_ast
 
 function parse_networks(nn_file₁::String, nn_file₂::String)
     println("Parsing $(basename(nn_file₁))...")
-    N₁ = load_onnx_model(nn_file₁)
+    N₁ = VeryDiff.load_onnx_model(nn_file₁)
     println("Parsing $(basename(nn_file₂))...")
     N₂ = load_onnx_model(nn_file₂)
     return N₁, N₂
@@ -120,10 +119,10 @@ function run_tests_top1(benchmarks_dir::String, specs_csv_file::String, run_name
 end
 
 cur_dir = @__DIR__
-benchmarks_dir = "$cur_dir/../../../verydiff-experiments"
-acas_csv_dir = joinpath(cur_dir, "specs", "acas-prune.csv")
-mnist_csv_dir = joinpath(cur_dir, "specs", "mnist-prune.csv")
-lhc_csv_dir = joinpath(cur_dir, "specs", "lhc.csv")
+benchmarks_dir = "$cur_dir/../../../../verydiff-experiments"
+acas_csv_dir = joinpath(cur_dir, "..", "specs", "acas-prune.csv")
+mnist_csv_dir = joinpath(cur_dir, "..", "specs", "mnist-prune.csv")
+lhc_csv_dir = joinpath(cur_dir, "..", "specs", "lhc.csv")
 
 # verifier = deepsplit_top1(
 #     (true, true, true),
@@ -142,22 +141,6 @@ verifier = deepsplit_epsilon(
     VeryDiff.LPZonoContract
 )
 # verifier = verydiff_epsilon((true, true, false))
-
-# original_stdout = stdout
-# original_stderr = stderr
-# out_dir = "$(@__DIR__)/similar_splits/"
-# mkdir(out_dir)
-# open(joinpath(out_dir, "mnist_10_local_15.log"), "w") do f
-#     redirect_stdout(f)
-#     redirect_stderr(f)
-#     try
-#         run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
-#     catch e
-#         showerror(stdout, e, catch_backtrace())
-#     end
-#     redirect_stdout(original_stdout)
-#     redirect_stderr(original_stderr)
-# end
 
 run_tests_epsilon(benchmarks_dir, mnist_csv_dir, "", verifier)
 # run_tests_top1(benchmarks_dir, lhc_csv_dir, "", verifier)

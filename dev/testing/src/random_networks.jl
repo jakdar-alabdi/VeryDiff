@@ -1,6 +1,5 @@
 # using VeryDiff
-using VNNLib
-import VNNLib.OnnxParser: Node, ONNXLinear, ONNXRelu, ONNXAddConst
+import VeryDiff.Definitions.VNNLib.OnnxParser: OnnxNet, Node, ONNXLinear, ONNXRelu, ONNXAddConst
 
 function create_random_dense_layer(input_id::String, output_id::String, layer_name::String, rows::Int, columns::Int)
     W₁ = 0.1 * randn(rows, columns)
