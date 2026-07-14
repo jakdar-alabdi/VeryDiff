@@ -107,6 +107,7 @@ function run_cmd(args)
     split_heuristic = nothing
     if epsilon != -Inf64
         if parsed_args["naive"]
+            @assert !VeryDiff.INCORPORATE_CONCRETE_SPLIT_BOUNDS[] "Cannot use naive verification with concrete split bounds: These are unsound for naive verification"
             property = get_epsilon_property_naive(epsilon)
         else
             property = get_epsilon_property(epsilon)
