@@ -6,7 +6,8 @@ function propagate_layer!(
         ONNXLinear{S3}},
     inputs :: Vector{DiffZonotope};
     bounds_cache :: Union{Nothing,BoundsCache}=nothing,
-    data :: Union{Nothing,NeuronSplittingLayerData}=nothing) where {S1, S2, S3}
+    data :: Union{Nothing,NeuronSplittingLayerData}=nothing,
+    owned_generators=nothing) where {S1, S2, S3}
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
     ZoutRef = ZoutRefVec[1]
@@ -61,7 +62,8 @@ function propagate_layer!(
         ONNXAddConst{S3}},
     inputs :: Vector{DiffZonotope};
     bounds_cache :: Union{Nothing,BoundsCache}=nothing,
-    data :: Union{Nothing,NeuronSplittingLayerData}=nothing) where {S1, S2, S3}
+    data :: Union{Nothing,NeuronSplittingLayerData}=nothing,
+    owned_generators=nothing) where {S1, S2, S3}
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
     ZoutRef = ZoutRefVec[1]
@@ -103,7 +105,8 @@ function propagate_layer!(
         ONNXLinear{S3}},
     inputs :: Vector{DiffZonotope};
     bounds_cache :: Union{Nothing,BoundsCache}=nothing,
-    data :: Union{Nothing,NeuronSplittingLayerData}=nothing) where {S1, S2, S3}
+    data :: Union{Nothing,NeuronSplittingLayerData}=nothing,
+    owned_generators=nothing) where {S1, S2, S3}
     @assert length(inputs) == 1 "Dense layer should have exactly one input zonotope"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
     ZoutRef = ZoutRefVec[1]
@@ -164,7 +167,8 @@ function propagate_layer!(
         ONNXRelu{S3}},
     inputs :: Vector{DiffZonotope};
     bounds_cache :: Union{Nothing,BoundsCache}=nothing,
-    data :: Union{Nothing,NeuronSplittingLayerData}=nothing) where {S1, S2, S3}
+    data :: Union{Nothing,NeuronSplittingLayerData}=nothing,
+    owned_generators=nothing) where {S1, S2, S3}
     @assert length(inputs) == 1 "ReLU layer should have exactly one input zonotope"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output zonotope"
     ZoutRef = ZoutRefVec[1]
@@ -363,9 +367,7 @@ function propagate_layer!(
     new_gen₁ = count(bounds_cache.crossing₁)
     new_gen₂ = count(bounds_cache.crossing₂)
     data.num_instable += new_gen₁ + new_gen₂
-    # new_gen₁ = count(lower₁ .< 0.0 .&& upper₁ .> 0.0)
-    # new_gen₂ = count(lower₂ .< 0.0 .&& upper₂ .> 0.0)
-    ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
+    ∂new_gen = count(any_any)
     # @debug "Instable Neurons: Network 1: $new_gen₁, Network 2: $new_gen₂, Differential: $∂new_gen"
     Zout_proto = ZoutRef.zonotope_proto # Need this to be able to access the generator ids
     gen_sizes₁ = zeros(Int64,length(Zout_proto.Z₁.generator_ids))
@@ -377,6 +379,13 @@ function propagate_layer!(
     pre_indices₁ = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.Z₁.generator_ids)
     pre_indices₂ = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.Z₂.generator_ids)
     ∂pre_indices = intersect_indices(Zout_proto.∂Z.generator_ids, Zin.∂Z.generator_ids)
+
+    # New Any-Pos Case:
+    # ReLU(x) - ReLU(y) = ReLU(x) - y = ReLU(x) - (x - (x-y)) = ReLU(x) - x + (x-y)
+    # -> 1 * Ẑ₁ - 1 * Z₁ + 1 * ∂Z
+    # New Pos-Any Case:
+    # ReLU(x) - ReLU(y) = x - ReLU(y) = (y + (x-y)) - ReLU(y) = y - ReLU(y) + (x-y)
+    # -> 1 * Z₂ - 1 * Ẑ₂ + 1 * ∂Z
 
     for (i, idx) in enumerate(pre_indices_Z₁)
         gen_sizes₁[idx] = size(Zin.Z₁.Gs[i],2)
@@ -408,7 +417,6 @@ function propagate_layer!(
     idx2 = find_index_position(Zout_proto.∂Z.generator_ids, Zout_proto.Z₂.generator_ids[Zout_proto.Z₂.owned_generators])
     ∂gen_sizes[idx1] += new_gen₁
     ∂gen_sizes[idx2] += new_gen₂
-    Zout_proto = nothing # Avoid missuse
     # @info "ReLU DiffZonotope Generators: Z₁=$(gen_sizes₁), Z₂=$(gen_sizes₂), ∂Z=$(∂gen_sizes)"
     # Zout = get_zonotope!(ZoutRef, gen_sizes₁, gen_sizes₂, ∂gen_sizes)
     Zout = get_zonotope!(ZoutRef, ∂gen_sizes, ∂gen_sizes, ∂gen_sizes)
@@ -417,15 +425,26 @@ function propagate_layer!(
 
     L1 = get_layer1(Ls)
     L2 = get_layer2(Ls)
+    owned_generators = []
+    if !isnothing(Zout_proto.Z₁.owned_generators)
+        push!(owned_generators, Zout_proto.Z₁.generator_ids[Zout_proto.Z₁.owned_generators])
+    end
+    if !isnothing(Zout_proto.Z₂.owned_generators)
+        push!(owned_generators, Zout_proto.Z₂.generator_ids[Zout_proto.Z₂.owned_generators])
+    end
+    if !isnothing(Zout_proto.∂Z.owned_generators)
+        push!(owned_generators, Zout_proto.∂Z.generator_ids[Zout_proto.∂Z.owned_generators])
+    end
+    Zout_proto = nothing # Avoid missuse
     # Compute Zonotopes for individual networks
-    propagate_layer!(Zout.Z₁, L1, Zin.Z₁;lower=lower₁, upper=upper₁, split_nodes=split_nodes₁)
-    propagate_layer!(Zout.Z₂, L2, Zin.Z₂;lower=lower₂, upper=upper₂, split_nodes=split_nodes₂)
+    propagate_layer!(Zout.Z₁, L1, Zin.Z₁;lower=lower₁, upper=upper₁, split_nodes=split_nodes₁, owned_generators=owned_generators)
+    propagate_layer!(Zout.Z₂, L2, Zin.Z₂;lower=lower₂, upper=upper₂, split_nodes=split_nodes₂, owned_generators=owned_generators)
 
     if VeryDiff.USE_DIFFZONO[]
         dim = length(any_neg)
-        â₁_pos = @simd_bool_expr dim (any_neg | pos_neg)
+        â₁_pos = @simd_bool_expr dim (any_neg | pos_neg | any_pos)
         a₁_pos = any_pos
-        â₂_pos = @simd_bool_expr dim (neg_any | neg_pos)
+        â₂_pos = @simd_bool_expr dim (neg_any | neg_pos | pos_any)
         a₂_pos = pos_any
         ∂a_pos_∂λ = any_any
         # This one *must* be addition
@@ -438,24 +457,22 @@ function propagate_layer!(
         for g in Zout.∂Z.Gs
             g[selector, :] .= 0.0
         end
-        
-        # Assign Zin.Z₁ with a₁
-        cur_α₁ = .-α.((@view lower₁[a₁_pos]), (@view upper₁[a₁_pos]))
-        updateGeneratorsMul!(Zout.∂Z.Gs, pre_indices₁, Zin.Z₁.Gs, cur_α₁, a₁_pos)
-        Zout.∂Z.c[a₁_pos] .= cur_α₁ .* (@view Zin.Z₁.c[a₁_pos])
 
         # Assign Zout.Z₁ with â₁ = 1
         updateGenerators!(Zout.∂Z.Gs, post_indices₁, Zout.Z₁.Gs, â₁_pos)
         Zout.∂Z.c[â₁_pos] .= (@view Zout.Z₁.c[â₁_pos])
 
-        # Assign Zin.Z₂ with a₂
-        cur_α₂ = α.((@view lower₂[a₂_pos]), (@view upper₂[a₂_pos]))
-        updateGeneratorsMul!(Zout.∂Z.Gs, pre_indices₂, Zin.Z₂.Gs, cur_α₂, a₂_pos)
-        Zout.∂Z.c[a₂_pos] .= cur_α₂ .* (@view Zin.Z₂.c[a₂_pos])
-
         # Assign Zout.Z₂ with â₂ = -1
         updateGeneratorsMul!(Zout.∂Z.Gs, post_indices₂, Zout.Z₂.Gs, -1.0, â₂_pos)
         Zout.∂Z.c[â₂_pos] .= .-(@view Zout.Z₂.c[â₂_pos])
+        
+        # Assign Zin.Z₁ with a₁ = -1
+        updateGeneratorsSub!(Zout.∂Z.Gs, pre_indices₁, Zin.Z₁.Gs, a₁_pos)
+        Zout.∂Z.c[a₁_pos] .-= (@view Zin.Z₁.c[a₁_pos])
+
+        # Assign Zin.Z₂ with a₂ = +1
+        updateGeneratorsAdd!(Zout.∂Z.Gs, pre_indices₂, Zin.Z₂.Gs, a₂_pos)
+        Zout.∂Z.c[a₂_pos] .+= (@view Zin.Z₂.c[a₂_pos])
 
         # Add Zin.∂Z with 1.0
         updateGeneratorsAdd!(Zout.∂Z.Gs, ∂pre_indices, Zin.∂Z.Gs, ∂a_pos_1)
@@ -472,24 +489,14 @@ function propagate_layer!(
         Zout.∂Z.c[∂a_pos_∂λ] .= cur_∂λ .* (@view Zin.∂Z.c[∂a_pos_∂λ])
 
         # Add new generators from c
-        c_pos = findall(@simd_bool_expr dim (any_any | any_pos | pos_any))
+        c_pos = findall(any_any)
         A = Zout.∂Z.Gs[Zout.∂Z.owned_generators]
-        @inbounds for i in 1:length(c_pos)
-            row = c_pos[i]
+        @inbounds for (i,row) in enumerate(c_pos)
             col = ∂old_gen + i
-            if any_any[row]
-                A[row, col] = ∂μ(∂lower[row], ∂upper[row])
-            elseif any_pos[row]
-                A[row, col] = μ(lower₁[row], upper₁[row])
-            else # pos_any[row]
-                A[row, col] = μ(lower₂[row], upper₂[row])
-            end
+            A[row, col] = ∂μ(∂lower[row], ∂upper[row])
         end
 
         # Add bias
-        Zout.∂Z.c .+= ifelse.(
-            any_any, ∂ν.(∂lower, ∂upper) .- ∂μ.(∂lower, ∂upper),
-                ifelse.(any_pos, μ.(lower₁,upper₁),
-                    ifelse.(pos_any, .-μ.(lower₂,upper₂), 0.0)))
+        Zout.∂Z.c .+= ifelse.(any_any, ∂ν.(∂lower, ∂upper) .- ∂μ.(∂lower, ∂upper), 0.0)
     end
 end

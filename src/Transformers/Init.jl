@@ -35,17 +35,17 @@ function init_layer!(PS :: PropState, diff_layer :: DiffLayer{ONNXRelu{S1}, ONNX
     ∂bounds = zono_bounds(input_zono.∂Z)
     (
         _, _, _, _, _,
-        any_neg,
-        neg_any,
-        any_pos,
-        pos_any,
+        _,
+        _,
+        _,
+        _,
         any_any
     ) = get_selectors(bounds₁, bounds₂, ∂bounds)
     # Do NOT use counts created above for new_gen₁ / new_gen₂,
     # because these omit dimensions where difference is still zero
     new_gen₁ = count(bounds₁[:, 1] .< 0.0 .&& bounds₁[:, 2] .> 0.0)
     new_gen₂ = count(bounds₂[:, 1] .< 0.0 .&& bounds₂[:, 2] .> 0.0)
-    ∂new_gen = count(any_pos) + count(pos_any) + count(any_any)
+    ∂new_gen = count(any_any)
     
     all_generator_ids = union(input_zono.∂Z.generator_ids, union(input_zono.Z₁.generator_ids, input_zono.Z₂.generator_ids))
     

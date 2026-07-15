@@ -35,15 +35,17 @@ function get_slope(l,u, alpha)
     end
 end
 
-function propagate_layer!(ZoutRefVec :: Vector{Zonotope}, L :: ONNXRelu{S}, inputs :: Vector{Zonotope}; lower=nothing, upper=nothing, split_nodes=nothing) where {S}
+function propagate_layer!(ZoutRefVec :: Vector{Zonotope}, L :: ONNXRelu{S}, inputs :: Vector{Zonotope}; lower=nothing, upper=nothing, split_nodes=nothing,
+    owned_generators=nothing) where {S}
     @assert length(inputs) == 1 "Dense layer should have exactly one input"
     @assert length(ZoutRefVec) == 1 "Dense layer should have exactly one output"
     ZoutRef = ZoutRefVec[1]
     Zin = inputs[1]
-    return propagate_layer!(ZoutRef, L, Zin; lower=lower, upper=upper, split_nodes=split_nodes)
+    return propagate_layer!(ZoutRef, L, Zin; lower=lower, upper=upper, split_nodes=split_nodes,
+    owned_generators=owned_generators)
 end
 
-function propagate_layer!(ZoutRef :: Zonotope, _L :: ONNXRelu{S}, Zin :: Zonotope; lower=nothing, upper=nothing, split_nodes=nothing) where {S}
+function propagate_layer!(ZoutRef :: Zonotope, _L :: ONNXRelu{S}, Zin :: Zonotope; lower=nothing, upper=nothing, split_nodes=nothing, owned_generators=nothing) where {S}
     if isnothing(lower) || isnothing(upper)
         bounds = zono_bounds(Zin)
         lower = @view bounds[:,1]
@@ -78,18 +80,29 @@ function propagate_layer!(ZoutRef :: Zonotope, _L :: ONNXRelu{S}, Zin :: Zonotop
 
     indices = intersect_indices(ZoutRef.generator_ids, Zin.generator_ids)
     if VeryDiff.NEW_HEURISTIC[]
+        owned_generators = [(id,find_index_position(ZoutRef.generator_ids, id)) for id in owned_generators]
         influence_new = ZoutRef.influence
         column_pos = size(influence_new[ZoutRef.owned_generators],2) - new_gens + 1
         # @debug "Adding $new_gens new columns at position $column_pos to influence matrix of owned generator ID $(ZoutRef.generator_ids[ZoutRef.owned_generators])"
         # @debug "Sizes of influence matrices: $([size(inf) for inf in Zin.influence])"
         # Other influence matrices remain the same
         # Only need to update the owned generator influence matrix
-        if !isnothing(Zin.owned_generators) && Zin.owned_generators == attempt_find_index_position(Zin.generator_ids, ZoutRef.generator_ids[ZoutRef.owned_generators])
-            influence_new[ZoutRef.owned_generators][:, 1:column_pos-1] .= Zin.influence[Zin.owned_generators]
-        end
-        # @debug "Size of owned influence matrix after copy: $(size(influence_new[ZoutRef.owned_generators]))"
-        influence_new[ZoutRef.owned_generators][:,column_pos:end] .= 0.0
         bounds_range = upper[crossing] .- lower[crossing]
+        for (old_id, new_idx) in owned_generators
+            old_pos = attempt_find_index_position(Zin.generator_ids, old_id)
+            offset = 0
+            if old_pos != -1
+                old_influence = Zin.influence[old_pos]
+                offset = size(old_influence, 2)
+                influence_new[new_idx][1:end,1:offset] .= old_influence
+                influence_new[new_idx][1:end,(offset+1):end] .= 0.0
+            else
+                influence_new[new_idx] .= 0.0
+            end
+            # @inbounds for (idx, g) in enumerate(Zin.Gs)
+            #     influence_new[new_idx][:,(offset+1):end] .+= Zin.influence[idx] * abs.((@view g[crossing,:]) ./ bounds_range)'
+            # end
+        end
         @inbounds for (idx, g) in enumerate(Zin.Gs)
             influence_new[ZoutRef.owned_generators][:,column_pos:end] .+= Zin.influence[idx] * abs.((@view g[crossing,:]) ./ bounds_range)'
         end
