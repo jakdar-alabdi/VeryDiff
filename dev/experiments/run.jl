@@ -87,7 +87,7 @@ function deepsplit_top1(nn_file₁::String, nn_file₂::String, spec_file::Strin
     end
 end
 
-function run_experiments_acas_epsilon(specs_file::String; heuristic_config=(true, false, false), run_verydiff=false)
+function run_experiments_acas_epsilon(specs_file::String; heuristic_config=(true, false, false))
     println("\nRunning ACAS all...")
     run_func = run_acas_all_epsilon(specs_file, "experiments_final/")
     
@@ -101,23 +101,23 @@ function run_experiments_acas_epsilon(specs_file::String; heuristic_config=(true
     set_config(heuristic_config, (true, true, true), false, DeepSplitUnbiased, LP)
     run_func(deepsplit_epsilon, get_config())
 
-    if run_verydiff
-        set_config((false, false, false), (false, false, false), false)
-        run_func(verydiff_epsilon, get_config())
-        set_config((false, false, false), (true, true, true), false)
-        run_func(verydiff_epsilon, get_config())
-    end
+    set_config((false, false, false), (false, false, false), false)
+    run_func(verydiff_epsilon, get_config())
+    set_config((false, false, false), (true, true, true), false)
+    run_func(verydiff_epsilon, get_config())
 end
 
-function run_experiments_mnist_epsilon(specs_file::String; heuristic_config=(true, false, false), run_verydiff=false)
+function run_experiments_mnist_epsilon(specs_file::String; heuristic_config=(true, false, false))
     println("\nRunning MNIST all...")
     run_func = run_mnist_all_epsilon(specs_file, "experiments_final/")
     
-    set_config(heuristic_config, (false, true, false, false), true, DeepSplitUnbiased, LP)
+    set_config(heuristic_config, (false, true, false, false), false, DeepSplitUnbiased, LP)
+    run_func(deepsplit_epsilon, get_config())
+    set_config(heuristic_config, (false, false, false, false), false, DeepSplitUnbiased, LP)
     run_func(deepsplit_epsilon, get_config())
 
-    if run_verydiff
-        set_config((false, false, false), (false, false, false, false), false)
-        run_func(verydiff_epsilon, get_config())
-    end
+    set_config((false, false, false), (false, false, false, false), false)
+    run_func(verydiff_epsilon, get_config())
+    set_config((false, false, false), (false, true, false, false), false)
+    run_func(verydiff_epsilon, get_config())
 end

@@ -3,6 +3,6 @@ module Testing
 # include("../../../../src/VeryDiff.jl")
 using VeryDiff
 
-greet() = print("Hello World!")
+println(VeryDiff.get_config())
 
 end # module Testing
