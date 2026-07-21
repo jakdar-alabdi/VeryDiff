@@ -85,7 +85,7 @@ function set_config(
 end
 
 function get_config()
-    config = "APT-" # "APT" = Any-Positive-Transformer
+    config = "AP-" # "AP" = Any-Positive
     if !USE_NEURON_SPLITTING[]
         config *= "VeryDiff"
     else
