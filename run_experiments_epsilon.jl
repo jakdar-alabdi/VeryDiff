@@ -5,7 +5,6 @@ using VeryDiff
 benchmark = ARGS[1]
 config = ARGS[2]
 specs_file = ARGS[3]
-run_verydiff = length(ARGS) > 3 && ARGS[4] == "run VeryDiff"
 
 if benchmark == "MNIST"
     run_func = VeryDiff.run_experiments_mnist_epsilon
@@ -27,4 +26,4 @@ else
     throw("Heuristic configuration $(config) was not recognized.")
 end
 
-run_func(specs_file; heuristic_config=heuristic_config, run_verydiff=run_verydiff)
+run_func(specs_file; heuristic_config=heuristic_config)
