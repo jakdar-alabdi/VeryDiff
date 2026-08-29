@@ -205,13 +205,14 @@ function propagate_layer!(
             crossing₂ = bounds₂[:, 1] .< 0.0 .&& bounds₂[:, 2] .> 0.0
             replace_row₁ = crossing₁ .&& (minimum(abs, alt_bounds₁, dims=2) .< minimum(abs, bounds₁, dims=2))[:]
             replace_row₂ = crossing₂ .&& (minimum(abs, alt_bounds₂, dims=2) .< minimum(abs, bounds₂, dims=2))[:]
-            # @info "Num row replacement: $(count(replace_row₁) + count(replace_row₂))"
             for (G, Ĝ) in zip(Zin.Z₁.Gs, Ẑ₁.Gs)
                 G[replace_row₁, :] .= Ĝ[replace_row₁, :]
             end
             for (G, Ĝ) in zip(Zin.Z₂.Gs, Ẑ₂.Gs)
                 G[replace_row₂, :] .= Ĝ[replace_row₂, :]
             end
+            Zin.Z₁.c[replace_row₁] = Ẑ₁.c[replace_row₁]
+            Zin.Z₂.c[replace_row₂] = Ẑ₂.c[replace_row₂]
         end
     end
 
@@ -231,6 +232,7 @@ function propagate_layer!(
             for (G, Ĝ) in zip(Zin.∂Z.Gs, ∂Ẑ.Gs)
                 G[∂replace_row, :] .= Ĝ[∂replace_row, :]
             end
+            Zin.∂Z.c[∂replace_row] = ∂Ẑ.c[∂replace_row]
         end
     end
 
