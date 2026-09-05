@@ -111,13 +111,9 @@ function run_experiments_mnist_epsilon(specs_file::String; heuristic_config=(tru
     println("\nRunning MNIST all...")
     run_func = run_mnist_all_epsilon(specs_file, "experiments_final/")
     
-    set_config(heuristic_config, (false, true, false, false), false, DeepSplitUnbiased, LP)
-    run_func(deepsplit_epsilon, get_config())
-    set_config(heuristic_config, (false, false, false, false), false, DeepSplitUnbiased, LP)
+    set_config(heuristic_config, (true, true, true, true), false, DeepSplitUnbiased, LP)
     run_func(deepsplit_epsilon, get_config())
 
-    set_config((false, false, false), (false, false, false, false), false)
-    run_func(verydiff_epsilon, get_config())
-    set_config((false, false, false), (false, true, false, false), false)
+    set_config((false, false, false), (true, true, true, true), false)
     run_func(verydiff_epsilon, get_config())
 end
