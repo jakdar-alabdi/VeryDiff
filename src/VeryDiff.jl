@@ -90,10 +90,8 @@ function get_config()
         config *= "VeryDiff"
     else
         if USE_ZONO_CONTRACT[]
-            config *= "ZC"
-            if USE_LP_ZONO_CONTRACT[]
-                config = "LP-" * config
-            elseif INTER_CONTRACT[]
+            config *= ifelse(USE_LP[], "LP-", "") * "ZC"
+            if INTER_CONTRACT[]
                 config *= "-Inter"
             elseif POST_CONTRACT[] && !PRE_CONTRACT[]
                 config *= "-Post"
