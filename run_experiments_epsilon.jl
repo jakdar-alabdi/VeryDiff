@@ -23,7 +23,7 @@ elseif config == "DIFF"
 elseif config == "INPUT-DIFF"
     heuristic_config = (true, true, true)
 else
-    throw("Heuristic configuration $(config) for splitting was not recognized.")
+    throw("Heuristic configuration $(config) for splitting could not be recognized.")
 end
 
 run_func(specs_file; heuristic_config=heuristic_config)
